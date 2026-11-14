@@ -1,0 +1,25 @@
+{
+  "name": "dsh-famling",
+  "version": "0.0.1",
+  "description": "DSH plugin entry for Famling — a little familiar for your desktop. Name reservation.",
+  "license": "MIT",
+  "author": "PerryLink",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "README.md", "LICENSE"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PerryLink/dsh-famling.git"
+  },
+  "homepage": "https://github.com/PerryLink/famling",
+  "bugs": {
+    "url": "https://github.com/PerryLink/dsh-famling/issues"
+  },
+  "keywords": ["dsh", "dsh-plugin", "famling", "desktop-pet", "deepseek-harness"],
+  "engines": { "node": ">=18" },
+  "publishConfig": { "access": "public" }
+}
