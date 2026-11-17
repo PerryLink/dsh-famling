@@ -52,7 +52,7 @@ window.__ModuleLoader__.load({
       return L[lang] || L.zh
     }
     function loadSettings() {
-      try { return { sound: true, motion: true, bubble: true, ...JSON.parse(localStorage.getItem('dsh-famling/settings') || '{}') } } catch { return { sound: true, motion: true, bubble: true } }
+      try { return { sound: false, motion: true, bubble: true, ...JSON.parse(localStorage.getItem('dsh-famling/settings') || '{}') } } catch { return { sound: false, motion: true, bubble: true } }
     }
     function FamlingFooter() {
       const L = labels()

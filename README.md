@@ -27,6 +27,13 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 不宣传 roleplay；不包含完整桌宠/游戏基座。
 - 无 roleplay 公开入口；无任何网络请求。
 
+## Host bridge（P0 已实现）
+
+- `POST /api/famling/bridge`（同源、owner-only、JSON ≤16KB）
+- `op:"echo"` / `"chat"` → 本地回显，不发模型
+- `op:"brief"` → 只读 `~/.advisers/pet-brief.json`（若存在；不代传 Advisers TOS）
+- 未实现 LLM/TTS/ASR/记忆写入；下一步见 `docs/DSH-FAMLING-BRIDGE-2026-11-17.md`
+
 ## 安装（本地）
 
 1. 把本目录放到 DSH 插件目录；
