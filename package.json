@@ -1,25 +1,49 @@
 {
   "name": "dsh-famling",
-  "version": "0.0.1",
-  "description": "DSH plugin entry for Famling — a little familiar for your desktop. Name reservation.",
-  "license": "MIT",
-  "author": "PerryLink",
+  "version": "0.1.1",
+  "private": false,
   "type": "module",
-  "main": "index.js",
+  "description": "Famling mini pet in the DSH sidebar footer: Tinglan interactions and a link to the standalone famling app.",
+  "license": "MIT",
   "exports": {
     ".": "./index.js",
-    "./package.json": "./package.json"
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png"
   },
-  "files": ["index.js", "README.md", "LICENSE"],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/PerryLink/dsh-famling.git"
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "docs",
+    "icon.png",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "famling",
+    "desktop-pet",
+    "tinglan"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
   },
-  "homepage": "https://github.com/PerryLink/famling",
-  "bugs": {
-    "url": "https://github.com/PerryLink/dsh-famling/issues"
-  },
-  "keywords": ["dsh", "dsh-plugin", "famling", "desktop-pet", "deepseek-harness"],
-  "engines": { "node": ">=18" },
-  "publishConfig": { "access": "public" }
+  "engines": {
+    "dsh": ">=0.2.1-rc.5 <0.3.0"
+  }
 }
