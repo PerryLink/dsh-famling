@@ -94,8 +94,7 @@ window.__ModuleLoader__.load({
           padding: 12, fontSize: 13, lineHeight: 1.55,
         },
       }, [
-        h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 } }, [
-          h('div', { key: 'pet', style: { width: SIZE, height: SIZE, flex: 'none', borderRadius: 10, background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.08))', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' } }, avatar),
+        h('div', { key: 'head', style: { display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 } }, [
           h('div', { key: 't', style: { flex: 1, minWidth: 0 } }, [
             h('div', { key: 'n', style: { fontWeight: 600, fontSize: 14 } }, L.title),
             h('div', { key: 's', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.note),
@@ -107,9 +106,7 @@ window.__ModuleLoader__.load({
           h('button', { key: 'p', type: 'button', onClick: () => act('pat', 'patLine'), style: actionStyle }, L.pat),
           h('button', { key: 'pa', type: 'button', onClick: () => act('paper', 'paperLine'), style: actionStyle }, L.paper),
           h('button', { key: 'f', type: 'button', onClick: () => act('fold', 'foldLine'), style: actionStyle }, L.fold),
-        ]),
-        h('a', { key: 'link', href: 'https://github.com/PerryLink/famling', target: '_blank', rel: 'noreferrer noopener', style: { display: 'inline-block', marginTop: 10, fontSize: 12, color: 'var(--dsw-alias-state-business-primary, #7aa2ff)' } }, L.standalone),
-      ]) : null
+        ]),      ]) : null
       return h('div', { ref: rootRef, style: { position: 'relative' } }, [
         h('button', {
           key: 'btn', ref: btnRef, type: 'button', 'aria-expanded': open, 'aria-label': L.title,
