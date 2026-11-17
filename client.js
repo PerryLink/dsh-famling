@@ -43,8 +43,10 @@ window.__ModuleLoader__.load({
       const [line, setLine] = useState('')
       const [pose, setPose] = useState('idle')
       const [hop, setHop] = useState(false)
+      const [anchor, setAnchor] = useState(null)
       const closeRef = useRef(null)
       const rootRef = useRef(null)
+      const btnRef = useRef(null)
       const timerRef = useRef(null)
       const L = labels()
       useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
@@ -82,7 +84,7 @@ window.__ModuleLoader__.load({
       const panel = open ? h('div', {
         role: 'dialog', 'aria-label': L.title,
         style: {
-          position: 'fixed', left: 12, bottom: 104, zIndex: 1200,
+          position: 'fixed', left: anchor ? anchor.left : 12, bottom: anchor ? anchor.bottom : 104, zIndex: 1200, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto',
           width: 304, maxWidth: 'calc(100vw - 24px)',
           background: 'var(--dsw-alias-bg-elevated, #1f2329)',
           color: 'var(--dsw-alias-label-primary, #e8e8e8)',
@@ -110,8 +112,15 @@ window.__ModuleLoader__.load({
       ]) : null
       return h('div', { ref: rootRef, style: { position: 'relative' } }, [
         h('button', {
-          key: 'btn', type: 'button', 'aria-expanded': open, 'aria-label': L.title,
-          title: L.title, onClick: () => setOpen((v) => !v),
+          key: 'btn', ref: btnRef, type: 'button', 'aria-expanded': open, 'aria-label': L.title,
+          title: L.title, onClick: () => {
+            const next = !open
+            if (next) {
+              const rect = btnRef.current?.getBoundingClientRect()
+              if (rect) setAnchor({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
+            }
+            setOpen(next)
+          },
           style: {
             display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: SIZE + 8,
             border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer',

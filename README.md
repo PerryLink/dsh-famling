@@ -34,7 +34,9 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `node --check client.js`
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`
 - 本版本已用 DSH 0.2.2-rc.3 的 `sidebar.footer.action` slot 编写；实际渲染需在 DSH Web UI 验证。
-- 头像/图标来自 `PerryLink/famling` 汀岚美术（CC BY-NC-SA 4.0）；插件代码 MIT。
+- 代码：**PolyForm Noncommercial 1.0.0**（`LICENSE`）；
+- 头像/图标/汀岚美术：**CC BY-NC-SA 4.0**（`LICENSE-ART`）；
+- 非商业 + 同协议 + 署名；商业需书面许可。
 
 ## 限制
 

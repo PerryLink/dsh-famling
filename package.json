@@ -1,10 +1,10 @@
 {
   "name": "dsh-famling",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan interactions and a link to the standalone famling app.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -20,6 +20,7 @@
     "icon.png",
     "README.md",
     "LICENSE",
+    "LICENSE-ART",
     "NOTICE"
   ],
   "keywords": [
@@ -39,7 +40,9 @@
       "platform": "web",
       "immediately": true,
       "inject": [
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer"
       ]
     }
   },
