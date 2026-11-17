@@ -14,7 +14,7 @@ window.__ModuleLoader__.load({
     const FALLBACK = {
       zh: {
         pet: '汀岚', title: 'Famling · 汀岚', close: '关闭',
-        note: '非官方桌宠 · 本地小互动 · 未连接模型',
+        note: '非官方 · 本地互动',
         hello: '我在。今天想在 DSH 里做什么？',
         pat: '摸摸', paper: '给纸片', fold: '折一下',
         patLine: '被摸到了。今天的纸片声音很轻。',
@@ -24,7 +24,7 @@ window.__ModuleLoader__.load({
       },
       en: {
         pet: 'Tinglan', title: 'Famling · Tinglan', close: 'Close',
-        note: 'Unofficial pet · local mini interactions · no model connection',
+        note: 'Unofficial · local',
         hello: 'I am here. What shall we do in DSH today?',
         pat: 'Pat', paper: 'Paper', fold: 'Fold',
         patLine: 'Pat received. The paper sounds soft today.',
@@ -85,7 +85,7 @@ window.__ModuleLoader__.load({
         role: 'dialog', 'aria-label': L.title,
         style: {
           position: 'fixed', left: anchor ? anchor.left : 12, bottom: anchor ? anchor.bottom : 104, zIndex: 1200, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto',
-          width: 304, maxWidth: 'calc(100vw - 24px)',
+          width: 'fit-content', minWidth: 200, maxWidth: 'min(320px, calc(100vw - 24px))', overflowWrap: 'anywhere',
           background: 'var(--dsw-alias-bg-elevated, #1f2329)',
           color: 'var(--dsw-alias-label-primary, #e8e8e8)',
           border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))',
