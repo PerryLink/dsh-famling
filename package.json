@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": false,
   "type": "module",
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan interactions and a link to the standalone famling app.",
@@ -21,7 +21,8 @@
     "README.md",
     "LICENSE",
     "LICENSE-ART",
-    "NOTICE"
+    "NOTICE",
+    "docs"
   ],
   "keywords": [
     "deepseek-harness",

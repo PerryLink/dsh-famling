@@ -140,12 +140,16 @@ window.__ModuleLoader__.load({
       async function sendInput() {
         const text = input.trim()
         if (!text) { say(L.inputEmpty); return }
-        const bridge = typeof window !== 'undefined' ? window.__DSH_FAMLING_BRIDGE__ : undefined
-        if (!bridge || typeof bridge.send !== 'function') { say(L.bridgeMissing); return }
         try {
-          const result = await bridge.send({ text })
-          const reply = typeof result === 'string' ? result : result?.text
-          if (typeof reply === 'string' && reply.trim() !== '') say(reply)
+          const response = await fetch(new URL('api/famling/bridge', document.baseURI), {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ v: 1, op: 'chat', text }),
+          })
+          const result = await response.json().catch(() => null)
+          if (!response.ok || !result || result.ok === false) throw new Error(result?.code || 'bridge')
+          const reply = typeof result.reply === 'string' ? result.reply : ''
+          if (reply.trim() !== '') say(reply, result.bubbleKind === 'thought' ? 'thought' : 'speech')
         } catch { say(L.bridgeFailed) }
       }
       function startVoice() {
