@@ -22,6 +22,10 @@ window.__ModuleLoader__.load({
         mic: '语音输入', send: '发送', speaking: '正在听…',
         actions: '选择互动', pat: '摸摸', paper: '给纸片', fold: '折一下', look: '左右看',
         settingsTitle: '设置', sound: '语音朗读', motion: '帧动画', bubble: '说话气泡', memory: '读取 Advisers 摘要', today: '今天', commitments: '承诺',
+        consentTts: '开启语音朗读前需独立确认：使用浏览器系统语音，不是 DeepSeek stella/tide；回复文本会被朗读，可随时关闭。',
+        consentAsr: '语音输入前需独立确认：浏览器语音识别可能把音频发送给浏览器厂商；仅在你点击麦克风后录音，可随时关闭。',
+        task: '提醒', taskAt: '提醒时间', createTask: '创建提醒', taskEmpty: '写下提醒内容并选择未来时间。', taskDone: '已创建提醒。',
+        allow: '同意并开启', cancel: '暂不开启',
         bridgeMissing: 'DSH/Advisers 桥接尚未接入。', bridgeFailed: '桥接调用失败。',
         micUnsupported: '当前浏览器不支持语音输入。', inputEmpty: '先说点什么吧。',
         patLine: '被摸到了。', paperLine: '收到一张纸片。', foldLine: '折了一下。', lookLine: '四处看了看。',
@@ -34,6 +38,10 @@ window.__ModuleLoader__.load({
         mic: 'Voice input', send: 'Send', speaking: 'Listening…',
         actions: 'Choose an action', pat: 'Pat', paper: 'Paper', fold: 'Fold', look: 'Look',
         settingsTitle: 'Settings', sound: 'Voice', motion: 'Frame animation', bubble: 'Speech bubble', memory: 'Read Advisers summary', today: 'Today', commitments: 'Commitments',
+        consentTts: 'Voice playback needs separate confirmation: it uses the browser system voice, not DeepSeek stella/tide; replies may be read aloud and can be switched off.',
+        consentAsr: 'Voice input needs separate confirmation: browser speech recognition may send audio to the browser vendor; the microphone starts only after your click and can be switched off.',
+        task: 'Remind', taskAt: 'Remind at', createTask: 'Create reminder', taskEmpty: 'Write a reminder and choose a future time.', taskDone: 'Reminder created.',
+        allow: 'Agree and enable', cancel: 'Not now',
         bridgeMissing: 'DSH/Advisers bridge is not connected yet.', bridgeFailed: 'Bridge call failed.',
         micUnsupported: 'Speech input is unavailable in this browser.', inputEmpty: 'Say something first.',
         patLine: 'Pat received.', paperLine: 'A sheet of paper.', foldLine: 'A little fold.', lookLine: 'Looked around.',
@@ -54,6 +62,10 @@ window.__ModuleLoader__.load({
     function loadSettings() {
       try { return { sound: false, motion: true, bubble: true, ...JSON.parse(localStorage.getItem('dsh-famling/settings') || '{}') } } catch { return { sound: false, motion: true, bubble: true } }
     }
+    const CONSENT_KEY = 'dsh-famling/consent/v1'
+    function loadConsent() {
+      try { return { tts: false, asr: false, ...JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') } } catch { return { tts: false, asr: false } }
+    }
     function FamlingFooter() {
       const L = labels()
       const [mode, setMode] = useState(null)
@@ -65,6 +77,13 @@ window.__ModuleLoader__.load({
       const [input, setInput] = useState('')
       const [listening, setListening] = useState(false)
       const [settings, setSettings] = useState(loadSettings)
+      const [ttsConsent, setTtsConsent] = useState(() => loadConsent().tts)
+      const [asrConsent, setAsrConsent] = useState(() => loadConsent().asr)
+      const [consentKind, setConsentKind] = useState(null)
+      const [taskMode, setTaskMode] = useState(false)
+      const [taskAt, setTaskAt] = useState('')
+      const [taskText, setTaskText] = useState('')
+      const pendingConsent = useRef(null)
       const [brief, setBrief] = useState(null)
       const [briefError, setBriefError] = useState('')
       const rootRef = useRef(null)
@@ -114,7 +133,7 @@ window.__ModuleLoader__.load({
         setBubble(text); setBubbleKind(kind)
         if (bubbleTimer.current) clearTimeout(bubbleTimer.current)
         bubbleTimer.current = setTimeout(() => setBubble(''), 3200)
-        if (settings.sound && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (settings.sound && ttsConsent && typeof window !== 'undefined' && 'speechSynthesis' in window) {
           try { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.lang = /^[\x00-\x7F]/.test(text) ? 'en-US' : 'zh-CN'; window.speechSynthesis.speak(utterance) } catch {}
         }
       }
@@ -137,7 +156,29 @@ window.__ModuleLoader__.load({
         runAction(kind)
       }
       function updateSetting(key) {
+        if (key === 'sound' && !settings.sound && !ttsConsent) {
+          pendingConsent.current = null
+          setConsentKind('tts')
+          return
+        }
         setSettings((value) => ({ ...value, [key]: !value[key] }))
+      }
+      function acceptConsent() {
+        const kind = consentKind
+        if (!kind) return
+        try {
+          const next = loadConsent()
+          next[kind] = true
+          localStorage.setItem(CONSENT_KEY, JSON.stringify(next))
+        } catch {}
+        if (kind === 'tts') { setTtsConsent(true); setSettings((value) => ({ ...value, sound: true })) }
+        if (kind === 'asr') { setAsrConsent(true); const action = pendingConsent.current; pendingConsent.current = null; setConsentKind(null); action?.(); return }
+        pendingConsent.current = null
+        setConsentKind(null)
+      }
+      function cancelConsent() {
+        pendingConsent.current = null
+        setConsentKind(null)
       }
       async function loadBrief() {
         setBriefError('')
@@ -164,7 +205,23 @@ window.__ModuleLoader__.load({
           if (reply.trim() !== '') say(reply, result.bubbleKind === 'thought' ? 'thought' : 'speech')
         } catch { say(L.bridgeFailed) }
       }
-      function startVoice() {
+      async function sendTask() {
+        const text = taskText.trim()
+        if (!text || !taskAt) { say(L.taskEmpty); return }
+        const at = new Date(taskAt).toISOString()
+        try {
+          const response = await fetch(new URL('api/famling/bridge', document.baseURI), {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ v: 1, op: 'task', text, at }),
+          })
+          const result = await response.json().catch(() => null)
+          if (!response.ok || !result || result.ok === false) throw new Error(result?.code || 'task')
+          setTaskMode(false); setTaskText(''); setTaskAt('')
+          say(result.reply || L.taskDone)
+        } catch { say(L.bridgeFailed) }
+      }
+      function startRecognition() {
         const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
         if (!Recognition) { say(L.micUnsupported); return }
         try {
@@ -180,6 +237,10 @@ window.__ModuleLoader__.load({
           recognitionRef.current = recognition
           recognition.start()
         } catch { setListening(false); say(L.micUnsupported) }
+      }
+      function startVoice() {
+        if (!asrConsent) { pendingConsent.current = startRecognition; setConsentKind('asr'); return }
+        startRecognition()
       }
       const idleFrame = blink ? 'eye_closed_00' : SEQ.idle.frames[frameIndex % SEQ.idle.frames.length]
       const frameName = anim === 'idle' ? idleFrame : (SEQ[anim]?.frames[frameIndex % SEQ[anim].frames.length] || 'idle_00')
@@ -207,6 +268,14 @@ window.__ModuleLoader__.load({
             h('button', { key: 'send', type: 'button', onClick: () => void sendInput(), style: { ...buttonBase, padding: '8px 7px' } }, L.send),
           ]),
         ]),
+        h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, [
+          h('button', { key: 'toggle', type: 'button', onClick: () => setTaskMode((value) => !value), style: { ...buttonBase, padding: '4px 7px' } }, L.task),
+          taskMode ? h('div', { key: 'form', style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 } }, [
+            h('input', { key: 'at', type: 'datetime-local', value: taskAt, onChange: (event) => setTaskAt(event.target.value), 'aria-label': L.taskAt, style: { background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 6, font: 'inherit' } }),
+            h('textarea', { key: 'text', value: taskText, rows: 2, placeholder: L.task, onChange: (event) => setTaskText(event.target.value), style: { resize: 'vertical', background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 6, font: 'inherit' } }),
+            h('button', { key: 'create', type: 'button', onClick: () => void sendTask(), style: { ...buttonBase, padding: '5px 7px' } }, L.createTask),
+          ]) : null,
+        ]),
       ]) : null
       const actionPanel = mode === 'actions' ? h('div', { role: 'dialog', 'aria-label': L.actions, style: { ...panelStyle, width: 'fit-content' } }, [
         h('strong', { key: 't', style: { display: 'block', marginBottom: 7 } }, L.actions),
@@ -230,6 +299,23 @@ window.__ModuleLoader__.load({
             ...(brief.today || []).slice(0, 2).map((item, index) => h('div', { key: 't' + index, style: { color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, '· ' + item.title)),
           ]) : null,
           briefError ? h('div', { key: 'err', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, briefError) : null,
+        ]),
+      ]) : null
+      const consentNode = consentKind ? h('div', {
+        role: 'dialog', 'aria-modal': true, 'aria-label': consentKind === 'tts' ? L.sound : L.mic,
+        style: {
+          position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1400,
+          width: 300, maxWidth: 'calc(100vw - 24px)', padding: 14,
+          background: 'var(--dsw-alias-bg-elevated, #1f2329)', color: 'var(--dsw-alias-label-primary, #e8e8e8)',
+          border: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.35))', borderRadius: 'var(--dsw-radius-md, 10px)',
+          boxShadow: '0 12px 36px rgba(0,0,0,.4)', fontSize: 12, lineHeight: 1.55,
+        },
+      }, [
+        h('strong', { key: 't', style: { display: 'block', marginBottom: 8 } }, consentKind === 'tts' ? L.sound : L.mic),
+        h('p', { key: 'text', style: { margin: '0 0 10px' } }, consentKind === 'tts' ? L.consentTts : L.consentAsr),
+        h('div', { key: 'actions', style: { display: 'flex', gap: 6, justifyContent: 'flex-end' } }, [
+          h('button', { key: 'cancel', type: 'button', onClick: cancelConsent, style: { ...buttonBase, padding: '5px 8px' } }, L.cancel),
+          h('button', { key: 'allow', type: 'button', onClick: acceptConsent, style: { ...buttonBase, padding: '5px 8px' } }, L.allow),
         ]),
       ]) : null
       const bubbleNode = settings.bubble && bubble ? h('div', {

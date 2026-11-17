@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": false,
   "type": "module",
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan interactions and a link to the standalone famling app.",

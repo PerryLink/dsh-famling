@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const name = 'dsh-famling'
-export const inject = ['connection', 'llm']
+export const inject = ['connection', 'llm', 'schedule']
 
 const MAX_INPUT_CHARS = 2000
 const MAX_BODY_BYTES = 16 * 1024
@@ -107,12 +107,31 @@ async function handleBridge(ctx, request) {
   try { payload = JSON.parse(text) } catch { return error('E_INPUT', 'Invalid JSON.') }
   if (!payload || payload.v !== 1 || typeof payload.op !== 'string') return error('E_INPUT', 'Invalid bridge request.')
   const op = payload.op
-  if (op !== 'echo' && op !== 'chat' && op !== 'brief') return error('E_OP', 'Unsupported operation.')
+  if (op !== 'echo' && op !== 'chat' && op !== 'brief' && op !== 'task') return error('E_OP', 'Unsupported operation.')
   if (op === 'brief') {
     const result = await readBriefProjection()
     if (!result.ok) return error(result.code, result.message, 404)
     const p = result.projection
     return json(200, { v: 1, ok: true, reply: `Advisers：今天 ${p.counts.today} 项，承诺 ${p.counts.commitments} 项，风险 ${p.counts.risks} 项。`, bubbleKind: 'thought', brief: p, meta: { stage: 'P1' } })
+  }
+  if (op === 'task') {
+    if (typeof payload.text !== 'string' || typeof payload.at !== 'string') return error('E_INPUT', 'text and at are required.')
+    const text = payload.text.trim()
+    if (text.length === 0 || text.length > 200) return error('E_INPUT', 'task text is invalid.')
+    const at = payload.at.trim()
+    const timestamp = Date.parse(at)
+    if (!Number.isFinite(timestamp) || timestamp <= Date.now() + 30_000) return error('E_INPUT', 'at must be a future RFC 3339 time.')
+    try {
+      const task = await ctx.schedule.create({
+        title: text.slice(0, 120),
+        prompt: text,
+        timing: { kind: 'at', at: new Date(timestamp).toISOString() },
+        target: { kind: 'new_once' },
+      })
+      return json(200, { v: 1, ok: true, reply: `已创建提醒：${text.slice(0, 80)}`, bubbleKind: 'speech', meta: { stage: 'P4', taskId: String(task.id || '') } })
+    } catch {
+      return error('E_TASK', 'DSH schedule could not create the reminder.', 503)
+    }
   }
   if (typeof payload.text !== 'string') return error('E_INPUT', 'text is required.')
   const input = payload.text.trim()
