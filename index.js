@@ -107,12 +107,21 @@ async function handleBridge(ctx, request) {
   try { payload = JSON.parse(text) } catch { return error('E_INPUT', 'Invalid JSON.') }
   if (!payload || payload.v !== 1 || typeof payload.op !== 'string') return error('E_INPUT', 'Invalid bridge request.')
   const op = payload.op
-  if (op !== 'echo' && op !== 'chat' && op !== 'brief' && op !== 'task') return error('E_OP', 'Unsupported operation.')
+  if (op !== 'echo' && op !== 'chat' && op !== 'brief' && op !== 'task' && op !== 'task-delete') return error('E_OP', 'Unsupported operation.')
   if (op === 'brief') {
     const result = await readBriefProjection()
     if (!result.ok) return error(result.code, result.message, 404)
     const p = result.projection
     return json(200, { v: 1, ok: true, reply: `Advisers：今天 ${p.counts.today} 项，承诺 ${p.counts.commitments} 项，风险 ${p.counts.risks} 项。`, bubbleKind: 'thought', brief: p, meta: { stage: 'P1' } })
+  }
+  if (op === 'task-delete') {
+    if (typeof payload.id !== 'string' || payload.id.length === 0) return error('E_INPUT', 'id is required.')
+    try {
+      await ctx.schedule.edit({ id: payload.id, action: 'delete' })
+      return json(200, { v: 1, ok: true, reply: '已删除提醒。', meta: { stage: 'P4' } })
+    } catch {
+      return error('E_TASK', 'DSH schedule could not delete the reminder.', 503)
+    }
   }
   if (op === 'task') {
     if (typeof payload.text !== 'string' || typeof payload.at !== 'string') return error('E_INPUT', 'text and at are required.')
