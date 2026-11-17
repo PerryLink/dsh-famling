@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
         inputTitle: '和汀岚说话', placeholder: '对汀岚说点什么…',
         mic: '语音输入', send: '发送', speaking: '正在听…',
         actions: '选择互动', pat: '摸摸', paper: '给纸片', fold: '折一下', look: '左右看',
-        settingsTitle: '设置', sound: '语音朗读', motion: '帧动画', bubble: '说话气泡',
+        settingsTitle: '设置', sound: '语音朗读', motion: '帧动画', bubble: '说话气泡', memory: '读取 Advisers 摘要', today: '今天', commitments: '承诺',
         bridgeMissing: 'DSH/Advisers 桥接尚未接入。', bridgeFailed: '桥接调用失败。',
         micUnsupported: '当前浏览器不支持语音输入。', inputEmpty: '先说点什么吧。',
         patLine: '被摸到了。', paperLine: '收到一张纸片。', foldLine: '折了一下。', lookLine: '四处看了看。',
@@ -33,7 +33,7 @@ window.__ModuleLoader__.load({
         inputTitle: 'Talk to Tinglan', placeholder: 'Say something…',
         mic: 'Voice input', send: 'Send', speaking: 'Listening…',
         actions: 'Choose an action', pat: 'Pat', paper: 'Paper', fold: 'Fold', look: 'Look',
-        settingsTitle: 'Settings', sound: 'Voice', motion: 'Frame animation', bubble: 'Speech bubble',
+        settingsTitle: 'Settings', sound: 'Voice', motion: 'Frame animation', bubble: 'Speech bubble', memory: 'Read Advisers summary', today: 'Today', commitments: 'Commitments',
         bridgeMissing: 'DSH/Advisers bridge is not connected yet.', bridgeFailed: 'Bridge call failed.',
         micUnsupported: 'Speech input is unavailable in this browser.', inputEmpty: 'Say something first.',
         patLine: 'Pat received.', paperLine: 'A sheet of paper.', foldLine: 'A little fold.', lookLine: 'Looked around.',
@@ -65,6 +65,8 @@ window.__ModuleLoader__.load({
       const [input, setInput] = useState('')
       const [listening, setListening] = useState(false)
       const [settings, setSettings] = useState(loadSettings)
+      const [brief, setBrief] = useState(null)
+      const [briefError, setBriefError] = useState('')
       const rootRef = useRef(null)
       const closeRef = useRef(null)
       const inputRef = useRef(null)
@@ -137,6 +139,16 @@ window.__ModuleLoader__.load({
       function updateSetting(key) {
         setSettings((value) => ({ ...value, [key]: !value[key] }))
       }
+      async function loadBrief() {
+        setBriefError('')
+        try {
+          const response = await fetch(new URL('api/famling/bridge', document.baseURI), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ v: 1, op: 'brief' }) })
+          const result = await response.json().catch(() => null)
+          if (!response.ok || !result || result.ok === false) throw new Error(result?.code || 'brief')
+          setBrief(result.brief || null)
+          if (result.reply) say(result.reply, 'thought')
+        } catch { setBrief(null); setBriefError(L.bridgeFailed) }
+      }
       async function sendInput() {
         const text = input.trim()
         if (!text) { say(L.inputEmpty); return }
@@ -202,7 +214,7 @@ window.__ModuleLoader__.load({
           h('button', { key: kind, type: 'button', onClick: () => runAction(kind), style: { ...buttonBase, padding: '6px 9px' } }, L[kind]))),
         h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, marginTop: 8, padding: '4px 7px' } }, '×'),
       ]) : null
-      const settingsPanel = mode === 'settings' ? h('div', { role: 'dialog', 'aria-label': L.settingsTitle, style: { ...panelStyle, width: 220 } }, [
+      const settingsPanel = mode === 'settings' ? h('div', { role: 'dialog', 'aria-label': L.settingsTitle, style: { ...panelStyle, width: 248 } }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', marginBottom: 8 } }, [
           h('strong', { key: 't', style: { flex: 1 } }, L.settingsTitle),
           h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
@@ -211,6 +223,14 @@ window.__ModuleLoader__.load({
           h('input', { type: 'checkbox', checked: settings[key], onChange: () => updateSetting(key) }),
           h('span', null, L[key]),
         ])),
+        h('div', { key: 'memory', style: { borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', marginTop: 6, paddingTop: 7 } }, [
+          h('button', { key: 'refresh', type: 'button', onClick: () => void loadBrief(), style: { ...buttonBase, padding: '4px 7px', marginBottom: 5 } }, L.memory),
+          brief ? h('div', { key: 'brief', style: { fontSize: 11, lineHeight: 1.5 } }, [
+            h('div', { key: 'counts' }, `${L.today}: ${brief.counts.today} · ${L.commitments}: ${brief.counts.commitments}`),
+            ...(brief.today || []).slice(0, 2).map((item, index) => h('div', { key: 't' + index, style: { color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, '· ' + item.title)),
+          ]) : null,
+          briefError ? h('div', { key: 'err', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, briefError) : null,
+        ]),
       ]) : null
       const bubbleNode = settings.bubble && bubble ? h('div', {
         role: 'status', 'aria-live': 'polite',

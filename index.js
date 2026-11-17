@@ -9,11 +9,15 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const name = 'dsh-famling'
-export const inject = ['connection']
+export const inject = ['connection', 'llm']
 
 const MAX_INPUT_CHARS = 2000
 const MAX_BODY_BYTES = 16 * 1024
 const BRIDGE_PATH = '/api/famling/bridge'
+const LLM_PROVIDER = 'deepseek-official'
+const LLM_MODEL = 'deepseek-flash'
+const LLM_TIMEOUT_MS = 25_000
+const SYSTEM_PROMPT = '你是汀岚，一只安静、简洁的桌面小生灵。用中文回答，1-3 句；不知道就说不知道。不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
 
 function json(status, body) {
   return new Response(JSON.stringify(body), {
@@ -56,11 +60,46 @@ async function readBriefProjection() {
         risks: Number(counts.risks) || 0,
         facts: Number(counts.facts) || 0,
       },
+      today: Array.isArray(brief.today) ? brief.today.slice(0, 3).map((item) => ({
+        title: String(item && typeof item.title === 'string' ? item.title : '').slice(0, 60),
+        status: String(item && typeof item.status === 'string' ? item.status : '').slice(0, 20),
+      })) : [],
+      commitments: Array.isArray(brief.commitments) ? brief.commitments.slice(0, 3).map((item) => ({
+        what: String(item && typeof item.what === 'string' ? item.what : '').slice(0, 60),
+        due: String(item && typeof item.due === 'string' ? item.due : '').slice(0, 40),
+        risk: String(item && typeof item.risk === 'string' ? item.risk : '').slice(0, 20),
+      })) : [],
     },
   }
 }
 
-async function handleBridge(request) {
+async function chatWithDsh(ctx, input) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
+  let reply = ''
+  try {
+    for await (const chunk of ctx.llm.stream({
+      provider: LLM_PROVIDER,
+      model: LLM_MODEL,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: [{ type: 'text', text: input }] }],
+      maxTokens: 300,
+      signal: controller.signal,
+    })) {
+      if (chunk && chunk.type === 'text-delta' && typeof chunk.text === 'string') reply += chunk.text
+      if (chunk && chunk.type === 'finish' && chunk.reason && chunk.reason.kind !== 'stop') {
+        if (chunk.reason.kind === 'error' || chunk.reason.kind === 'aborted') throw new Error(chunk.reason.kind)
+      }
+    }
+    const trimmed = reply.trim()
+    if (!trimmed) throw new Error('empty reply')
+    return trimmed
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function handleBridge(ctx, request) {
   if (request.method !== 'POST') return error('E_METHOD', 'POST required.', 405)
   const text = await request.text()
   if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) return error('E_INPUT', 'Request is too large.', 413)
@@ -78,8 +117,12 @@ async function handleBridge(request) {
   if (typeof payload.text !== 'string') return error('E_INPUT', 'text is required.')
   const input = payload.text.trim()
   if (input.length === 0 || input.length > MAX_INPUT_CHARS) return error('E_INPUT', 'Text length is invalid.')
-  // P0 deliberately does not call a model. The reply labels itself as local echo.
-  return json(200, { v: 1, ok: true, reply: `（本地回显）${input}`, bubbleKind: 'speech', meta: { stage: 'P0' } })
+  try {
+    const reply = await chatWithDsh(ctx, input)
+    return json(200, { v: 1, ok: true, reply, bubbleKind: 'speech', meta: { stage: 'P2', provider: LLM_PROVIDER, model: LLM_MODEL } })
+  } catch {
+    return error('E_LLM', 'DSH LLM is unavailable or failed.', 503)
+  }
 }
 
 export function apply(ctx) {
@@ -87,6 +130,6 @@ export function apply(ctx) {
     path: BRIDGE_PATH,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: handleBridge,
+    fetch: (request) => handleBridge(ctx, request),
   }), 'dsh-famling: P0 bridge route')
 }
