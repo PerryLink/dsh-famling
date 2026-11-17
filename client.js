@@ -72,7 +72,7 @@ window.__ModuleLoader__.load({
         timerRef.current = setTimeout(() => { setHop(false); setPose('idle') }, 700)
       }
       const avatar = h('img', {
-        key: 'avatar', src: FRAMES[pose] || FRAMES.idle, width: SIZE, height: SIZE,
+        key: 'avatar', src: 'data:image/png;base64,' + (FRAMES[pose] || FRAMES.idle), width: SIZE, height: SIZE,
         alt: L.pet, draggable: false,
         style: {
           imageRendering: 'pixelated', display: 'block', flex: 'none',
