@@ -72,7 +72,7 @@ test('chat follows the DSH profile default model instead of a frozen literal', a
   assert.equal('reasoningEffort' in env.calls.llm[0], false)
 })
 
-const PERSONA_MARKERS = { human: '汀岚', cat: '布偶猫', dog: '金毛' }
+const PERSONA_MARKERS = { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛' }
 const PERSONA_TRAITS = { human: '工作搭子', cat: '懒散', dog: '友善' }
 const SAFETY_BOUNDARY = '不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
 
@@ -107,7 +107,7 @@ test('chat falls back to the human persona for missing or invalid character valu
     assert.equal(env.calls.llm.length, 1, JSON.stringify(character) + ': one model call')
     const system = env.calls.llm[0].system
     assert.ok(system.includes('汀岚'), JSON.stringify(character) + ': human fallback')
-    assert.equal(system.includes('布偶猫'), false, JSON.stringify(character) + ': no cat persona')
+    assert.equal(system.includes('塞尔凯克卷毛猫'), false, JSON.stringify(character) + ': no cat persona')
     assert.equal(system.includes('金毛'), false, JSON.stringify(character) + ': no dog persona')
   }
 })

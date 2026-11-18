@@ -5,14 +5,24 @@
  * Source of truth:
  *   ../../desktop-games/public/assets/pet/anim/{human,cat,dog}/
  *     manifest.json + <clip>/<clip>_NN.png   (12 clips / 68 frames each, 96x96 RGBA)
+ *   ../../desktop-games/public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/
+ *     regions.json                           (version/canvas/regions/gestures)
+ *
+ * The regions documents are shared verbatim with the standalone famling hero
+ * app: head/body/tail art-pixel rectangles plus data-driven tap reactions with
+ * a state whitelist. They are embedded as ANIMS[character].regions so the DSH
+ * plugin can hit-test clicks on the logical 96x96 canvas without fetching JSON
+ * at runtime.
  *
  * What it does:
- *   1. reads the three manifests and validates the shared anim contract;
+ *   1. reads the three manifests and validates the shared anim contract, then
+ *      reads + validates each character's regions.json tap-region document;
  *   2. reads every PNG and (by default) re-encodes it losslessly as an indexed
  *      PNG with the smallest bit depth - pixel-identical, roughly half the bytes;
  *   3. renders a generated JS block with `const ANIMS` (per-character clip table
- *      + bubble/TTS policy) and `const SPRITES` (base64 PNG data, one key per
- *      frame) and injects it between the two marker comments in client.js.
+ *      + bubble/TTS policy + tap regions) and `const SPRITES` (base64 PNG data,
+ *      one key per frame) and injects it between the two marker comments in
+ *      client.js.
  *
  * The block is generated data: never hand-edit it. Re-run this script instead.
  *
@@ -22,9 +32,12 @@
  *   node scripts/embed-anims.mjs --qa            # also write scripts/qa/anim-data.js
  *   node scripts/embed-anims.mjs --no-optimize   # embed source PNG bytes verbatim
  *   node scripts/embed-anims.mjs --src DIR       # explicit anim asset root
+ *   node scripts/embed-anims.mjs --characters DIR # explicit public/characters root
  *
  * The asset root defaults to FAMLING_ANIM_DIR, else the sibling private repo
- * checkout ../../desktop-games/public/assets/pet/anim. No network, no deps.
+ * checkout ../../desktop-games/public/assets/pet/anim. The tap-region root
+ * defaults to FAMLING_CHARACTERS_DIR, else the sibling private repo checkout
+ * ../../desktop-games/public/characters. No network, no deps.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -40,6 +53,17 @@ export const CHARACTERS = ['human', 'cat', 'dog']
 export const BEGIN_MARKER = '// <dsh-famling:anims:begin>'
 export const END_MARKER = '// <dsh-famling:anims:end>'
 export const DEFAULT_ASSETS_ROOT = resolve(PLUGIN_ROOT, '..', '..', 'desktop-games', 'public', 'assets', 'pet', 'anim')
+/** The standalone famling hero keeps one tap-region document per character. */
+export const DEFAULT_CHARACTERS_ROOT = resolve(PLUGIN_ROOT, '..', '..', 'desktop-games', 'public', 'characters')
+export const REGION_CHARACTER_DIRS = { human: 'pet-tinglan-anim', cat: 'pet-cat', dog: 'pet-dog' }
+/** Region gesture events the client knows how to play as animation clips. */
+export const REGION_EVENTS = ['pat', 'stand_wag', 'chase_tail']
+const REGION_ID_RE = /^[a-z][a-z0-9_.-]{0,63}$/
+const REGION_EVENT_RE = /^[a-z][a-z0-9_.-]{0,63}$/
+const MAX_REGIONS = 32
+const MAX_GESTURES = 64
+const MAX_STATES = 8
+const MAX_SAY = 120
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -263,7 +287,7 @@ export function optimizeFrame(buffer) {
 }
 
 export function parseArgs(argv) {
-  const options = { mode: 'embed', assetsRoot: null, qa: false, optimize: true, help: false }
+  const options = { mode: 'embed', assetsRoot: null, charactersRoot: null, qa: false, optimize: true, help: false }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--check') options.mode = 'check'
@@ -273,6 +297,11 @@ export function parseArgs(argv) {
       const value = argv[i + 1]
       if (!value) throw new Error('--src requires a directory')
       options.assetsRoot = resolve(value)
+      i += 1
+    } else if (arg === '--characters') {
+      const value = argv[i + 1]
+      if (!value) throw new Error('--characters requires a directory')
+      options.charactersRoot = resolve(value)
       i += 1
     } else if (arg === '--help' || arg === '-h') options.help = true
     else throw new Error('unknown argument: ' + arg)
@@ -284,6 +313,106 @@ export function resolveAssetsRoot(option) {
   const candidates = [option, process.env.FAMLING_ANIM_DIR, DEFAULT_ASSETS_ROOT].filter((value) => typeof value === 'string' && value !== '')
   for (const candidate of candidates) if (existsSync(join(candidate, 'human', 'manifest.json'))) return resolve(candidate)
   return null
+}
+
+/** Locate the public/characters root that holds all three regions.json files. */
+export function resolveCharactersRoot(option) {
+  const candidates = [option, process.env.FAMLING_CHARACTERS_DIR, DEFAULT_CHARACTERS_ROOT].filter((value) => typeof value === 'string' && value !== '')
+  for (const candidate of candidates) {
+    const complete = Object.values(REGION_CHARACTER_DIRS).every((dir) => existsSync(join(candidate, dir, 'regions.json')))
+    if (complete) return resolve(candidate)
+  }
+  return null
+}
+
+function regionFail(kind, message) {
+  throw new Error(kind + ' regions.json: ' + message)
+}
+
+function asRegionRecord(kind, value, what) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) regionFail(kind, what + ' must be an object')
+  return value
+}
+
+function asRegionString(kind, value, what, max) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > max) regionFail(kind, what + ' must be a non-empty string <= ' + max + ' chars')
+  return value
+}
+
+function asRegionFinite(kind, value, what) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) regionFail(kind, what + ' must be a finite number')
+  return value
+}
+
+function asRegionRect(kind, value, what) {
+  if (!Array.isArray(value) || value.length !== 4) regionFail(kind, what + ' must be [x,y,width,height]')
+  const rect = value.map((part, index) => asRegionFinite(kind, part, what + '[' + index + ']'))
+  if (rect[2] <= 0 || rect[3] <= 0) regionFail(kind, what + ' width/height must be > 0')
+  return rect
+}
+
+/**
+ * Read + validate one character's regions.json (the famling hero tap-region
+ * contract: version/canvas/regions/gestures, art pixels, data-driven reactions).
+ * Unknown fields are dropped so the embedded data is a strict, stable subset
+ * and `--check` can compare it deterministically.
+ */
+export function loadRegionConfig(charactersRoot, kind) {
+  const dir = REGION_CHARACTER_DIRS[kind]
+  if (!dir) throw new Error('no regions.json character dir for ' + kind)
+  if (!charactersRoot) throw new Error(kind + ': character regions root is not available')
+  const regionsPath = join(charactersRoot, dir, 'regions.json')
+  if (!existsSync(regionsPath)) regionFail(kind, 'missing file ' + regionsPath)
+  let raw
+  try {
+    raw = JSON.parse(readFileSync(regionsPath, 'utf8'))
+  } catch (error) {
+    regionFail(kind, 'cannot parse ' + regionsPath + ': ' + error.message)
+  }
+  if (raw.version !== 1) regionFail(kind, 'version must be 1')
+  if (!Array.isArray(raw.canvas) || raw.canvas.length !== 2) regionFail(kind, 'canvas must be [width,height]')
+  const canvas = raw.canvas.map((part, index) => asRegionFinite(kind, part, 'canvas[' + index + ']'))
+  if (canvas[0] < 16 || canvas[1] < 16 || canvas[0] > 1024 || canvas[1] > 1024) regionFail(kind, 'canvas must be 16..1024 art px')
+  if (!Array.isArray(raw.regions) || raw.regions.length === 0 || raw.regions.length > MAX_REGIONS) regionFail(kind, 'regions must be a non-empty array (<= ' + MAX_REGIONS + ')')
+  const ids = new Set()
+  const regions = raw.regions.map((entry, index) => {
+    const region = asRegionRecord(kind, entry, 'regions[' + index + ']')
+    const id = asRegionString(kind, region.id, 'regions[' + index + '].id', 64)
+    if (!REGION_ID_RE.test(id)) regionFail(kind, 'regions[' + index + '].id "' + id + '" is not a safe id')
+    if (ids.has(id)) regionFail(kind, 'duplicate region id "' + id + '"')
+    ids.add(id)
+    const rect = asRegionRect(kind, region.rect, 'regions[' + index + '].rect')
+    if (rect[0] < 0 || rect[1] < 0 || rect[0] + rect[2] > canvas[0] || rect[1] + rect[3] > canvas[1]) {
+      regionFail(kind, 'regions[' + index + '].rect must stay inside the ' + canvas[0] + 'x' + canvas[1] + ' canvas')
+    }
+    const label = region.label === undefined ? undefined : asRegionString(kind, region.label, 'regions[' + index + '].label', 32)
+    const priority = region.priority === undefined ? undefined : asRegionFinite(kind, region.priority, 'regions[' + index + '].priority')
+    return { id, ...(label !== undefined ? { label } : {}), rect, ...(priority !== undefined ? { priority } : {}) }
+  })
+  if (!Array.isArray(raw.gestures) || raw.gestures.length > MAX_GESTURES) regionFail(kind, 'gestures must be an array (<= ' + MAX_GESTURES + ')')
+  const gestures = raw.gestures.map((entry, index) => {
+    const rule = asRegionRecord(kind, entry, 'gestures[' + index + ']')
+    const region = asRegionString(kind, rule.region, 'gestures[' + index + '].region', 64)
+    if (!ids.has(region)) regionFail(kind, 'gestures[' + index + '].region "' + region + '" is not declared')
+    const event = asRegionString(kind, rule.event, 'gestures[' + index + '].event', 64)
+    if (!REGION_EVENT_RE.test(event)) regionFail(kind, 'gestures[' + index + '].event "' + event + '" is not a safe event name')
+    if (!REGION_EVENTS.includes(event)) regionFail(kind, 'gestures[' + index + '].event "' + event + '" has no client clip mapping')
+    const gesture = rule.gesture === undefined ? undefined : asRegionString(kind, rule.gesture, 'gestures[' + index + '].gesture', 24)
+    let states
+    if (rule.states !== undefined) {
+      if (!Array.isArray(rule.states) || rule.states.length === 0 || rule.states.length > MAX_STATES) {
+        regionFail(kind, 'gestures[' + index + '].states must be a non-empty array (<= ' + MAX_STATES + ')')
+      }
+      states = rule.states.map((state, stateIndex) => {
+        const value = asRegionString(kind, state, 'gestures[' + index + '].states[' + stateIndex + ']', 64)
+        if (!REGION_ID_RE.test(value)) regionFail(kind, 'gestures[' + index + '].states[' + stateIndex + '] "' + value + '" is not a safe state name')
+        return value
+      })
+    }
+    const say = rule.say === undefined ? undefined : asRegionString(kind, rule.say, 'gestures[' + index + '].say', MAX_SAY)
+    return { region, ...(states !== undefined ? { states } : {}), ...(gesture !== undefined ? { gesture } : {}), event, ...(say !== undefined ? { say } : {}) }
+  })
+  return { version: 1, canvas: [canvas[0], canvas[1]], regions, gestures }
 }
 
 function loadPack(assetsRoot, kind) {
@@ -353,12 +482,21 @@ function validatePolicies(anims) {
 export function buildAnimationData(assetsRoot, options = {}) {
   const optimize = options.optimize !== false
   const packs = loadPacks(assetsRoot)
+  const charactersRoot = resolveCharactersRoot(Object.prototype.hasOwnProperty.call(options, 'charactersRoot') ? options.charactersRoot : undefined)
+  if (!charactersRoot) throw new Error('character tap regions not found; pass --characters DIR or set FAMLING_CHARACTERS_DIR')
   const anims = {}
   const sprites = {}
   const hash = createHash('sha256')
   const stats = []
   for (const kind of CHARACTERS) {
     const pack = packs[kind]
+    const regions = loadRegionConfig(charactersRoot, kind)
+    const canvas = pack.manifest.canvas
+    if (regions.canvas[0] !== canvas[0] || regions.canvas[1] !== canvas[1]) {
+      throw new Error(kind + ': regions.json canvas ' + regions.canvas.join('x') + ' differs from the animation canvas ' + canvas.join('x'))
+    }
+    hash.update('regions/' + kind + ':')
+    hash.update(JSON.stringify(regions))
     const clips = {}
     for (const [clipId, clip] of Object.entries(pack.clips)) {
       clips[clipId] = { frames: [], fps: clip.fps, loop: clip.loop === true, layer: clip.layer || 'base', category: clip.category || '', priority: Number(clip.priority) || 0 }
@@ -385,6 +523,7 @@ export function buildAnimationData(assetsRoot, options = {}) {
     const microActions = (pack.manifest.anim.randomMicroActions || []).filter((clipId) => clips[clipId] && clipId !== 'idle' && clipId !== 'idle_blink')
     anims[kind] = {
       clips,
+      regions,
       bubble: voice.bubble === 'thought' ? 'thought' : 'speech',
       canTts: voice.canTts === true,
       voiceMode: typeof voice.mode === 'string' ? voice.mode : 'none',
@@ -394,7 +533,7 @@ export function buildAnimationData(assetsRoot, options = {}) {
     stats.push({ kind, frames: pack.frames.length, sourceBytes, embeddedBytes, base64Chars, optimizedFrames })
   }
   validatePolicies(anims)
-  return { anims, sprites, stats, sourceSha256: hash.digest('hex') }
+  return { anims, sprites, stats, sourceSha256: hash.digest('hex'), charactersRoot }
 }
 
 /** Render the generated block, including both marker lines. */
@@ -405,6 +544,7 @@ export function renderBlock(data) {
   lines.push('    ' + BEGIN_MARKER)
   lines.push('    // @generated by scripts/embed-anims.mjs - do not edit this block by hand.')
   lines.push('    // source: ../../desktop-games/public/assets/pet/anim (96x96 RGBA PNG; losslessly re-encoded indexed PNG, hard alpha kept)')
+  lines.push('    // regions: ../../desktop-games/public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/regions.json (head/body/tail tap zones, idle gating)')
   lines.push('    // source-sha256: ' + data.sourceSha256)
   lines.push('    // characters: human/cat/dog - 12 clips - ' + totalFrames + ' frames - base64 chars: ' + totalBase64)
   lines.push('    const ANIMS = ' + JSON.stringify(data.anims, null, 2).split('\n').join('\n    '))
@@ -456,6 +596,7 @@ function formatBytes(bytes) {
 
 function printSummary(data, assetsRoot, extra = {}) {
   console.log('[embed-anims] assets: ' + assetsRoot)
+  if (data.charactersRoot) console.log('[embed-anims] regions: ' + data.charactersRoot)
   console.log('[embed-anims] source sha256: ' + data.sourceSha256.slice(0, 16) + '...')
   for (const item of data.stats) {
     console.log('[embed-anims] ' + item.kind.padEnd(5) + ' frames=' + item.frames + ' raw=' + formatBytes(item.sourceBytes) + ' embedded=' + formatBytes(item.embeddedBytes) + ' base64=' + formatBytes(item.base64Chars) + ' reencoded=' + item.optimizedFrames + '/' + item.frames)
@@ -474,11 +615,11 @@ function printSummary(data, assetsRoot, extra = {}) {
 export function generate(options = {}) {
   const assetsRoot = resolveAssetsRoot(options.assetsRoot)
   if (!assetsRoot) throw new Error('animation assets not found; pass --src DIR or set FAMLING_ANIM_DIR')
-  const data = buildAnimationData(assetsRoot, { optimize: options.optimize !== false })
+  const data = buildAnimationData(assetsRoot, { optimize: options.optimize !== false, charactersRoot: options.charactersRoot })
   const block = renderBlock(data)
   const source = readFileSync(CLIENT_PATH, 'utf8')
   const next = injectBlock(source, block)
-  return { data, block, source, next, assetsRoot }
+  return { data, block, source, next, assetsRoot, charactersRoot: data.charactersRoot }
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -491,7 +632,7 @@ export async function main(argv = process.argv.slice(2)) {
     return
   }
   if (options.help) {
-    console.log('usage: node scripts/embed-anims.mjs [--check] [--qa] [--no-optimize] [--src DIR]')
+    console.log('usage: node scripts/embed-anims.mjs [--check] [--qa] [--no-optimize] [--src DIR] [--characters DIR]')
     return
   }
   try {

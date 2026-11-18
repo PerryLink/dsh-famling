@@ -123,6 +123,20 @@ function createUi(Component, ReactRuntime) {
     findButtonByAria(label) { return findAll((node) => node.type === 'button' && node.props['aria-label'] === label)[0] },
     findInput(type) { return findAll((node) => node.type === 'input' && node.props.type === type)[0] },
     findBubble() { return findAll((node) => node.type === 'div' && node.props.role === 'status')[0] },
+    findPetButton() { return findAll((node) => node.type === 'button' && typeof node.props.title === 'string' && node.props.title.startsWith('Famling ·'))[0] },
+    /**
+     * Simulate a click on the pet image at an art-canvas point. The fake target
+     * reports a rendered size, so the client must map offsetX/Y through the
+     * actual display size back to the logical 96x96 canvas.
+     */
+    clickPetAt(artX, artY, display = 72) {
+      const button = ui.findPetButton()
+      assert.ok(button, 'pet button exists')
+      const scale = display / 96
+      const rect = { left: 0, top: 0, right: display, bottom: display, width: display, height: display }
+      const target = { width: display, height: display, getBoundingClientRect: () => rect }
+      button.props.onClick({ target, currentTarget: target, nativeEvent: { offsetX: artX * scale, offsetY: artY * scale }, preventDefault() {} })
+    },
     click(node) {
       assert.ok(node, 'clickable node exists')
       assert.equal(typeof node.props.onClick, 'function', 'node has onClick')
@@ -221,6 +235,15 @@ function idleSrc(kind) {
   return 'data:image/png;base64,' + embedded.SPRITES[key]
 }
 
+function clipSrc(kind, clipId, index = 0) {
+  const key = embedded.ANIMS[kind].clips[clipId].frames[index]
+  return 'data:image/png;base64,' + embedded.SPRITES[key]
+}
+
+function petImage(ui) {
+  return ui.findAll((node) => node.type === 'img')[0]
+}
+
 test('default render is Tinglan with the embedded 72px idle frame', () => {
   const { ui, speech } = createHarness()
   assert.equal(ui.tree.props['data-character'], 'human')
@@ -233,13 +256,14 @@ test('default render is Tinglan with the embedded 72px idle frame', () => {
   assert.equal(speech.speak.length, 0, 'nothing is spoken before an interaction')
 })
 
-test('settings panel switches to the Ragdoll cat, persists it and disables voice', () => {
+test('settings panel switches to the Selkirk Rex cat, persists it and disables voice', () => {
   const { ui, speech, storage } = createHarness()
   ui.clickText('设置')
   ui.render()
-  ui.clickText('布偶猫')
+  ui.clickText('塞尔凯克卷毛猫')
   ui.render()
   assert.equal(ui.tree.props['data-character'], 'cat')
+  assert.equal(ui.findPetButton().props['aria-label'], '塞尔凯克卷毛猫', 'pet aria-label uses the Selkirk Rex name')
   assert.equal(ui.findAll((node) => node.type === 'img')[0].props.src, idleSrc('cat'))
   assert.equal(storage.get('dsh-famling/character'), 'cat')
   const checkboxes = ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox')
@@ -301,7 +325,7 @@ test('chat bridge sends the active character so the Host can switch personas', a
   await typeAndSend('你好')
   ui.clickText('设置')
   ui.render()
-  ui.clickText('布偶猫')
+  ui.clickText('塞尔凯克卷毛猫')
   ui.render()
   ui.clickText('输入')
   ui.render()
@@ -340,5 +364,95 @@ test('chat bridge still works from the input panel (op:chat, same endpoint)', as
   assert.ok(bubble)
   assert.equal(ui.text(bubble), '嗯，我在。')
   assert.equal(speech.speak.length, 1, 'human reply is read aloud under TTS consent')
+})
+
+// Art-canvas points (96x96) inside each character's head/body/tail region.
+const REGION_CASES = {
+  human: {
+    head: { point: [51, 27], clip: 'pat_head', line: '被摸到了。' },
+    body: { point: [48, 66], clip: 'stand_wag', line: '挥了挥手。' },
+    tail: { point: [74, 72], clip: 'chase_tail', line: '回头看了一眼。' },
+  },
+  cat: {
+    head: { point: [50, 35], clip: 'pat_head', line: '（被摸到了，呼噜呼噜…）' },
+    body: { point: [50, 69], clip: 'stand_wag', line: '（站起来看看。）' },
+    tail: { point: [81, 69], clip: 'chase_tail', line: '（尾巴…转。）' },
+  },
+  dog: {
+    head: { point: [50, 31], clip: 'pat_head', line: '（好舒服，还要！）' },
+    body: { point: [49, 68], clip: 'stand_wag', line: '（摇尾巴…开心。）' },
+    tail: { point: [83, 67], clip: 'chase_tail', line: '（尾巴在动？追！）' },
+  },
+}
+
+test('region taps map head/body/tail to pat_head/stand_wag/chase_tail', () => {
+  for (const kind of ['human', 'cat', 'dog']) {
+    for (const [regionId, expected] of Object.entries(REGION_CASES[kind])) {
+      const { ui, speech } = createHarness({ character: kind })
+      ui.clickPetAt(expected.point[0], expected.point[1])
+      ui.render()
+      assert.equal(petImage(ui).props.src, clipSrc(kind, expected.clip), kind + '/' + regionId + ': plays ' + expected.clip)
+      const bubble = ui.findBubble()
+      assert.ok(bubble, kind + '/' + regionId + ': bubble renders')
+      assert.equal(ui.text(bubble), expected.line, kind + '/' + regionId + ': bubble line')
+      if (kind === 'human') {
+        assert.match(bubble.props.style.border, /solid/, 'human region taps use a solid speech bubble')
+        assert.equal(speech.speak.length, 1, 'human region taps may use browser TTS')
+      } else {
+        assert.match(bubble.props.style.border, /dashed/, kind + ' region taps use a thought bubble')
+        assert.equal(speech.speak.length, 0, kind + ' region taps never call browser TTS')
+      }
+    }
+  }
+})
+
+test('the same relative tap point hits the same region at every rendered size', () => {
+  const points = [[50, 35, 'pat_head'], [50, 69, 'stand_wag'], [81, 69, 'chase_tail']]
+  for (const display of [64, 72, 96, 144, 192]) {
+    for (const [artX, artY, clipId] of points) {
+      const { ui } = createHarness({ character: 'cat' })
+      ui.clickPetAt(artX, artY, display)
+      ui.render()
+      assert.equal(petImage(ui).props.src, clipSrc('cat', clipId), display + 'px display: ' + clipId)
+    }
+  }
+})
+
+test('a tap does not interrupt a playing (non-idle) animation', () => {
+  const { ui, speech } = createHarness({ character: 'human' })
+  ui.clickText('互动')
+  ui.render()
+  ui.clickText('摸摸')
+  ui.render()
+  const playing = petImage(ui).props.src
+  const playingBubble = ui.text(ui.findBubble())
+  assert.equal(playing, clipSrc('human', 'pat_head'), 'pat_head clip is playing')
+  ui.clickPetAt(74, 72) // the tail region would play chase_tail if gating were missing
+  ui.render()
+  assert.equal(petImage(ui).props.src, playing, 'animation is unchanged while non-idle')
+  assert.equal(ui.text(ui.findBubble()), playingBubble, 'bubble is unchanged while non-idle')
+  assert.equal(speech.speak.length, 1, 'no extra narration while non-idle')
+})
+
+test('a tap outside every region is a no-op (no random fallback)', () => {
+  const { ui, speech } = createHarness({ character: 'dog' })
+  const idle = petImage(ui).props.src
+  ui.clickPetAt(3, 3)
+  ui.render()
+  assert.equal(petImage(ui).props.src, idle, 'idle animation keeps playing')
+  assert.equal(ui.findBubble(), undefined, 'no bubble on transparent/undefined area')
+  assert.equal(speech.speak.length, 0, 'no narration on transparent/undefined area')
+})
+
+test('region taps still react during the idle blink phase', () => {
+  const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
+  const blinkTimer = timers.timeouts.find((timer) => timer.ms >= 3600 && timer.ms < 6200)
+  assert.ok(blinkTimer, 'idle blink timer is scheduled')
+  blinkTimer.fn()
+  ui.render()
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle_blink'), 'blink frame is showing')
+  ui.clickPetAt(50, 35)
+  ui.render()
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'pat_head'), 'head tap reacts while blinking')
 })
 

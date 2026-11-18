@@ -6,6 +6,8 @@
  *   - the generated ANIMS/SPRITES block and the hand-written ACTION_SETS/
  *     MICRO_LINES block are structurally valid and every action maps to a clip
  *     that really exists for that character;
+ *   - each embedded character's regions (head/body/tail tap zones, idle gating,
+ *     gesture -> event -> clip mapping) follow the famling hero regions contract;
  *   - all 3 x 68 frames decode as 96x96 PNGs with visible pixels;
  *   - bubble/TTS policy is human=speech+tts, cat/dog=thought+no-tts;
  *   - the hand-written label/line i18n keys the action table points at exist;
@@ -26,6 +28,7 @@ import {
   DEFAULT_ASSETS_ROOT,
   END_MARKER,
   PLUGIN_ROOT,
+  REGION_EVENTS,
   buildAnimationData,
   decodePng,
   resolveAssetsRoot,
@@ -39,6 +42,70 @@ const EXPECTED_CLIP_COUNT = 12
 const EXPECTED_FRAME_COUNT = 68
 const EXPECTED_CANVAS = 96
 const REQUIRED_ACTION_CLIPS = ['pat_head', 'ball_throw', 'ball_chase']
+// The plugin click layer maps region gesture events to these animation clips.
+const REQUIRED_REGIONS = { head: 'pat', body: 'stand_wag', tail: 'chase_tail' }
+
+/** Validate one embedded ANIMS[character].regions document against the hero contract. */
+function verifyEmbeddedRegions(kind, anim, errors) {
+  const config = anim.regions
+  if (!config || typeof config !== 'object') {
+    errors.push(kind + ': regions are missing')
+    return
+  }
+  if (config.version !== 1) errors.push(kind + ': regions.version must be 1')
+  if (!Array.isArray(config.canvas) || config.canvas[0] !== EXPECTED_CANVAS || config.canvas[1] !== EXPECTED_CANVAS) {
+    errors.push(kind + ': regions.canvas must be ' + EXPECTED_CANVAS + 'x' + EXPECTED_CANVAS)
+  }
+  if (!Array.isArray(config.regions) || config.regions.length === 0) {
+    errors.push(kind + ': regions must be a non-empty array')
+    return
+  }
+  const regionIds = new Set()
+  for (const region of config.regions) {
+    if (!region || typeof region.id !== 'string' || region.id.length === 0) {
+      errors.push(kind + ': region without a valid id')
+      continue
+    }
+    if (regionIds.has(region.id)) errors.push(kind + ': duplicate region ' + region.id)
+    regionIds.add(region.id)
+    const rect = region.rect
+    if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((value) => Number.isFinite(value))) {
+      errors.push(kind + '/' + region.id + ': rect must be four finite numbers')
+      continue
+    }
+    if (rect[2] <= 0 || rect[3] <= 0) errors.push(kind + '/' + region.id + ': rect width/height must be > 0')
+    if (rect[0] < 0 || rect[1] < 0 || rect[0] + rect[2] > EXPECTED_CANVAS || rect[1] + rect[3] > EXPECTED_CANVAS) {
+      errors.push(kind + '/' + region.id + ': rect must stay inside the ' + EXPECTED_CANVAS + 'x' + EXPECTED_CANVAS + ' canvas')
+    }
+  }
+  if (!Array.isArray(config.gestures) || config.gestures.length === 0) {
+    errors.push(kind + ': regions.gestures must be a non-empty array')
+    return
+  }
+  for (const gesture of config.gestures) {
+    if (!gesture || typeof gesture !== 'object') {
+      errors.push(kind + ': malformed region gesture')
+      continue
+    }
+    if (typeof gesture.region !== 'string' || !regionIds.has(gesture.region)) errors.push(kind + ': gesture region is not declared: ' + gesture.region)
+    if (!REGION_EVENTS.includes(gesture.event)) errors.push(kind + ': gesture event has no client clip mapping: ' + gesture.event)
+    if (gesture.gesture !== undefined && gesture.gesture !== 'tap') errors.push(kind + '/' + gesture.region + ': unsupported gesture ' + gesture.gesture)
+  }
+  for (const [regionId, expectedEvent] of Object.entries(REQUIRED_REGIONS)) {
+    if (!regionIds.has(regionId)) {
+      errors.push(kind + ': regions must declare ' + regionId)
+      continue
+    }
+    const rule = config.gestures.find((gesture) => gesture.region === regionId && gesture.event === expectedEvent)
+    if (!rule) {
+      errors.push(kind + ': ' + regionId + ' must map tap -> ' + expectedEvent)
+      continue
+    }
+    if (!Array.isArray(rule.states) || !rule.states.includes('idle') || !rule.states.includes('idle_blink')) {
+      errors.push(kind + ': ' + regionId + ' reaction must be state-gated to idle/idle_blink')
+    }
+  }
+}
 
 function extractConstBlock(source, beginMarker, endMarker) {
   const lines = source.split('\n')
@@ -130,6 +197,7 @@ export function verifyClient(options = {}) {
     }
     if (frameCount !== EXPECTED_FRAME_COUNT) errors.push(kind + ': expected ' + EXPECTED_FRAME_COUNT + ' frames, got ' + frameCount)
     if (emptyFrames > 0) errors.push(kind + ': ' + emptyFrames + ' fully transparent frames')
+    verifyEmbeddedRegions(kind, anim, errors)
     const actionRows = ACTION_SETS?.[kind]
     if (!Array.isArray(actionRows) || actionRows.length === 0) {
       errors.push(kind + ': ACTION_SETS entry is missing')

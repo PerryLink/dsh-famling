@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { CHARACTERS, PLUGIN_ROOT, decodePng, resolveAssetsRoot } from '../scripts/embed-anims.mjs'
+import { CHARACTERS, PLUGIN_ROOT, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
 import { loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
 
 const clientPath = join(PLUGIN_ROOT, 'client.js')
@@ -46,6 +46,52 @@ test('bubble and TTS policy is human=speech/tts, cat+dog=thought/no-tts', () => 
   }
 })
 
+const REQUIRED_REGION_EVENTS = { head: 'pat', body: 'stand_wag', tail: 'chase_tail' }
+
+test('embedded tap regions follow the famling hero regions contract', () => {
+  for (const kind of CHARACTERS) {
+    const config = clientData.ANIMS[kind].regions
+    assert.ok(config, kind + ': regions embedded in ANIMS')
+    assert.equal(config.version, 1, kind + ': regions version')
+    assert.deepEqual(config.canvas, [96, 96], kind + ': regions canvas matches the 96x96 art canvas')
+    assert.ok(Array.isArray(config.regions) && config.regions.length > 0, kind + ': regions array')
+    const ids = new Set(config.regions.map((region) => region.id))
+    for (const regionId of Object.keys(REQUIRED_REGION_EVENTS)) assert.ok(ids.has(regionId), kind + ': declares ' + regionId)
+    for (const region of config.regions) {
+      assert.equal(region.rect.length, 4, kind + '/' + region.id + ': rect is [x,y,width,height]')
+      const [x, y, width, height] = region.rect
+      assert.ok(width > 0 && height > 0, kind + '/' + region.id + ': rect size is positive')
+      assert.ok(x >= 0 && y >= 0 && x + width <= 96 && y + height <= 96, kind + '/' + region.id + ': rect stays inside the canvas')
+    }
+    assert.ok(Array.isArray(config.gestures) && config.gestures.length > 0, kind + ': gestures array')
+    for (const [regionId, event] of Object.entries(REQUIRED_REGION_EVENTS)) {
+      const rule = config.gestures.find((gesture) => gesture.region === regionId && (gesture.gesture || 'tap') === 'tap' && gesture.event === event)
+      assert.ok(rule, kind + '/' + regionId + ': tap -> ' + event)
+      assert.ok(Array.isArray(rule.states) && rule.states.includes('idle') && rule.states.includes('idle_blink'), kind + '/' + regionId + ': idle/idle_blink gating')
+    }
+  }
+})
+
+test('embedded regions match the private character regions.json when present', (t) => {
+  const charactersRoot = resolveCharactersRoot(null)
+  if (!charactersRoot) {
+    t.skip('private character regions are not available in this checkout')
+    return
+  }
+  for (const kind of CHARACTERS) {
+    assert.deepEqual(clientData.ANIMS[kind].regions, loadRegionConfig(charactersRoot, kind), kind + ': embedded regions equal the source document')
+  }
+})
+
+test('client code hit-tests regions at the rendered size and only reacts while idle', () => {
+  assert.ok(clientSource.includes('function onPetClick(event)'), 'pet click handler receives the DOM event')
+  assert.ok(clientSource.includes("const REGION_EVENT_CLIPS = { pat: 'pat_head', stand_wag: 'stand_wag', chase_tail: 'chase_tail' }"), 'region events map to animation clips')
+  assert.ok(clientSource.includes('function clickArtPoint(event, config)'), 'rendered-size -> 96px art mapping helper exists')
+  assert.ok(clientSource.includes('function regionAt(config, artX, artY)'), 'region hit-test helper exists')
+  assert.ok(clientSource.includes("anim === 'idle' ? (blink ? 'idle_blink' : 'idle') : anim"), 'state gating accepts idle and idle_blink only')
+  assert.ok(!clientSource.includes('playMicroAction(true)'), 'pet clicks no longer fall back to a random micro action')
+})
+
 test('action mapping only uses clips that exist and exposes pat_head/ball_throw/ball_chase', () => {
   for (const kind of CHARACTERS) {
     const rows = clientData.ACTION_SETS[kind]
@@ -83,9 +129,22 @@ test('embedded animation data is current against the private asset pack when pre
   assert.equal(result.ok, true, result.errors.join('; '))
 })
 
-test('package version is 0.8.1 and the host bridge entrypoint is still exported', async () => {
+test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () => {
+  assert.ok(clientSource.includes("cat: '塞尔凯克卷毛猫'"), 'zh client label')
+  assert.ok(clientSource.includes("cat: 'Selkirk Rex'"), 'en client label')
+  assert.equal(clientSource.includes('布偶猫'), false, 'client source has no stale Ragdoll label')
+  for (const file of ['README.md', 'docs/DETAIL.md', 'locale/zh.json', 'locale/en.json']) {
+    const text = readFileSync(join(PLUGIN_ROOT, file), 'utf8')
+    assert.equal(text.includes('布偶猫'), false, file + ': no stale Ragdoll label')
+    assert.equal(text.includes('Ragdoll'), false, file + ': no stale Ragdoll label')
+  }
+  const zh = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'locale/zh.json'), 'utf8'))
+  assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
+})
+
+test('package version is 0.8.2 and the host bridge entrypoint is still exported', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.8.1')
+  assert.equal(pkg.version, '0.8.2')
   const module = await import('../index.js')
   assert.equal(typeof module.apply, 'function')
   assert.equal(module.name, 'dsh-famling')
