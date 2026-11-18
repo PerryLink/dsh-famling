@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Famling · Tinglan / Ragdoll / Golden Retriever",
-    "description": "Shows a pixel mini pet (Tinglan, Ragdoll cat, Golden Retriever) below the DSH account area; switch characters, local interactions and animations; the cat and dog only use silent thought bubbles.",
+    "description": "Shows a pixel mini pet (Tinglan, Ragdoll cat, Golden Retriever) below the DSH account area; switch characters, local interactions and animations; the chat persona follows the active character; the cat and dog only use silent thought bubbles.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -284,6 +284,37 @@ test('human interactions keep solid speech bubbles and browser TTS', () => {
   assert.equal(speech.speak[0].text, '被摸到了。')
 })
 
+test('chat bridge sends the active character so the Host can switch personas', async () => {
+  const { ui, fetchCalls } = createHarness()
+  async function typeAndSend(text) {
+    const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+    assert.ok(textarea, 'chat input panel is open')
+    ui.change(textarea, text)
+    ui.render()
+    ui.clickText('发送')
+    await ui.settle()
+  }
+  ui.clickText('输入')
+  ui.render()
+  await typeAndSend('你好')
+  ui.clickText('设置')
+  ui.render()
+  ui.clickText('布偶猫')
+  ui.render()
+  ui.clickText('输入')
+  ui.render()
+  await typeAndSend('今天好懒')
+  ui.clickText('设置')
+  ui.render()
+  ui.clickText('金毛')
+  ui.render()
+  ui.clickText('输入')
+  ui.render()
+  await typeAndSend('去玩球')
+  assert.equal(ui.tree.props['data-character'], 'dog')
+  assert.deepEqual(fetchCalls.map((call) => JSON.parse(call.init.body).character), ['human', 'cat', 'dog'])
+})
+
 test('stored character choice is restored on the next render', () => {
   const { ui } = createHarness({ character: 'dog' })
   assert.equal(ui.tree.props['data-character'], 'dog')
@@ -302,7 +333,7 @@ test('chat bridge still works from the input panel (op:chat, same endpoint)', as
   assert.equal(fetchCalls.length, 1)
   assert.match(fetchCalls[0].url, /\/api\/famling\/bridge$/)
   const payload = JSON.parse(fetchCalls[0].init.body)
-  assert.deepEqual(payload, { v: 1, op: 'chat', text: '你好' })
+  assert.deepEqual(payload, { v: 1, op: 'chat', text: '你好', character: 'human' })
   const bubble = ui.findBubble()
   assert.ok(bubble)
   assert.equal(ui.text(bubble), '嗯，我在。')

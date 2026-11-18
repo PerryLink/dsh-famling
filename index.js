@@ -15,7 +15,26 @@ const MAX_INPUT_CHARS = 2000
 const MAX_BODY_BYTES = 16 * 1024
 const BRIDGE_PATH = '/api/famling/bridge'
 const LLM_TIMEOUT_MS = 25_000
-const SYSTEM_PROMPT = '你是汀岚，一只安静、简洁的桌面小生灵。用中文回答，1-3 句；不知道就说不知道。不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
+const CHARACTER_IDS = ['human', 'cat', 'dog']
+// Every persona keeps the same hard boundaries: the pet must never pose as a
+// human/official/professional, must not build dependency or romantic/paid/minor
+// relationships, and must not output illegal or private content.
+const SAFETY_BOUNDARY = '不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
+const PERSONAS = {
+  human: '你是汀岚，一只安静、简洁的桌面小生灵，也是用户的工作搭子。用中文回答，1-3 句，先给结论；不知道就说不知道。' + SAFETY_BOUNDARY,
+  cat: '你是布偶猫（AI 桌面伙伴，不是真的猫），一只懒散、高冷的桌面小猫。用中文回答，1-2 句短句；可以轻微傲娇，但不冒犯、不刻薄；不知道就说不知道。' + SAFETY_BOUNDARY,
+  dog: '你是金毛（AI 桌面伙伴，不是真的狗），一只友善、热情的桌面小狗。用中文回答，1-3 句，简单直接；不知道就说不知道。' + SAFETY_BOUNDARY,
+}
+
+/** Map a bridge request character to a persona id; missing/unknown values fall back to human. */
+function characterId(value) {
+  return typeof value === 'string' && CHARACTER_IDS.includes(value) ? value : 'human'
+}
+
+/** Select the system prompt for one persona id (already normalized by characterId). */
+function personaPrompt(character) {
+  return Object.prototype.hasOwnProperty.call(PERSONAS, character) ? PERSONAS[character] : PERSONAS.human
+}
 
 /** Normalize an optional string: trim it, and treat a blank value as absent. */
 function optionalString(value) {
@@ -117,7 +136,7 @@ async function readBriefProjection() {
   }
 }
 
-async function chatWithDsh(ctx, input, config) {
+async function chatWithDsh(ctx, input, config, character) {
   const selection = resolveSelection(ctx, config)
   if (!selection) throw new Error('no-model')
   const controller = new AbortController()
@@ -128,7 +147,7 @@ async function chatWithDsh(ctx, input, config) {
       provider: selection.provider,
       model: selection.model,
       ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort }),
-      system: SYSTEM_PROMPT,
+      system: personaPrompt(character),
       messages: [{ role: 'user', content: [{ type: 'text', text: input }] }],
       maxTokens: 300,
       signal: controller.signal,
@@ -198,8 +217,11 @@ async function handleBridge(ctx, request, config) {
   if (typeof payload.text !== 'string') return error('E_INPUT', 'text is required.')
   const input = payload.text.trim()
   if (input.length === 0 || input.length > MAX_INPUT_CHARS) return error('E_INPUT', 'Text length is invalid.')
+  // Persona follows the character picked in the client; invalid/absent values
+  // deliberately fall back to the human Tinglan persona instead of failing.
+  const character = characterId(payload.character)
   try {
-    const chat = await chatWithDsh(ctx, input, config)
+    const chat = await chatWithDsh(ctx, input, config, character)
     return json(200, {
       v: 1,
       ok: true,

@@ -23,6 +23,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 互动面板：按形象映射到该角色真实存在的 clip——三个角色都有 `pat_head` / `ball_throw` / `ball_chase`；汀岚另有挥手、伸懒腰、抬手，布偶猫另有洗脸、站起来、追尾巴，金毛另有摇尾巴、追尾巴、挠痒。绝不会把 A 角色的动作放到 B 角色身上。
 - 设置：形象切换、语音朗读、帧动画、说话气泡开关，存本机 localStorage（形象键 `dsh-famling/character`，默认汀岚）。
 - 气泡：**汀岚**的台词是实心 speech 气泡，可配合浏览器 TTS（保留原有独立同意）；**布偶猫/金毛**只用空心 thought 气泡，永不调用 `speechSynthesis`，设置里的语音朗读对它们禁用并提示“仅汀岚可用”；切到猫/狗时若正在朗读会立即停止。气泡不常驻、不遮挡人物。
+- 聊天人格随形象切换（0.8.1）：输入面板的聊天请求会带当前形象（`human`/`cat`/`dog`，缺省 `human`）；Host 按形象选择 system prompt，切猫/狗后回复语气随之变化。
 - 输入面板的 LLM/TTS/ASR/记忆需要 Host 桥接；未接入时如实提示，不伪造回复。
 - 不宣传 roleplay；不包含完整桌宠/游戏基座。
 - 无 roleplay 公开入口；网络请求仅限同源 `/api/famling/bridge`（DSH Host 路由）。
@@ -41,7 +42,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - `POST /api/famling/bridge`（同源、owner-only、JSON ≤16KB）
 - `op:"echo"` → 本地回显
-- `op:"chat"` → Host `ctx.llm.stream`；provider/model 来自 DSH 默认模型选择或本插件 Config，**不写死**（Key 只在 Host）
+- `op:"chat"` → Host `ctx.llm.stream`；provider/model 来自 DSH 默认模型选择或本插件 Config，**不写死**（Key 只在 Host）；system prompt 按请求的 `character` 选择人格（非法/缺失回退 `human`）
 - `op:"brief"` → 只读 `~/.advisers/pet-brief.json`，只投影计数/今天/承诺，不代传 Advisers TOS
 - `op:"task"` → `ctx.schedule.create` 一次性提醒（绝对时间；不自己实现定时器）
 - TTS/ASR 各自独立同意；默认关闭；浏览器语音会明确说明音频去向
@@ -67,7 +68,19 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
     reasoningEffort: max   # 可选
 ```
 
-不要改 DSH 自带的 profile bundle；优先用 DSH 的模型选择器。```
+不要改 DSH 自带的 profile bundle；优先用 DSH 的模型选择器。
+
+## 人格随形象切换（0.8.1）
+
+切形象时图像与聊天人格一起切换：`client.js` 的 `op:"chat"` 请求携带当前 `character`（`human`/`cat`/`dog`，非法或缺失时客户端归一为 `human`）；`index.js` 用它选择 system prompt，Host 侧同样对非法值回退 `human`。
+
+| character | 形象 | 人格要点 | 气泡/语音 |
+|---|---|---|---|
+| `human` | 汀岚 | 安静、简洁的工作搭子；先给结论 | 实心 speech，可用浏览器 TTS |
+| `cat` | 布偶猫 | 懒散、高冷、短句；允许轻微傲娇但不冒犯 | 空心 thought，永不 TTS |
+| `dog` | 金毛 | 友善、热情、简单直接 | 空心 thought，永不 TTS |
+
+三条人格共用同一组安全边界：不冒充真人/官方/专业顾问；不诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。人格只是 system prompt 级的语气差异，不是独立角色扮演或情感陪伴；模型仍由 DSH 默认模型选择决定。
 
 ## 安装（本地）
 
@@ -93,7 +106,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 ## 限制
 
 - 仅本地小 widget，不是完整 famling；完整应用见 `PerryLink/famling`。
-- Host 聊天人格仍是汀岚（`index.js` 的 system prompt 未按形象切换）；切到猫/狗时回复会以猫/狗的空心气泡呈现，但文本语气仍来自汀岚人格。客户端动画/语音规则不受影响。
+- Host 聊天人格随形象切换（0.8.1）：人格差异只体现在 system prompt，安全边界与 AI 声明不变；切换形象只影响之后的聊天请求，不会改写正在进行或已生成的回复。模型选择仍由 DSH 默认模型选择/插件 Config 决定。
 - 动画包标注为 placeholder（非最终美术，非商业授权），与插件整体 PolyForm Noncommercial 许可一致。
 - 不是官方 DeepSeek 项目；不使用 DeepSeek 官方 logo/字标。
 - 插件不保存个人数据；点击计数不持久化。

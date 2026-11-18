@@ -67,6 +67,12 @@ test('client code enforces the TTS policy guard and persists the character', () 
   assert.ok(clientSource.includes('window.speechSynthesis.cancel()'), 'silent characters cancel running speech')
 })
 
+test('chat payload carries the active character with a human fallback', () => {
+  assert.ok(clientSource.includes('function chatCharacter(value)'), 'character normalization helper exists')
+  assert.ok(clientSource.includes("return CHARACTER_IDS.includes(value) ? value : 'human'"), 'unknown/missing character falls back to human')
+  assert.ok(clientSource.includes("op: 'chat', text, character: chatCharacter(characterRef.current)"), 'chat request carries the live character')
+})
+
 test('embedded animation data is current against the private asset pack when present', (t) => {
   const assetsRoot = resolveAssetsRoot(null)
   if (!assetsRoot) {
@@ -77,9 +83,9 @@ test('embedded animation data is current against the private asset pack when pre
   assert.equal(result.ok, true, result.errors.join('; '))
 })
 
-test('package version is 0.8.0 and the host bridge entrypoint is still exported', async () => {
+test('package version is 0.8.1 and the host bridge entrypoint is still exported', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.8.0')
+  assert.equal(pkg.version, '0.8.1')
   const module = await import('../index.js')
   assert.equal(typeof module.apply, 'function')
   assert.equal(module.name, 'dsh-famling')
