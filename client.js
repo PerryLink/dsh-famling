@@ -246,7 +246,7 @@ window.__ModuleLoader__.load({
       const frameName = anim === 'idle' ? idleFrame : (SEQ[anim]?.frames[frameIndex % SEQ[anim].frames.length] || 'idle_00')
       const src = 'data:image/png;base64,' + (SPRITES[frameName] || SPRITES.idle_00)
       const panelStyle = {
-        position: 'fixed', left: panelAnchor.current.left, bottom: panelAnchor.current.bottom, zIndex: 1200,
+        position: 'fixed', left: panelAnchor.current.left, bottom: panelAnchor.current.bottom, zIndex: 1200, pointerEvents: 'auto',
         background: 'var(--dsw-alias-bg-elevated, #1f2329)', color: 'var(--dsw-alias-label-primary, #e8e8e8)',
         border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 'var(--dsw-radius-md, 10px)',
         boxShadow: '0 10px 30px rgba(0,0,0,.32)', padding: 10, fontSize: 12,
@@ -321,17 +321,17 @@ window.__ModuleLoader__.load({
       const bubbleNode = settings.bubble && bubble ? h('div', {
         role: 'status', 'aria-live': 'polite',
         style: {
-          position: 'fixed', left: Math.max(8, (rootRef.current?.getBoundingClientRect().left ?? 12)), bottom: Math.max(8, window.innerHeight - (rootRef.current?.getBoundingClientRect().top ?? 120) + 6), zIndex: 1100,
+          position: 'fixed', left: Math.max(8, (rootRef.current?.getBoundingClientRect().left ?? 12)), bottom: Math.max(8, window.innerHeight - (rootRef.current?.getBoundingClientRect().top ?? 120) + 6), zIndex: 1100, pointerEvents: 'none',
           width: 'fit-content', minWidth: 90, maxWidth: 240, padding: '7px 10px',
           background: 'var(--dsw-alias-bg-elevated, #1f2329)', color: 'var(--dsw-alias-label-primary, #e8e8e8)',
           border: bubbleKind === 'thought' ? '1.5px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.4))' : '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.3))',
           borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 12, lineHeight: 1.5, overflowWrap: 'anywhere',
         },
       }, bubble) : null
-      return h('div', { ref: rootRef, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: 8 } }, [
-        h('button', { key: 'pet', type: 'button', onClick: onPetClick, 'aria-label': L.pet, title: L.title, style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none' } },
+      return h('div', { ref: rootRef, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', height: 'fit-content', pointerEvents: 'none' } }, [
+        h('button', { key: 'pet', type: 'button', onClick: onPetClick, 'aria-label': L.pet, title: L.title, style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
           h('img', { src, width: SIZE, height: SIZE, alt: L.pet, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),
-        h('div', { key: 'buttons', style: { display: 'flex', flexDirection: 'column', gap: 3, flex: 'none' } }, [
+        h('div', { key: 'buttons', style: { display: 'flex', flexDirection: 'column', gap: 3, flex: 'none', pointerEvents: 'auto' } }, [
           h('button', { key: 'input', type: 'button', onClick: () => openPanel('input'), 'aria-expanded': mode === 'input', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.input),
           h('button', { key: 'actions', type: 'button', onClick: () => openPanel('actions'), 'aria-expanded': mode === 'actions', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.interact),
           h('button', { key: 'settings', type: 'button', onClick: () => openPanel('settings'), 'aria-expanded': mode === 'settings', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.settings),
