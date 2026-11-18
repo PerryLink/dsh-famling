@@ -1,1 +1,7 @@
-{ "meta": { "title": "Famling · Tinglan", "description": "Shows the Tinglan mini pet below the DSH account area; local interactions and a link to standalone famling.", "detail": "docs/DETAIL.md" } }
+{
+  "meta": {
+    "title": "Famling · Tinglan / Ragdoll / Golden Retriever",
+    "description": "Shows a pixel mini pet (Tinglan, Ragdoll cat, Golden Retriever) below the DSH account area; switch characters, local interactions and animations; the cat and dog only use silent thought bubbles.",
+    "detail": "docs/DETAIL.md"
+  }
+}

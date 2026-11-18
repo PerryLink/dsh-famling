@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang='zh-CN'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>dsh-famling · 多角色动画 QA</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: #15181e; color: #e8e8e8; font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 13px; margin: 14px 0 6px; color: #b9c0cc; }
+    header p { margin: 0 0 14px; max-width: 980px; color: #9aa0a6; }
+    code { background: #232833; padding: 1px 4px; border-radius: 4px; }
+    main { display: grid; grid-template-columns: minmax(320px, 460px) 1fr; gap: 16px; align-items: start; }
+    section { background: #1d222b; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 14px; }
+    .stage { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+    .pet-row { display: flex; align-items: flex-end; gap: 14px; }
+    #pet { image-rendering: pixelated; display: block; background: repeating-conic-gradient(#20242c 0 25%, #262b34 0 50%) 0 0 / 16px 16px; border-radius: 6px; }
+    .pill { border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: inherit; border-radius: 6px; padding: 4px 8px; font: inherit; cursor: pointer; }
+    .pill[aria-pressed='true'] { border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.16); font-weight: 600; }
+    .pill:disabled { opacity: .45; cursor: not-allowed; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .bubble { max-width: 280px; min-width: 90px; padding: 7px 10px; border-radius: 10px; overflow-wrap: anywhere; }
+    .bubble.speech { background: #1f2329; border: 1px solid rgba(255,255,255,.45); }
+    .bubble.thought { background: transparent; border: 1.5px dashed rgba(255,255,255,.4); }
+    .bubble:empty { display: none; }
+    .policy { font-size: 12px; color: #9aa0a6; white-space: pre-line; }
+    ul#check-list { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+    ul#check-list li { padding: 2px 0; }
+    ul#check-list li.pass::before { content: "PASS "; color: #7ddc9a; font-weight: 600; }
+    ul#check-list li.fail::before { content: "FAIL "; color: #ff8b8b; font-weight: 600; }
+    ul#check-list li.run::before { content: "… "; color: #9aa0a6; }
+    .note { color: #9aa0a6; font-size: 12px; margin: 8px 0 0; }
+    .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>dsh-famling · 多角色动画 QA</h1>
+    <p>静态预览页，不启动 DSH、不调用 <code>speechSynthesis</code>。数据来自 <code>scripts/embed-anims.mjs --qa</code> 生成的 <code>scripts/qa/anim-data.js</code>；插件 <code>client.js</code> 嵌入的是同一份数据。直接双击本文件或 <code>file://</code> 打开即可。</p>
+  </header>
+  <main>
+    <section>
+      <div class='stage'>
+        <div class='pet-row'>
+          <img id='pet' width='72' height='72' alt='pet'>
+          <div>
+            <div class='row' style='margin-bottom:6px'>
+              <button class='pill' id='size-72' aria-pressed='true'>72px</button>
+              <button class='pill' id='size-96' aria-pressed='false'>96px</button>
+              <button class='pill' id='motion'>动画：开</button>
+            </div>
+            <div class='policy' id='policy'></div>
+          </div>
+        </div>
+        <div id='bubble' class='bubble'></div>
+        <p class='note' id='source-note'></p>
+      </div>
+    </section>
+    <section>
+      <h2>形象（对应插件 设置 → 形象）</h2>
+      <div class='row' id='chars'></div>
+      <h2>互动按钮（与插件 ACTION_SETS 相同）</h2>
+      <div class='row' id='actions'></div>
+      <h2>全部 clip（12 个；idle_blink 是叠层/替换帧）</h2>
+      <div class='row' id='clips'></div>
+      <p class='note'>人类汀岚：实心 speech 气泡；猫/狗：空心 thought 气泡，永不 TTS（此页也不发声）。</p>
+    </section>
+    <section style='grid-column: 1 / -1'>
+      <h2>数据自检</h2>
+      <ul id='check-list'><li class='run'>等待 anim-data.js…</li></ul>
+    </section>
+  </main>
+  <script src='anim-data.js'></script>
+  <script>
+(function () {
+  var DATA = window.__FAMLING_ANIM_DATA__
+  var CHARS = ['human', 'cat', 'dog']
+  var NAMES = { human: '汀岚', cat: '布偶猫', dog: '金毛' }
+  var ACTION_SETS = {
+    human: [['pat_head', '摸摸'], ['ball_throw', '纸团'], ['ball_chase', '捡纸团'], ['stand_wag', '挥手'], ['scratch', '伸懒腰'], ['paw_face', '抬手']],
+    cat: [['pat_head', '摸摸'], ['ball_throw', '纸团'], ['ball_chase', '追球'], ['paw_face', '洗脸'], ['stand_wag', '站起来'], ['chase_tail', '追尾巴']],
+    dog: [['pat_head', '摸摸'], ['ball_throw', '丢球'], ['ball_chase', '捡球'], ['stand_wag', '摇尾巴'], ['chase_tail', '追尾巴'], ['scratch', '挠痒']],
+  }
+  var LINES = { human: '被摸到了。', cat: '（被摸到了，呼噜呼噜…）', dog: '（好舒服，还要！）' }
+  var state = { char: 'human', clip: 'idle', frame: 0, blink: false, blinkStep: 0, motion: true }
+  if (typeof location !== 'undefined' && /^#(human|cat|dog)$/.test(location.hash)) state.char = location.hash.slice(1)
+  var runToken = 0
+  var pet = document.getElementById('pet')
+  var policy = document.getElementById('policy')
+  var bubble = document.getElementById('bubble')
+  var sourceNote = document.getElementById('source-note')
+
+  function anims() { return DATA ? DATA.anims : null }
+  function clips() { return anims() && anims()[state.char] ? anims()[state.char].clips : null }
+  function clipData(id) { var all = clips(); return all ? all[id] : null }
+  function frameKeyFor() {
+    var all = clips()
+    if (!all) return null
+    if (state.clip === 'idle') {
+      var blink = all.idle_blink
+      if (state.blink && blink && blink.frames.length) return blink.frames[state.blinkStep % blink.frames.length]
+      var idle = all.idle
+      return idle && idle.frames.length ? idle.frames[state.frame % idle.frames.length] : null
+    }
+    var seq = all[state.clip]
+    return seq && seq.frames.length ? seq.frames[state.frame % seq.frames.length] : (all.idle && all.idle.frames.length ? all.idle.frames[0] : null)
+  }
+  function srcFor(key) { return key && DATA.sprites[key] ? 'data:image/png;base64,' + DATA.sprites[key] : '' }
+  function render() {
+    state.frame = state.frame % 100000
+    var key = frameKeyFor()
+    pet.src = srcFor(key)
+    var data = anims()[state.char]
+    policy.textContent = NAMES[state.char] + ' · 气泡：' + (data.canTts ? '实心 speech（汀岚可 TTS）' : '空心 thought（永不 TTS）') + ' · ' + Object.keys(data.clips).length + ' clips / ' + Object.keys(data.clips).reduce(function (sum, id) { return sum + data.clips[id].frames.length }, 0) + ' 帧'
+    Array.prototype.forEach.call(document.querySelectorAll('#chars .pill'), function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-char') === state.char ? 'true' : 'false') })
+    Array.prototype.forEach.call(document.querySelectorAll('#actions .pill'), function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-clip') === state.clip ? 'true' : 'false') })
+    Array.prototype.forEach.call(document.querySelectorAll('#clips .pill'), function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-clip') === state.clip ? 'true' : 'false') })
+  }
+  function scheduleFrame() {
+    clearTimeout(scheduleFrame.timer)
+    if (!state.motion) return
+    var seq = clipData(state.clip) || clipData('idle')
+    if (!seq) return
+    var ms = Math.max(30, Math.round(1000 / (seq.fps || 6)))
+    scheduleFrame.timer = setTimeout(function () {
+      state.frame += 1
+      if (!seq.loop && state.frame >= seq.frames.length) { state.frame = 0; state.clip = 'idle' }
+      render()
+      scheduleFrame()
+    }, ms)
+  }
+  function scheduleBlink() {
+    clearTimeout(scheduleBlink.timer)
+    if (!state.motion || state.clip !== 'idle') return
+    scheduleBlink.timer = setTimeout(function () {
+      var blink = clips() && clips().idle_blink
+      if (!blink || !blink.frames.length) return
+      state.blink = true
+      state.blinkStep = 0
+      render()
+      var step = 0
+      var interval = setInterval(function () {
+        step += 1
+        if (step >= blink.frames.length) { clearInterval(interval); state.blink = false; state.blinkStep = 0; render(); scheduleBlink() }
+        else { state.blinkStep = step; render() }
+      }, Math.max(30, Math.round(1000 / (blink.fps || 12))))
+    }, 3600 + Math.random() * 2600)
+  }
+  function scheduleMicro() {
+    clearTimeout(scheduleMicro.timer)
+    if (!state.motion || state.clip !== 'idle') return
+    scheduleMicro.timer = setTimeout(function () {
+      var micro = anims()[state.char].microActions
+      if (!micro || !micro.length) return
+      state.clip = micro[Math.floor(Math.random() * micro.length)]
+      state.frame = 0
+      render()
+      scheduleFrame()
+      setTimeout(scheduleBlink, 400)
+      scheduleMicro()
+    }, 11000 + Math.random() * 8000)
+  }
+  function play(clip) {
+    if (!clipData(clip)) return
+    state.clip = clip === 'idle' ? 'idle' : clip
+    state.frame = 0
+    state.blink = false
+    bubble.className = 'bubble ' + (anims()[state.char].canTts ? 'speech' : 'thought')
+    bubble.textContent = LINES[state.char]
+    render()
+    scheduleFrame()
+  }
+  function buildControls() {
+    var chars = document.getElementById('chars')
+    var actions = document.getElementById('actions')
+    var clipsBox = document.getElementById('clips')
+    CHARS.forEach(function (kind) {
+      var button = document.createElement('button')
+      button.className = 'pill'
+      button.textContent = NAMES[kind]
+      button.setAttribute('data-char', kind)
+      button.setAttribute('aria-pressed', kind === state.char ? 'true' : 'false')
+      button.onclick = function () { state.char = kind; state.clip = 'idle'; state.frame = 0; bubble.textContent = ''; rebuildActions(); render(); scheduleFrame(); scheduleBlink(); scheduleMicro() }
+      chars.appendChild(button)
+    })
+    ACTION_SETS[state.char].forEach(function (row) { addAction(actions, row[0], row[1]) })
+    Object.keys(anims().human.clips).forEach(function (id) {
+      var button = document.createElement('button')
+      button.className = 'pill'
+      button.textContent = id
+      button.setAttribute('data-clip', id)
+      button.onclick = function () { play(id) }
+      clipsBox.appendChild(button)
+    })
+    var motionButton = document.getElementById('motion')
+    motionButton.onclick = function () { state.motion = !state.motion; motionButton.textContent = '动画：' + (state.motion ? '开' : '关'); if (state.motion) { scheduleFrame(); scheduleBlink(); scheduleMicro() } else { clearTimeout(scheduleFrame.timer); clearTimeout(scheduleBlink.timer); clearTimeout(scheduleMicro.timer); state.blink = false; render() } }
+    document.getElementById('size-72').onclick = function () { pet.width = 72; pet.height = 72; setSizeButtons(72) }
+    document.getElementById('size-96').onclick = function () { pet.width = 96; pet.height = 96; setSizeButtons(96) }
+    document.getElementById('actions').onclick = function (event) {
+      var button = event.target.closest('button[data-clip]')
+      if (button) play(button.getAttribute('data-clip'))
+    }
+  }
+  function addAction(container, clip, label) {
+    var button = document.createElement('button')
+    button.className = 'pill'
+    button.textContent = label
+    button.setAttribute('data-clip', clip)
+    container.appendChild(button)
+  }
+  function setSizeButtons(size) {
+    document.getElementById('size-72').setAttribute('aria-pressed', size === 72 ? 'true' : 'false')
+    document.getElementById('size-96').setAttribute('aria-pressed', size === 96 ? 'true' : 'false')
+  }
+  function rebuildActions() {
+    var actions = document.getElementById('actions')
+    actions.innerHTML = ''
+    ACTION_SETS[state.char].forEach(function (row) { addAction(actions, row[0], row[1]) })
+  }
+
+  var checks = []
+  function addCheck(ok, text) { checks.push({ ok: ok, text: text }) }
+  function renderChecks() {
+    var list = document.getElementById('check-list')
+    list.innerHTML = ''
+    checks.forEach(function (item) {
+      var li = document.createElement('li')
+      li.className = item.ok ? 'pass' : 'fail'
+      li.textContent = item.text
+      list.appendChild(li)
+    })
+    var failed = checks.filter(function (item) { return !item.ok }).length
+    var summary = document.createElement('li')
+    summary.textContent = failed === 0 ? ('全部 ' + checks.length + ' 项通过') : (failed + ' 项失败 / 共 ' + checks.length + ' 项')
+    list.appendChild(summary)
+  }
+  function verifyData() {
+    if (!DATA || !DATA.anims || !DATA.sprites) { addCheck(false, 'anim-data.js 未加载或格式错误'); renderChecks(); return }
+    CHARS.forEach(function (kind) {
+      var data = DATA.anims[kind]
+      addCheck(!!data, kind + ': ANIMS 存在')
+      if (!data) return
+      var ids = Object.keys(data.clips)
+      var frames = ids.reduce(function (sum, id) { return sum + data.clips[id].frames.length }, 0)
+      addCheck(ids.length === 12, kind + ': clip 数 = ' + ids.length + '/12')
+      addCheck(frames === 68, kind + ': 帧数 = ' + frames + '/68')
+      addCheck(kind === 'human' ? (data.canTts === true && data.bubble === 'speech') : (data.canTts === false && data.bubble === 'thought'), kind + ': 气泡/TTS 策略正确')
+      var missing = 0
+      ids.forEach(function (id) { data.clips[id].frames.forEach(function (key) { if (!DATA.sprites[key]) missing += 1 }) })
+      addCheck(missing === 0, kind + ': 所有帧都有 sprite base64（缺 ' + missing + '）')
+      var actionsOk = ACTION_SETS[kind].every(function (row) { return !!data.clips[row[0]] })
+      addCheck(actionsOk, kind + ': 互动按钮 clip 映射全部存在')
+      var microOk = data.microActions.every(function (id) { return !!data.clips[id] })
+      addCheck(microOk, kind + ': 随机微动作 clip 全部存在')
+    })
+    addCheck(!!DATA.sourceSha256, 'source sha256: ' + String(DATA.sourceSha256 || '').slice(0, 16) + '…')
+    if (sourceNote) sourceNote.textContent = '嵌入源 sha256 ' + String(DATA.sourceSha256 || '').slice(0, 16) + '… · 帧数据 ' + Object.keys(DATA.sprites).length + ' 张';
+    renderChecks()
+    verifyImages()
+  }
+  function verifyImages() {
+    var keys = Object.keys(DATA.sprites)
+    var failed = []
+    var loaded = 0
+    var list = document.getElementById('check-list')
+    var pending = document.createElement('li')
+    pending.className = 'run'
+    pending.textContent = '解码全部 ' + keys.length + ' 帧 PNG…'
+    list.appendChild(pending)
+    var index = 0
+    function next() {
+      if (index >= keys.length) {
+        addCheck(failed.length === 0, '全部 ' + keys.length + ' 帧可由浏览器解码为 96x96 PNG（失败 ' + failed.length + '）')
+        renderChecks()
+        return
+      }
+      var key = keys[index]
+      index += 1
+      var image = new Image()
+      image.onload = function () {
+        if (image.naturalWidth !== 96 || image.naturalHeight !== 96) failed.push(key)
+        loaded += 1
+        if (index % 24 === 0) { pending.textContent = '解码中 ' + loaded + '/' + keys.length + ' 帧…' }
+        next()
+      }
+      image.onerror = function () { failed.push(key); loaded += 1; next() }
+      image.src = 'data:image/png;base64,' + DATA.sprites[key]
+    }
+    next()
+  }
+
+  if (!DATA) {
+    document.body.insertAdjacentHTML('afterbegin', '<p style="color:#ff8b8b">缺少 anim-data.js：先运行 node scripts/embed-anims.mjs --qa</p>')
+    return
+  }
+  buildControls()
+  render()
+  scheduleFrame()
+  scheduleBlink()
+  scheduleMicro()
+  verifyData()
+})()
+  </script>
+</body>
+</html>

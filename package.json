@@ -1,12 +1,16 @@
 {
   "name": "dsh-famling",
-  "version": "0.7.5",
+  "version": "0.8.0",
   "private": false,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "embed:anims": "node scripts/embed-anims.mjs",
+    "check:anims": "node scripts/embed-anims.mjs --check",
+    "verify:anims": "node scripts/verify-anims.mjs",
+    "qa:anims": "node scripts/embed-anims.mjs --qa"
   },
-  "description": "Famling mini pet in the DSH sidebar footer: Tinglan interactions and a link to the standalone famling app.",
+  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Ragdoll cat / Golden Retriever pixel animations, character-aware interactions, and a link to the standalone famling app.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": "./index.js",
