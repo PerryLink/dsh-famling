@@ -225,9 +225,9 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.8.4 and the host bridge entrypoint is still exported', async () => {
+test('package version is 0.8.5 and the host bridge entrypoint is still exported', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.8.4')
+  assert.equal(pkg.version, '0.8.5')
   const module = await import('../index.js')
   assert.equal(typeof module.apply, 'function')
   assert.equal(module.name, 'dsh-famling')

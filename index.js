@@ -108,13 +108,32 @@ async function readBriefProjection() {
   if (!brief || typeof brief !== 'object' || !Number.isInteger(brief.schemaVersion) || brief.schemaVersion < 1 || brief.schemaVersion > 2) {
     return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief schema is unsupported.' }
   }
-  if (brief.displayPolicy === 'none') return { ok: false, code: 'E_MEMORY', message: 'Advisers display policy is none.' }
-  const counts = brief.counts && typeof brief.counts === 'object' ? brief.counts : {}
+  const displayPolicy = brief.displayPolicy === 'public' || brief.displayPolicy === 'private' || brief.displayPolicy === 'none'
+    ? brief.displayPolicy
+    : 'private'
+  if (displayPolicy === 'none') return { ok: false, code: 'E_MEMORY', message: 'Advisers display policy is none.' }
+  // Pet Brief v0.2 carries a 5-minute TTL; never keep showing an expired
+  // projection (it may contain client/colleague names). Invalid/missing TTL is
+  // treated as unavailable rather than fail-open.
+  const expiresAt = typeof brief.expiresAt === 'string' ? Date.parse(brief.expiresAt) : Number.NaN
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is expired or has no valid expiresAt.' }
+  }
+  if (!brief.counts || typeof brief.counts !== 'object' || Array.isArray(brief.counts)) {
+    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief has invalid counts.' }
+  }
+  const counts = brief.counts
+  for (const key of ['today', 'commitments', 'risks', 'facts']) {
+    const value = counts[key]
+    if (!Number.isInteger(value) || value < 0) {
+      return { ok: false, code: 'E_MEMORY', message: `Advisers Pet Brief counts.${key} is invalid.` }
+    }
+  }
   return {
     ok: true,
     projection: {
       schemaVersion: brief.schemaVersion,
-      displayPolicy: brief.displayPolicy || 'private',
+      displayPolicy,
       generatedAt: brief.generatedAt,
       expiresAt: brief.expiresAt,
       counts: {
@@ -167,6 +186,8 @@ async function chatWithDsh(ctx, input, config, character) {
 
 async function handleBridge(ctx, request, config) {
   if (request.method !== 'POST') return error('E_METHOD', 'POST required.', 405)
+  const declaredLength = Number(request.headers?.get?.('content-length'))
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return error('E_INPUT', 'Request is too large.', 413)
   const text = await request.text()
   if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) return error('E_INPUT', 'Request is too large.', 413)
   let payload

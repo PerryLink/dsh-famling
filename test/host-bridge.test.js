@@ -184,6 +184,7 @@ test('brief projects a pet-brief file from ADVISERS_HOME without leaking extra f
       schemaVersion: 2,
       displayPolicy: 'private',
       generatedAt: '2026-11-18T00:00:00Z',
+      expiresAt: '2099-01-01T00:00:00Z',
       counts: { today: 2, commitments: 1, risks: 0, facts: 9 },
       today: [{ title: '写交接', status: 'done' }, { title: '跑测试', status: 'todo' }],
       commitments: [{ what: '发布核对', due: '2026-11-18', risk: 'low' }],
