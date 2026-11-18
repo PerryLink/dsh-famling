@@ -268,6 +268,7 @@ window.__ModuleLoader__.load({
             h('button', { key: 'send', type: 'button', onClick: () => void sendInput(), style: { ...buttonBase, padding: '8px 7px' } }, L.send),
           ]),
         ]),
+        h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, 'AI 声明：角色与语音为 AI 生成/合成，不是真人；本插件不提供自由 LLM 角色扮演或情感陪伴。 / AI notice: character and voice are AI-generated, not a human; no free-form roleplay.'),
         h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, [
           h('button', { key: 'toggle', type: 'button', onClick: () => setTaskMode((value) => !value), style: { ...buttonBase, padding: '4px 7px' } }, L.task),
           taskMode ? h('div', { key: 'form', style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 } }, [
@@ -288,6 +289,7 @@ window.__ModuleLoader__.load({
           h('strong', { key: 't', style: { flex: 1 } }, L.settingsTitle),
           h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
         ]),
+        h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, 'AI 声明：角色与语音为 AI 生成/合成，不是真人；本插件不提供自由 LLM 角色扮演或情感陪伴。 / AI notice: character and voice are AI-generated, not a human; no free-form roleplay.'),
         ...['sound','motion','bubble'].map((key) => h('label', { key, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer' } }, [
           h('input', { type: 'checkbox', checked: settings[key], onChange: () => updateSetting(key) }),
           h('span', null, L[key]),
