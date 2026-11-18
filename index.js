@@ -1,9 +1,9 @@
-/** Host half of dsh-famling: a small authenticated bridge for the pet input panel.
+/** Host half of dsh-famling: authenticated bridge for the pet input panel.
  *
- * P0 only: validate the request and echo text back. No LLM/TTS/ASR/credentials
- * are read here yet; those are separate, reviewed stages (see docs/DSH-FAMLING-BRIDGE).
- * The route is exact and below /api, so the DSH connection trust policy only
- * admits owner Peers and browser same-origin Cookie auth.
+ * Stages: P0 echo, P1 Advisers Pet Brief projection, P2 DSH LLM chat,
+ * P4 DSH schedule create/delete. No TTS/ASR service is called here; the
+ * browser owns those. The exact /api route admits owner Peers and uses the
+ * same-origin Cookie; no DSH key ever enters the client.
  */
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -108,6 +108,12 @@ async function handleBridge(ctx, request) {
   if (!payload || payload.v !== 1 || typeof payload.op !== 'string') return error('E_INPUT', 'Invalid bridge request.')
   const op = payload.op
   if (op !== 'echo' && op !== 'chat' && op !== 'brief' && op !== 'task' && op !== 'task-delete') return error('E_OP', 'Unsupported operation.')
+  if (op === 'echo') {
+    if (typeof payload.text !== 'string') return error('E_INPUT', 'text is required.')
+    const echo = payload.text.trim()
+    if (echo.length === 0 || echo.length > MAX_INPUT_CHARS) return error('E_INPUT', 'Text length is invalid.')
+    return json(200, { v: 1, ok: true, reply: `（本地回显）${echo}`, bubbleKind: 'speech', meta: { stage: 'P0' } })
+  }
   if (op === 'brief') {
     const result = await readBriefProjection()
     if (!result.ok) return error(result.code, result.message, 404)
@@ -159,5 +165,5 @@ export function apply(ctx) {
     methods: ['POST'],
     requestBody: 'buffered',
     fetch: (request) => handleBridge(ctx, request),
-  }), 'dsh-famling: P0 bridge route')
+  }), 'dsh-famling: authenticated bridge route')
 }

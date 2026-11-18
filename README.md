@@ -25,7 +25,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 气泡：虚线边框，显示桌宠说的话；猫/狗形态的“心里话”使用 thought 类型，仍为虚线。气泡不常驻、不遮挡人物。
 - 输入面板的 LLM/TTS/ASR/记忆需要 Host 桥接；未接入时如实提示，不伪造回复。
 - 不宣传 roleplay；不包含完整桌宠/游戏基座。
-- 无 roleplay 公开入口；无任何网络请求。
+- 无 roleplay 公开入口；网络请求仅限同源 `/api/famling/bridge`（DSH Host 路由）。
 
 ## Host bridge（P0/P1/P2/P4 已实现）
 
