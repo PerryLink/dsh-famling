@@ -1272,8 +1272,9 @@ window.__ModuleLoader__.load({
         style: {
           position: 'fixed', left: Math.max(8, (rootRef.current?.getBoundingClientRect().left ?? 12)), bottom: Math.max(8, window.innerHeight - (rootRef.current?.getBoundingClientRect().top ?? 120) + 6), zIndex: 1100, pointerEvents: 'none',
           width: 'fit-content', minWidth: 90, maxWidth: 240, padding: '7px 10px',
-          background: bubbleKind === 'thought' ? 'transparent' : 'var(--dsw-alias-bg-elevated, #1f2329)', color: 'var(--dsw-alias-label-primary, #e8e8e8)',
-          border: bubbleKind === 'thought' ? '1.5px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.4))' : '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.45))',
+          background: bubbleKind === 'thought' ? 'rgba(16, 19, 24, 0.94)' : 'var(--dsw-alias-bg-elevated, #1f2329)', color: bubbleKind === 'thought' ? '#f4f6fb' : 'var(--dsw-alias-label-primary, #e8e8e8)',
+          border: bubbleKind === 'thought' ? '1.5px dashed rgba(255,255,255,.72)' : '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.45))',
+          boxShadow: '0 4px 16px rgba(0,0,0,.35)',
           borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 12, lineHeight: 1.5, overflowWrap: 'anywhere',
         },
       }, bubble) : null

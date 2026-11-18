@@ -250,7 +250,7 @@ test('settings panel switches to the Ragdoll cat, persists it and disables voice
   assert.ok(speech.cancel >= 1, 'switching to a silent character cancels browser speech')
 })
 
-test('cat interactions use hollow thought bubbles and never call browser TTS', () => {
+test('cat interactions use readable dashed thought bubbles and never call browser TTS', () => {
   const { ui, speech } = createHarness({ character: 'cat' })
   assert.equal(ui.tree.props['data-character'], 'cat')
   ui.clickText('互动')
@@ -262,7 +262,9 @@ test('cat interactions use hollow thought bubbles and never call browser TTS', (
   ui.render()
   const bubble = ui.findBubble()
   assert.ok(bubble, 'thought bubble renders')
-  assert.equal(bubble.props.style.background, 'transparent')
+  assert.notEqual(bubble.props.style.background, 'transparent')
+  assert.match(bubble.props.style.background, /rgba?\(/)
+  assert.equal(bubble.props.style.color, '#f4f6fb')
   assert.match(bubble.props.style.border, /dashed/)
   assert.equal(speech.speak.length, 0, 'cat must never call speechSynthesis')
 })
