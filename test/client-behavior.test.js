@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { test } from 'node:test'
 import vm from 'node:vm'
 
@@ -120,10 +119,12 @@ function createUi(Component, ReactRuntime) {
     findAll,
     text(node) { return textOf(node) },
     findButton(label) { return findAll((node) => node.type === 'button' && textOf(node).includes(label))[0] },
+    findButtonExact(label) { return findAll((node) => node.type === 'button' && textOf(node) === label)[0] },
     findButtonByAria(label) { return findAll((node) => node.type === 'button' && node.props['aria-label'] === label)[0] },
     findInput(type) { return findAll((node) => node.type === 'input' && node.props.type === type)[0] },
     findBubble() { return findAll((node) => node.type === 'div' && node.props.role === 'status')[0] },
     findPetButton() { return findAll((node) => node.type === 'button' && typeof node.props.title === 'string' && node.props.title.startsWith('Famling ·'))[0] },
+    menuLabels() { return findAll((node) => node.type === 'button').map((node) => textOf(node)).filter((text) => text !== '' && !['输入', '互动', '设置', '×', 'Input', 'Play', 'Settings', 'Close'].includes(text)) },
     /**
      * Simulate a click on the pet image at an art-canvas point. The fake target
      * reports a rendered size, so the client must map offsetX/Y through the
@@ -144,6 +145,11 @@ function createUi(Component, ReactRuntime) {
     },
     clickText(label) {
       const node = ui.findButton(label)
+      assert.ok(node, 'button exists: ' + label)
+      ui.click(node)
+    },
+    clickExact(label) {
+      const node = ui.findButtonExact(label)
       assert.ok(node, 'button exists: ' + label)
       ui.click(node)
     },
@@ -244,16 +250,78 @@ function petImage(ui) {
   return ui.findAll((node) => node.type === 'img')[0]
 }
 
+function regionSays(kind, regionId) {
+  const rule = embedded.ANIMS[kind].regions.gestures.find((gesture) => gesture.region === regionId)
+  assert.ok(rule, kind + '/' + regionId + ': region rule exists')
+  return rule.says
+}
+
+function actionSays(kind, actionId) {
+  const action = embedded.ANIMS[kind].actions.find((item) => item.id === actionId)
+  assert.ok(action, kind + '/' + actionId + ': action exists')
+  return action.says
+}
+
+/** Invoke the most recently scheduled fake setTimeout with this delay. */
+function runTimeout(ui, timers, ms) {
+  const timer = [...timers.timeouts].reverse().find((item) => item.ms === ms)
+  assert.ok(timer, 'timeout +' + ms + 'ms is scheduled')
+  timer.fn()
+  ui.render()
+}
+
+/** Expected playback delays, recomputed independently from the embedded data. */
+function clipDurations(kind, clipId) {
+  const seq = embedded.ANIMS[kind].clips[clipId]
+  const durations = seq.frames.map((_, index) => {
+    const hold = Array.isArray(seq.holdMs) ? seq.holdMs[index] : undefined
+    return Number.isFinite(hold) && hold > 0 ? hold : Math.max(30, Math.round(1000 / (seq.fps || 6)))
+  })
+  if (seq.loop !== true && Number.isFinite(seq.durationMs)) {
+    const total = durations.reduce((sum, value) => sum + value, 0)
+    if (seq.durationMs > total) durations[durations.length - 1] += seq.durationMs - total
+  }
+  return durations
+}
+
+/** Play a one-shot clip to its end by invoking each scheduled frame timeout. */
+function finishClip(ui, timers, kind, clipId) {
+  const durations = clipDurations(kind, clipId)
+  for (let index = 0; index < durations.length; index += 1) {
+    const timer = timers.timeouts[timers.timeouts.length - 1]
+    assert.ok(timer, kind + '/' + clipId + ': frame timeout is scheduled')
+    assert.equal(timer.ms, durations[index], kind + '/' + clipId + ': frame ' + index + ' delay')
+    timer.fn()
+    ui.render()
+  }
+}
+
 test('default render is Tinglan with the embedded 72px idle frame', () => {
   const { ui, speech } = createHarness()
   assert.equal(ui.tree.props['data-character'], 'human')
-  const image = ui.findAll((node) => node.type === 'img')[0]
+  const image = petImage(ui)
   assert.ok(image, 'pet image renders')
   assert.equal(image.props.width, 72)
   assert.equal(image.props.height, 72)
   assert.equal(image.props.src, idleSrc('human'))
   assert.equal(image.props.style.imageRendering, 'pixelated')
   assert.equal(speech.speak.length, 0, 'nothing is spoken before an interaction')
+})
+
+test('idle loop advances frame by frame using the per-frame delays', () => {
+  const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
+  const idle = embedded.ANIMS.cat.clips.idle
+  const expectedDelay = Math.max(30, Math.round(1000 / (idle.fps || 6)))
+  for (let frame = 1; frame < idle.frames.length; frame += 1) {
+    // The blink/micro timers are also queued; pick the most recent idle delay.
+    const timer = [...timers.timeouts].reverse().find((item) => item.ms === expectedDelay)
+    assert.ok(timer, 'idle frame timeout is scheduled')
+    timer.fn()
+    ui.render()
+    assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle', frame), 'idle frame ' + frame)
+  }
+  runTimeout(ui, timers, expectedDelay)
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle', 0), 'idle loop wraps back to frame 0')
 })
 
 test('settings panel switches to the Selkirk Rex cat, persists it and disables voice', () => {
@@ -264,7 +332,7 @@ test('settings panel switches to the Selkirk Rex cat, persists it and disables v
   ui.render()
   assert.equal(ui.tree.props['data-character'], 'cat')
   assert.equal(ui.findPetButton().props['aria-label'], '塞尔凯克卷毛猫', 'pet aria-label uses the Selkirk Rex name')
-  assert.equal(ui.findAll((node) => node.type === 'img')[0].props.src, idleSrc('cat'))
+  assert.equal(petImage(ui).props.src, idleSrc('cat'))
   assert.equal(storage.get('dsh-famling/character'), 'cat')
   const checkboxes = ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox')
   assert.equal(checkboxes[0].props.disabled, true, 'voice checkbox disabled for cat')
@@ -274,40 +342,92 @@ test('settings panel switches to the Selkirk Rex cat, persists it and disables v
   assert.ok(speech.cancel >= 1, 'switching to a silent character cancels browser speech')
 })
 
-test('cat interactions use readable dashed thought bubbles and never call browser TTS', () => {
+test('cat menu is species-specific (no ball/fetch actions) and bubbles stay silent thoughts', () => {
   const { ui, speech } = createHarness({ character: 'cat' })
   assert.equal(ui.tree.props['data-character'], 'cat')
   ui.clickText('互动')
   ui.render()
-  assert.ok(ui.findButton('洗脸'), 'cat-specific action present')
-  assert.equal(ui.findButton('摇尾巴'), undefined, 'dog-only action is not shown for cat')
-  assert.ok(ui.findButton('摸摸'), 'shared pat_head action present')
-  ui.clickText('洗脸')
+  for (const label of ['摸头', '伸懒腰', '洗脸', '追尾巴', '跑一跑']) assert.ok(ui.findButtonExact(label), 'cat action present: ' + label)
+  assert.equal(ui.findButtonExact('摇尾巴'), undefined, 'dog-only action is not shown for cat')
+  assert.equal(ui.findAll((node) => node.type === 'button' && /球|纸团/.test(textOf(node))).length, 0, 'cat has no ball/paper actions')
+  const says = actionSays('cat', 'wash')
+  ui.clickExact('洗脸')
   ui.render()
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'paw_face'), 'wash plays paw_face')
   const bubble = ui.findBubble()
   assert.ok(bubble, 'thought bubble renders')
-  assert.notEqual(bubble.props.style.background, 'transparent')
-  assert.match(bubble.props.style.background, /rgba?\(/)
-  assert.equal(bubble.props.style.color, '#f4f6fb')
+  assert.ok(says.includes(ui.text(bubble)), 'cat wash line comes from the action says: ' + ui.text(bubble))
+  assert.equal(bubble.props.style.background, '#ffffff')
+  assert.equal(bubble.props.style.color, '#111111')
   assert.match(bubble.props.style.border, /dashed/)
+  assert.match(bubble.props.style.border, /#8f8f8f/)
   assert.equal(speech.speak.length, 0, 'cat must never call speechSynthesis')
 })
 
-test('human interactions keep solid speech bubbles and browser TTS', () => {
+test('human menu is species-specific with solid speech and TTS lines from the action says', () => {
   const { ui, speech } = createHarness()
   ui.clickText('互动')
   ui.render()
-  assert.ok(ui.findButton('摸摸'), 'human action present')
-  assert.ok(ui.findButton('挥手'), 'human-specific action present')
-  assert.equal(ui.findButton('追尾巴'), undefined, 'cat/dog-only action is not shown for human')
-  ui.clickText('摸摸')
+  for (const label of ['摸头', '递纸', '挥手', '整理蝴蝶结', '聊两句']) assert.ok(ui.findButtonExact(label), 'human action present: ' + label)
+  assert.equal(ui.findButtonExact('追尾巴'), undefined, 'cat/dog-only action is not shown for human')
+  assert.equal(ui.findAll((node) => node.type === 'button' && /球|纸团/.test(textOf(node))).length, 0, 'human menu has no ball/paper actions')
+  const says = actionSays('human', 'pat')
+  ui.clickExact('摸头')
   ui.render()
+  assert.equal(petImage(ui).props.src, clipSrc('human', 'pat_head'))
   const bubble = ui.findBubble()
   assert.ok(bubble)
-  assert.notEqual(bubble.props.style.background, 'transparent')
+  assert.equal(bubble.props.style.background, '#ffffff')
+  assert.equal(bubble.props.style.color, '#111111')
   assert.match(bubble.props.style.border, /solid/)
+  assert.match(bubble.props.style.border, /#9a9a9a/)
+  assert.ok(says.includes(ui.text(bubble)), 'human pat line comes from the action says')
   assert.equal(speech.speak.length, 1, 'human speech uses TTS when enabled + consented')
-  assert.equal(speech.speak[0].text, '被摸到了。')
+  assert.equal(speech.speak[0].text, ui.text(bubble), 'TTS reads the same random line')
+})
+
+test('dog menu exposes fetch/retrieve and chains ball_throw -> ball_chase', () => {
+  const { ui, speech, timers } = createHarness({ character: 'dog' })
+  ui.clickText('互动')
+  ui.render()
+  assert.ok(ui.findButtonExact('摸头'), 'dog pat')
+  assert.ok(ui.findButtonExact('丢球 / 捡球'), 'dog fetch')
+  assert.ok(ui.findButtonExact('捡球'), 'dog retrieve')
+  assert.ok(ui.findButtonExact('追尾巴'), 'dog tail')
+  assert.ok(ui.findButtonExact('跑一跑'), 'dog run')
+  assert.equal(ui.findButtonExact('洗脸'), undefined, 'cat-only action is not shown for dog')
+  const fetchSays = actionSays('dog', 'fetch')
+  ui.clickExact('丢球 / 捡球')
+  ui.render()
+  assert.equal(petImage(ui).props.src, clipSrc('dog', 'ball_throw'), 'fetch starts with ball_throw')
+  assert.ok(fetchSays.includes(ui.text(ui.findBubble())), 'dog fetch line comes from the action says')
+  runTimeout(ui, timers, 500)
+  assert.equal(petImage(ui).props.src, clipSrc('dog', 'ball_chase'), 'fetch follows up with ball_chase')
+  assert.equal(speech.speak.length, 0, 'dog never calls speechSynthesis')
+})
+
+test('cat stand_wag plays its 10 authored holdMs frames over 3200ms (no fixed fps interval)', () => {
+  const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
+  ui.clickText('互动')
+  ui.render()
+  const expected = [300, 300, 300, 350, 400, 400, 400, 350, 250, 150]
+  assert.deepEqual(clipDurations('cat', 'stand_wag'), expected, 'expected per-frame delays')
+  assert.equal(expected.reduce((sum, value) => sum + value, 0), 3200, 'total stretch duration')
+  ui.clickExact('伸懒腰')
+  ui.render()
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'stand_wag', 0), 'first stand_wag frame is showing')
+  assert.equal(timers.intervals.length, 0, 'playback must not use a fixed setInterval')
+  for (let index = 0; index < expected.length; index += 1) {
+    const timer = timers.timeouts[timers.timeouts.length - 1]
+    assert.ok(timer, 'stand_wag frame ' + index + ' timeout is scheduled')
+    assert.equal(timer.ms, expected[index], 'frame ' + index + ' holds for ' + expected[index] + 'ms')
+    timer.fn()
+    ui.render()
+    if (index + 1 < expected.length) {
+      assert.equal(petImage(ui).props.src, clipSrc('cat', 'stand_wag', index + 1), 'frame ' + (index + 1) + ' is showing')
+    }
+  }
+  assert.equal(petImage(ui).props.src, idleSrc('cat'), 'stand_wag returns to idle after 3200ms')
 })
 
 test('chat bridge sends the active character so the Host can switch personas', async () => {
@@ -344,7 +464,7 @@ test('chat bridge sends the active character so the Host can switch personas', a
 test('stored character choice is restored on the next render', () => {
   const { ui } = createHarness({ character: 'dog' })
   assert.equal(ui.tree.props['data-character'], 'dog')
-  assert.equal(ui.findAll((node) => node.type === 'img')[0].props.src, idleSrc('dog'))
+  assert.equal(petImage(ui).props.src, idleSrc('dog'))
 })
 
 test('chat bridge still works from the input panel (op:chat, same endpoint)', async () => {
@@ -369,23 +489,23 @@ test('chat bridge still works from the input panel (op:chat, same endpoint)', as
 // Art-canvas points (96x96) inside each character's head/body/tail region.
 const REGION_CASES = {
   human: {
-    head: { point: [51, 27], clip: 'pat_head', line: '被摸到了。' },
-    body: { point: [48, 66], clip: 'stand_wag', line: '挥了挥手。' },
-    tail: { point: [74, 72], clip: 'chase_tail', line: '回头看了一眼。' },
+    head: { point: [51, 27], clip: 'pat_head' },
+    body: { point: [48, 66], clip: 'stand_wag' },
+    tail: { point: [74, 72], clip: 'chase_tail' },
   },
   cat: {
-    head: { point: [50, 35], clip: 'pat_head', line: '（被摸到了，呼噜呼噜…）' },
-    body: { point: [50, 69], clip: 'stand_wag', line: '（站起来看看。）' },
-    tail: { point: [81, 69], clip: 'chase_tail', line: '（尾巴…转。）' },
+    head: { point: [50, 35], clip: 'pat_head' },
+    body: { point: [50, 69], clip: 'stand_wag' },
+    tail: { point: [81, 69], clip: 'chase_tail' },
   },
   dog: {
-    head: { point: [50, 31], clip: 'pat_head', line: '（好舒服，还要！）' },
-    body: { point: [49, 68], clip: 'stand_wag', line: '（摇尾巴…开心。）' },
-    tail: { point: [83, 67], clip: 'chase_tail', line: '（尾巴在动？追！）' },
+    head: { point: [50, 31], clip: 'pat_head' },
+    body: { point: [49, 68], clip: 'stand_wag' },
+    tail: { point: [83, 67], clip: 'chase_tail' },
   },
 }
 
-test('region taps map head/body/tail to pat_head/stand_wag/chase_tail', () => {
+test('region taps map head/body/tail to clips and random lines from that region says', () => {
   for (const kind of ['human', 'cat', 'dog']) {
     for (const [regionId, expected] of Object.entries(REGION_CASES[kind])) {
       const { ui, speech } = createHarness({ character: kind })
@@ -394,16 +514,64 @@ test('region taps map head/body/tail to pat_head/stand_wag/chase_tail', () => {
       assert.equal(petImage(ui).props.src, clipSrc(kind, expected.clip), kind + '/' + regionId + ': plays ' + expected.clip)
       const bubble = ui.findBubble()
       assert.ok(bubble, kind + '/' + regionId + ': bubble renders')
-      assert.equal(ui.text(bubble), expected.line, kind + '/' + regionId + ': bubble line')
+      const says = regionSays(kind, regionId)
+      assert.ok(says.includes(ui.text(bubble)), kind + '/' + regionId + ': bubble line is one of the region says: ' + ui.text(bubble))
       if (kind === 'human') {
         assert.match(bubble.props.style.border, /solid/, 'human region taps use a solid speech bubble')
         assert.equal(speech.speak.length, 1, 'human region taps may use browser TTS')
+        assert.equal(speech.speak[0].text, ui.text(bubble), 'TTS reads the region line')
       } else {
         assert.match(bubble.props.style.border, /dashed/, kind + ' region taps use a thought bubble')
         assert.equal(speech.speak.length, 0, kind + ' region taps never call browser TTS')
       }
     }
   }
+})
+
+test('repeated taps on the same region pick a different line from its says', () => {
+  const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
+  ui.clickPetAt(50, 35)
+  ui.render()
+  const says = regionSays('cat', 'head')
+  const first = ui.text(ui.findBubble())
+  assert.ok(says.includes(first), 'first head line comes from head says')
+  // Let the one-shot pat_head clip play out frame by frame, then tap again.
+  finishClip(ui, timers, 'cat', 'pat_head')
+  ui.clickPetAt(50, 35)
+  ui.render()
+  const second = ui.text(ui.findBubble())
+  assert.ok(says.includes(second), 'second head line comes from head says')
+  assert.notEqual(second, first, 'the same region does not repeat the same line on the next tap')
+})
+
+test('clicking the same menu action twice also changes the random line', () => {
+  const { ui } = createHarness()
+  ui.clickText('互动')
+  ui.render()
+  const says = actionSays('human', 'pat')
+  ui.clickExact('摸头')
+  ui.render()
+  const first = ui.text(ui.findBubble())
+  ui.clickExact('摸头')
+  ui.render()
+  const second = ui.text(ui.findBubble())
+  assert.ok(says.includes(first) && says.includes(second), 'both lines come from the action says')
+  assert.notEqual(second, first, 'menu action lines do not repeat back to back')
+})
+
+test('talk is bubble-only and keeps the idle animation', () => {
+  const { ui, speech } = createHarness()
+  ui.clickText('互动')
+  ui.render()
+  const says = actionSays('human', 'talk')
+  ui.clickExact('聊两句')
+  ui.render()
+  assert.equal(petImage(ui).props.src, idleSrc('human'), 'talk keeps the idle frame (no dedicated clip)')
+  const bubble = ui.findBubble()
+  assert.ok(bubble)
+  assert.ok(says.includes(ui.text(bubble)), 'talk line comes from the action says')
+  assert.match(bubble.props.style.border, /solid/)
+  assert.equal(speech.speak.length, 1, 'human talk is still spoken under TTS consent')
 })
 
 test('the same relative tap point hits the same region at every rendered size', () => {
@@ -422,7 +590,7 @@ test('a tap does not interrupt a playing (non-idle) animation', () => {
   const { ui, speech } = createHarness({ character: 'human' })
   ui.clickText('互动')
   ui.render()
-  ui.clickText('摸摸')
+  ui.clickExact('摸头')
   ui.render()
   const playing = petImage(ui).props.src
   const playingBubble = ui.text(ui.findBubble())
@@ -454,5 +622,15 @@ test('region taps still react during the idle blink phase', () => {
   ui.clickPetAt(50, 35)
   ui.render()
   assert.equal(petImage(ui).props.src, clipSrc('cat', 'pat_head'), 'head tap reacts while blinking')
+  assert.ok(regionSays('cat', 'head').includes(ui.text(ui.findBubble())), 'blink-phase tap still uses the head says')
 })
 
+test('English UI localizes action button labels while lines stay data-driven', () => {
+  const { ui } = createHarness({ character: 'human', language: 'en-US' })
+  ui.clickText('Play')
+  ui.render()
+  for (const label of ['Pat', 'Hand paper', 'Wave', 'Fix bow', 'Chat']) assert.ok(ui.findButtonExact(label), 'en action label present: ' + label)
+  ui.clickExact('Pat')
+  ui.render()
+  assert.ok(actionSays('human', 'pat').includes(ui.text(ui.findBubble())), 'line still comes from the shared data')
+})

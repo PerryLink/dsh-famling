@@ -62,7 +62,7 @@
     <section>
       <h2>形象（对应插件 设置 → 形象）</h2>
       <div class='row' id='chars'></div>
-      <h2>互动按钮（与插件 ACTION_SETS 相同）</h2>
+      <h2>互动按钮（来自 regions.json actions，与插件相同）</h2>
       <div class='row' id='actions'></div>
       <h2>全部 clip（12 个；idle_blink 是叠层/替换帧）</h2>
       <div class='row' id='clips'></div>
@@ -79,11 +79,9 @@
   var DATA = window.__FAMLING_ANIM_DATA__
   var CHARS = ['human', 'cat', 'dog']
   var NAMES = { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛' }
-  var ACTION_SETS = {
-    human: [['pat_head', '摸摸'], ['ball_throw', '纸团'], ['ball_chase', '捡纸团'], ['stand_wag', '挥手'], ['scratch', '伸懒腰'], ['paw_face', '抬手']],
-    cat: [['pat_head', '摸摸'], ['ball_throw', '纸团'], ['ball_chase', '追球'], ['paw_face', '洗脸'], ['stand_wag', '站起来'], ['chase_tail', '追尾巴']],
-    dog: [['pat_head', '摸摸'], ['ball_throw', '丢球'], ['ball_chase', '捡球'], ['stand_wag', '摇尾巴'], ['chase_tail', '追尾巴'], ['scratch', '挠痒']],
-  }
+  // Same hand-written event -> clip table as client.js; the buttons themselves
+  // come from the embedded data.anims[character].actions (regions.json).
+  var EVENT_CLIPS = { pat: 'pat_head', stand_wag: 'stand_wag', chase_tail: 'chase_tail', ball_throw: 'ball_throw', ball_chase: 'ball_chase', paw_face: 'paw_face', scratch: 'scratch', run: 'run', feed: 'stand_wag', talk: null }
   var LINES = { human: '被摸到了。', cat: '（被摸到了，呼噜呼噜…）', dog: '（好舒服，还要！）' }
   var state = { char: 'human', clip: 'idle', frame: 0, blink: false, blinkStep: 0, motion: true }
   if (typeof location !== 'undefined' && /^#(human|cat|dog)$/.test(location.hash)) state.char = location.hash.slice(1)
@@ -96,6 +94,23 @@
   function anims() { return DATA ? DATA.anims : null }
   function clips() { return anims() && anims()[state.char] ? anims()[state.char].clips : null }
   function clipData(id) { var all = clips(); return all ? all[id] : null }
+  function charActions() { var data = anims() && anims()[state.char]; return (data && data.actions) || [] }
+  function actionLine(action) {
+    var says = (action && action.says) || []
+    return says.length ? says[Math.floor(Math.random() * says.length)] : ''
+  }
+  function runAction(action) {
+    if (!action) return
+    var clip = EVENT_CLIPS[action.event]
+    if (typeof clip === 'string' && clipData(clip)) play(clip)
+    else render()
+    bubble.className = 'bubble ' + (anims()[state.char].canTts ? 'speech' : 'thought')
+    bubble.textContent = actionLine(action)
+    if (typeof action.followUpEvent === 'string') {
+      var follow = EVENT_CLIPS[action.followUpEvent]
+      if (typeof follow === 'string') setTimeout(function () { play(follow) }, action.followUpMs || 0)
+    }
+  }
   function frameKeyFor() {
     var all = clips()
     if (!all) return null
@@ -116,21 +131,24 @@
     var data = anims()[state.char]
     policy.textContent = NAMES[state.char] + ' · 气泡：' + (data.canTts ? '实心 speech（汀岚可 TTS）' : '空心 thought（永不 TTS）') + ' · ' + Object.keys(data.clips).length + ' clips / ' + Object.keys(data.clips).reduce(function (sum, id) { return sum + data.clips[id].frames.length }, 0) + ' 帧'
     Array.prototype.forEach.call(document.querySelectorAll('#chars .pill'), function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-char') === state.char ? 'true' : 'false') })
-    Array.prototype.forEach.call(document.querySelectorAll('#actions .pill'), function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-clip') === state.clip ? 'true' : 'false') })
+    Array.prototype.forEach.call(document.querySelectorAll('#actions .pill'), function (button) { var action = charActions().filter(function (item) { return item.id === button.getAttribute('data-action') })[0]; button.setAttribute('aria-pressed', action && EVENT_CLIPS[action.event] === state.clip ? 'true' : 'false') })
     Array.prototype.forEach.call(document.querySelectorAll('#clips .pill'), function (button) { button.setAttribute('aria-pressed', button.getAttribute('data-clip') === state.clip ? 'true' : 'false') })
+  }
+  function frameDelay(seq, index) {
+    var hold = seq.holdMs && seq.holdMs[index]
+    return (typeof hold === 'number' && hold > 0) ? hold : Math.max(30, Math.round(1000 / (seq.fps || 6)))
   }
   function scheduleFrame() {
     clearTimeout(scheduleFrame.timer)
     if (!state.motion) return
     var seq = clipData(state.clip) || clipData('idle')
     if (!seq) return
-    var ms = Math.max(30, Math.round(1000 / (seq.fps || 6)))
     scheduleFrame.timer = setTimeout(function () {
       state.frame += 1
       if (!seq.loop && state.frame >= seq.frames.length) { state.frame = 0; state.clip = 'idle' }
       render()
       scheduleFrame()
-    }, ms)
+    }, frameDelay(seq, state.frame % seq.frames.length))
   }
   function scheduleBlink() {
     clearTimeout(scheduleBlink.timer)
@@ -141,12 +159,14 @@
       state.blink = true
       state.blinkStep = 0
       render()
-      var step = 0
-      var interval = setInterval(function () {
-        step += 1
-        if (step >= blink.frames.length) { clearInterval(interval); state.blink = false; state.blinkStep = 0; render(); scheduleBlink() }
-        else { state.blinkStep = step; render() }
-      }, Math.max(30, Math.round(1000 / (blink.fps || 12))))
+      var advance = function (step) {
+        scheduleBlink.stepTimer = setTimeout(function () {
+          step += 1
+          if (step >= blink.frames.length) { state.blink = false; state.blinkStep = 0; render(); scheduleBlink() }
+          else { state.blinkStep = step; render(); advance(step) }
+        }, frameDelay(blink, step))
+      }
+      advance(0)
     }, 3600 + Math.random() * 2600)
   }
   function scheduleMicro() {
@@ -186,7 +206,7 @@
       button.onclick = function () { state.char = kind; state.clip = 'idle'; state.frame = 0; bubble.textContent = ''; rebuildActions(); render(); scheduleFrame(); scheduleBlink(); scheduleMicro() }
       chars.appendChild(button)
     })
-    ACTION_SETS[state.char].forEach(function (row) { addAction(actions, row[0], row[1]) })
+    charActions().forEach(function (action) { addAction(actions, action) })
     Object.keys(anims().human.clips).forEach(function (id) {
       var button = document.createElement('button')
       button.className = 'pill'
@@ -196,19 +216,21 @@
       clipsBox.appendChild(button)
     })
     var motionButton = document.getElementById('motion')
-    motionButton.onclick = function () { state.motion = !state.motion; motionButton.textContent = '动画：' + (state.motion ? '开' : '关'); if (state.motion) { scheduleFrame(); scheduleBlink(); scheduleMicro() } else { clearTimeout(scheduleFrame.timer); clearTimeout(scheduleBlink.timer); clearTimeout(scheduleMicro.timer); state.blink = false; render() } }
+    motionButton.onclick = function () { state.motion = !state.motion; motionButton.textContent = '动画：' + (state.motion ? '开' : '关'); if (state.motion) { scheduleFrame(); scheduleBlink(); scheduleMicro() } else { clearTimeout(scheduleFrame.timer); clearTimeout(scheduleBlink.timer); clearTimeout(scheduleBlink.stepTimer); clearTimeout(scheduleMicro.timer); state.blink = false; state.blinkStep = 0; render() } }
     document.getElementById('size-72').onclick = function () { pet.width = 72; pet.height = 72; setSizeButtons(72) }
     document.getElementById('size-96').onclick = function () { pet.width = 96; pet.height = 96; setSizeButtons(96) }
     document.getElementById('actions').onclick = function (event) {
-      var button = event.target.closest('button[data-clip]')
-      if (button) play(button.getAttribute('data-clip'))
+      var button = event.target.closest('button[data-action]')
+      if (!button) return
+      var action = charActions().filter(function (item) { return item.id === button.getAttribute('data-action') })[0]
+      runAction(action)
     }
   }
-  function addAction(container, clip, label) {
+  function addAction(container, action) {
     var button = document.createElement('button')
     button.className = 'pill'
-    button.textContent = label
-    button.setAttribute('data-clip', clip)
+    button.textContent = action.label
+    button.setAttribute('data-action', action.id)
     container.appendChild(button)
   }
   function setSizeButtons(size) {
@@ -218,7 +240,7 @@
   function rebuildActions() {
     var actions = document.getElementById('actions')
     actions.innerHTML = ''
-    ACTION_SETS[state.char].forEach(function (row) { addAction(actions, row[0], row[1]) })
+    charActions().forEach(function (action) { addAction(actions, action) })
   }
 
   var checks = []
@@ -246,13 +268,35 @@
       var ids = Object.keys(data.clips)
       var frames = ids.reduce(function (sum, id) { return sum + data.clips[id].frames.length }, 0)
       addCheck(ids.length === 12, kind + ': clip 数 = ' + ids.length + '/12')
-      addCheck(frames === 68, kind + ': 帧数 = ' + frames + '/68')
+      addCheck(frames > 0, kind + ': 帧数 = ' + frames + '（按 manifest）')
+      var timingOk = ids.every(function (id) {
+        var clip = data.clips[id]
+        if (clip.holdMs === undefined) return true
+        if (!Array.isArray(clip.holdMs) || clip.holdMs.length !== clip.frames.length) return false
+        var held = clip.holdMs.reduce(function (sum, value) { return sum + value }, 0)
+        return clip.durationMs === undefined || Math.abs(held - clip.durationMs) <= 1
+      })
+      addCheck(timingOk, kind + ': holdMs 逐帧时长与 durationMs 一致')
+      if (kind === 'cat') {
+        var stretch = data.clips.stand_wag
+        addCheck(stretch.frames.length === 10 && stretch.durationMs === 3200, 'cat: stand_wag 10 帧 / 3200ms（holdMs 拉伸）')
+      }
       addCheck(kind === 'human' ? (data.canTts === true && data.bubble === 'speech') : (data.canTts === false && data.bubble === 'thought'), kind + ': 气泡/TTS 策略正确')
       var missing = 0
       ids.forEach(function (id) { data.clips[id].frames.forEach(function (key) { if (!DATA.sprites[key]) missing += 1 }) })
       addCheck(missing === 0, kind + ': 所有帧都有 sprite base64（缺 ' + missing + '）')
-      var actionsOk = ACTION_SETS[kind].every(function (row) { return !!data.clips[row[0]] })
-      addCheck(actionsOk, kind + ': 互动按钮 clip 映射全部存在')
+      var actions = data.actions || []
+      var actionsOk = actions.length > 0 && actions.every(function (action) {
+        var clip = EVENT_CLIPS[action.event]
+        return clip === null || (typeof clip === 'string' && !!data.clips[clip])
+      })
+      addCheck(actionsOk, kind + ': 互动动作 event -> clip 映射全部存在（' + actions.length + ' 个动作）')
+      var saysOk = actions.every(function (action) { return Array.isArray(action.says) && action.says.length >= 2 })
+      addCheck(saysOk, kind + ': 每个互动动作都有 2+ 条随机回话')
+      var ballOk = kind === 'dog'
+        ? actions.some(function (action) { return action.event === 'ball_throw' && action.followUpEvent === 'ball_chase' })
+        : actions.every(function (action) { return action.event !== 'ball_throw' && action.event !== 'ball_chase' })
+      addCheck(ballOk, kind === 'dog' ? '金毛：丢球 -> 追球 follow-up' : kind + ': 没有球类动作')
       var microOk = data.microActions.every(function (id) { return !!data.clips[id] })
       addCheck(microOk, kind + ': 随机微动作 clip 全部存在')
     })

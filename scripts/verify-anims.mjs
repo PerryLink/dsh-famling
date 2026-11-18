@@ -3,14 +3,23 @@
  * Verify the generated multi-character animation block in client.js.
  *
  * Checks, without a browser:
- *   - the generated ANIMS/SPRITES block and the hand-written ACTION_SETS/
+ *   - the generated ANIMS/SPRITES block and the hand-written EVENT_CLIPS/
  *     MICRO_LINES block are structurally valid and every action maps to a clip
- *     that really exists for that character;
+ *     that really exists for that character (talk is the documented bubble-only
+ *     event and feed reuses the stand/wave clip);
  *   - each embedded character's regions (head/body/tail tap zones, idle gating,
- *     gesture -> event -> clip mapping) follow the famling hero regions contract;
- *   - all 3 x 68 frames decode as 96x96 PNGs with visible pixels;
+ *     gesture -> event -> clip mapping, per-region random says) follow the
+ *     famling hero regions contract;
+ *   - the embedded species actions follow the per-species menu contract (dog
+ *     fetch/retrieve with ball_throw -> ball_chase follow-up; cat/human never get
+ *     ball actions; every action has at least two random says lines);
+ *   - all embedded frames (per-manifest counts: dog/human 68, cat 72 = 208 today)
+ *     decode as 96x96 PNGs with visible pixels, and clip timing (fps/holdMs/
+ *     durationMs) is internally consistent;
  *   - bubble/TTS policy is human=speech+tts, cat/dog=thought+no-tts;
- *   - the hand-written label/line i18n keys the action table points at exist;
+ *   - the white bubble background / dark text and the random-say code paths are
+ *     present in client.js;
+ *   - the hand-written micro-action bubble line i18n keys exist in both locales;
  *   - optionally (default: auto) the embedded frames still match the private
  *     asset pack byte-for-byte after re-encoding.
  *
@@ -23,6 +32,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  ACTION_EVENTS,
   BEGIN_MARKER,
   CHARACTERS,
   DEFAULT_ASSETS_ROOT,
@@ -38,12 +48,46 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 export const ACTION_BEGIN = '// <dsh-famling:actions:begin>'
 export const ACTION_END = '// <dsh-famling:actions:end>'
 export const CLIENT_PATH = join(PLUGIN_ROOT, 'client.js')
-const EXPECTED_CLIP_COUNT = 12
-const EXPECTED_FRAME_COUNT = 68
 const EXPECTED_CANVAS = 96
-const REQUIRED_ACTION_CLIPS = ['pat_head', 'ball_throw', 'ball_chase']
+/** Per-clip timing: holdMs must cover every frame and sum to durationMs. */
+const MAX_FRAME_HOLD_MS = 60_000
+const MAX_SAYS = 6
+const MAX_SAY_CHARS = 120
 // The plugin click layer maps region gesture events to these animation clips.
 const REQUIRED_REGIONS = { head: 'pat', body: 'stand_wag', tail: 'chase_tail' }
+/** Event -> clip the hand-written client table must provide. */
+const REQUIRED_EVENT_CLIPS = {
+  pat: 'pat_head',
+  stand_wag: 'stand_wag',
+  chase_tail: 'chase_tail',
+  ball_throw: 'ball_throw',
+  ball_chase: 'ball_chase',
+  paw_face: 'paw_face',
+  run: 'run',
+}
+/** Events the client deliberately keeps bubble-only (no animation clip). */
+const BUBBLE_ONLY_EVENTS = ['talk']
+const BALL_EVENTS = ['ball_throw', 'ball_chase']
+/** Species menu contract: event coverage each character's actions must provide. */
+const REQUIRED_ACTION_EVENTS = {
+  human: ['pat', 'feed', 'stand_wag', 'paw_face', 'talk'],
+  cat: ['pat', 'stand_wag', 'paw_face', 'chase_tail', 'run'],
+  dog: ['pat', 'ball_throw', 'ball_chase', 'chase_tail', 'run'],
+}
+
+/** Validate a random-says array: at least two lines for a varied click. */
+function verifySays(kind, where, says, errors) {
+  if (!Array.isArray(says) || says.length < 2 || says.length > MAX_SAYS) {
+    errors.push(kind + ' ' + where + ': says must be 2..' + MAX_SAYS + ' random lines')
+    return
+  }
+  for (let index = 0; index < says.length; index += 1) {
+    const line = says[index]
+    if (typeof line !== 'string' || line.length === 0 || line.length > MAX_SAY_CHARS) {
+      errors.push(kind + ' ' + where + '.says[' + index + '] must be a non-empty string <= ' + MAX_SAY_CHARS + ' chars')
+    }
+  }
+}
 
 /** Validate one embedded ANIMS[character].regions document against the hero contract. */
 function verifyEmbeddedRegions(kind, anim, errors) {
@@ -90,6 +134,7 @@ function verifyEmbeddedRegions(kind, anim, errors) {
     if (typeof gesture.region !== 'string' || !regionIds.has(gesture.region)) errors.push(kind + ': gesture region is not declared: ' + gesture.region)
     if (!REGION_EVENTS.includes(gesture.event)) errors.push(kind + ': gesture event has no client clip mapping: ' + gesture.event)
     if (gesture.gesture !== undefined && gesture.gesture !== 'tap') errors.push(kind + '/' + gesture.region + ': unsupported gesture ' + gesture.gesture)
+    verifySays(kind, '/' + gesture.region + ' gesture', gesture.says, errors)
   }
   for (const [regionId, expectedEvent] of Object.entries(REQUIRED_REGIONS)) {
     if (!regionIds.has(regionId)) {
@@ -107,6 +152,79 @@ function verifyEmbeddedRegions(kind, anim, errors) {
   }
 }
 
+/** Validate the embedded species action table and its event -> clip mapping. */
+function verifyActions(kind, anim, eventClips, errors) {
+  const actions = anim.actions
+  if (!Array.isArray(actions) || actions.length === 0) {
+    errors.push(kind + ': actions are missing')
+    return
+  }
+  const actionIds = new Set()
+  const events = new Set()
+  for (const action of actions) {
+    if (!action || typeof action !== 'object') {
+      errors.push(kind + ': malformed action entry')
+      continue
+    }
+    if (typeof action.id !== 'string' || !/^[a-z][a-z0-9_.-]{0,63}$/.test(action.id)) {
+      errors.push(kind + ': action id is invalid: ' + String(action.id))
+    } else if (actionIds.has(action.id)) {
+      errors.push(kind + ': duplicate action id ' + action.id)
+    } else {
+      actionIds.add(action.id)
+    }
+    if (typeof action.label !== 'string' || action.label.length === 0 || action.label.length > 32) {
+      errors.push(kind + '/' + String(action.id) + ': label must be a non-empty string <= 32 chars')
+    }
+    const event = action.event
+    if (typeof event !== 'string' || !Object.prototype.hasOwnProperty.call(eventClips, event)) {
+      errors.push(kind + '/' + String(action.id) + ': event has no client clip mapping: ' + String(event))
+    } else {
+      const clipId = eventClips[event]
+      if (clipId === null) {
+        if (!BUBBLE_ONLY_EVENTS.includes(event)) errors.push(kind + '/' + String(action.id) + ': event ' + event + ' is bubble-only but not documented as such')
+      } else if (typeof clipId !== 'string' || !anim.clips[clipId]) {
+        errors.push(kind + '/' + String(action.id) + ': event ' + event + ' maps to missing clip ' + String(clipId))
+      }
+    }
+    events.add(event)
+    verifySays(kind, '/' + String(action.id) + ' action', action.says, errors)
+    if (action.followUpEvent !== undefined) {
+      if (typeof action.followUpEvent !== 'string' || !ACTION_EVENTS.includes(action.followUpEvent)) {
+        errors.push(kind + '/' + String(action.id) + ': followUpEvent has no client clip mapping: ' + String(action.followUpEvent))
+      } else if (action.followUpEvent === event) {
+        errors.push(kind + '/' + String(action.id) + ': followUpEvent must differ from event')
+      } else {
+        const followClip = eventClips[action.followUpEvent]
+        if (typeof followClip !== 'string' || !anim.clips[followClip]) {
+          errors.push(kind + '/' + String(action.id) + ': followUpEvent ' + action.followUpEvent + ' maps to missing clip ' + String(followClip))
+        }
+      }
+      if (action.followUpMs !== undefined && (typeof action.followUpMs !== 'number' || !Number.isFinite(action.followUpMs) || action.followUpMs < 0 || action.followUpMs > 5000)) {
+        errors.push(kind + '/' + String(action.id) + ': followUpMs must be 0..5000')
+      }
+    } else if (action.followUpMs !== undefined) {
+      errors.push(kind + '/' + String(action.id) + ': followUpMs requires followUpEvent')
+    }
+  }
+  for (const requiredEvent of REQUIRED_ACTION_EVENTS[kind] || []) {
+    if (!events.has(requiredEvent)) errors.push(kind + ': actions must cover event ' + requiredEvent)
+  }
+  if (kind === 'dog') {
+    const fetch = actions.find((action) => action && action.event === 'ball_throw' && action.followUpEvent === 'ball_chase')
+    if (!fetch) errors.push('dog: fetch action must follow ball_throw with ball_chase')
+  } else {
+    for (const ballEvent of BALL_EVENTS) {
+      if (events.has(ballEvent)) errors.push(kind + ': must not expose ball action ' + ballEvent)
+    }
+    for (const action of actions) {
+      if (action && typeof action.label === 'string' && /球|ball/i.test(action.label)) {
+        errors.push(kind + ': ball-like action label is not allowed: ' + action.label)
+      }
+    }
+  }
+}
+
 function extractConstBlock(source, beginMarker, endMarker) {
   const lines = source.split('\n')
   const begin = lines.findIndex((line) => line.trim() === beginMarker)
@@ -119,9 +237,9 @@ function extractConstBlock(source, beginMarker, endMarker) {
 export function loadClientData(source) {
   const animsBlock = extractConstBlock(source, BEGIN_MARKER, END_MARKER)
   const actionsBlock = extractConstBlock(source, ACTION_BEGIN, ACTION_END)
-  const code = animsBlock + '\n' + actionsBlock + '\n' + 'return { ANIMS, SPRITES, ACTION_SETS, MICRO_LINES }'
+  const code = animsBlock + '\n' + actionsBlock + '\n' + 'return { ANIMS, SPRITES, EVENT_CLIPS, MICRO_LINES }'
   const data = new Function(code)()
-  return { ANIMS: data.ANIMS, SPRITES: data.SPRITES, ACTION_SETS: data.ACTION_SETS, MICRO_LINES: data.MICRO_LINES }
+  return { ANIMS: data.ANIMS, SPRITES: data.SPRITES, EVENT_CLIPS: data.EVENT_CLIPS, MICRO_LINES: data.MICRO_LINES }
 }
 
 function extractSourceSha256(source) {
@@ -146,11 +264,21 @@ export function verifyClient(options = {}) {
   } catch (error) {
     return { ok: false, errors: ['cannot load generated animation block: ' + error.message], warnings, stats }
   }
-  const { ANIMS, SPRITES, ACTION_SETS, MICRO_LINES } = data
+  const { ANIMS, SPRITES, EVENT_CLIPS, MICRO_LINES } = data
   if (!ANIMS || typeof ANIMS !== 'object') errors.push('ANIMS is missing or not an object')
   if (!SPRITES || typeof SPRITES !== 'object') errors.push('SPRITES is missing or not an object')
-  if (!ACTION_SETS || typeof ACTION_SETS !== 'object') errors.push('ACTION_SETS is missing or not an object')
+  if (!EVENT_CLIPS || typeof EVENT_CLIPS !== 'object') errors.push('EVENT_CLIPS is missing or not an object')
   if (!MICRO_LINES || typeof MICRO_LINES !== 'object') errors.push('MICRO_LINES is missing or not an object')
+  if (EVENT_CLIPS && typeof EVENT_CLIPS === 'object') {
+    for (const [event, clipId] of Object.entries(REQUIRED_EVENT_CLIPS)) {
+      if (EVENT_CLIPS[event] !== clipId) errors.push('EVENT_CLIPS.' + event + ' must map to ' + clipId + ', got ' + String(EVENT_CLIPS[event]))
+    }
+    if (EVENT_CLIPS.talk !== null) errors.push('EVENT_CLIPS.talk must stay bubble-only (null)')
+    for (const [event, clipId] of Object.entries(EVENT_CLIPS)) {
+      if (!ACTION_EVENTS.includes(event)) errors.push('EVENT_CLIPS contains an unknown event: ' + event)
+      if (clipId !== null && typeof clipId !== 'string') errors.push('EVENT_CLIPS.' + event + ' must be a clip id or null')
+    }
+  }
 
   for (const kind of CHARACTERS) {
     const anim = ANIMS?.[kind]
@@ -160,7 +288,9 @@ export function verifyClient(options = {}) {
       continue
     }
     const clipIds = Object.keys(anim.clips)
-    if (clipIds.length !== EXPECTED_CLIP_COUNT) errors.push(kind + ': expected ' + EXPECTED_CLIP_COUNT + ' clips, got ' + clipIds.length)
+    if (clipIds.length === 0) errors.push(kind + ': no clips embedded')
+    const referenceClipIds = Object.keys(ANIMS?.[CHARACTERS[0]]?.clips || {}).sort()
+    if (clipIds.slice().sort().join(',') !== referenceClipIds.join(',')) errors.push(kind + ': clip ids differ from ' + CHARACTERS[0])
     if (anim.canTts !== expectedPolicy.canTts) errors.push(kind + ': canTts must be ' + expectedPolicy.canTts + ', got ' + anim.canTts)
     if (anim.bubble !== expectedPolicy.bubble) errors.push(kind + ': bubble must be ' + expectedPolicy.bubble + ', got ' + anim.bubble)
     let frameCount = 0
@@ -172,6 +302,25 @@ export function verifyClient(options = {}) {
       if (!Array.isArray(clip.frames) || clip.frames.length === 0) {
         errors.push(kind + '/' + clipId + ': no frames')
         continue
+      }
+      if (clip.holdMs !== undefined) {
+        if (!Array.isArray(clip.holdMs) || clip.holdMs.length !== clip.frames.length) {
+          errors.push(kind + '/' + clipId + ': holdMs must have exactly one entry per frame')
+        } else {
+          for (let index = 0; index < clip.holdMs.length; index += 1) {
+            const value = clip.holdMs[index]
+            if (typeof value !== 'number' || !Number.isFinite(value) || value < 30 || value > MAX_FRAME_HOLD_MS) {
+              errors.push(kind + '/' + clipId + ': holdMs[' + index + '] must be 30..' + MAX_FRAME_HOLD_MS + 'ms')
+            }
+          }
+          if (Number.isFinite(clip.durationMs)) {
+            const held = clip.holdMs.reduce((sum, value) => sum + value, 0)
+            if (Math.abs(held - clip.durationMs) > 1) errors.push(kind + '/' + clipId + ': durationMs ' + clip.durationMs + ' does not match the sum of holdMs ' + held)
+          }
+        }
+      }
+      if (clip.durationMs !== undefined && (typeof clip.durationMs !== 'number' || !Number.isFinite(clip.durationMs) || clip.durationMs <= 0)) {
+        errors.push(kind + '/' + clipId + ': durationMs must be a positive finite number')
       }
       for (const frameKey of clip.frames) {
         frameCount += 1
@@ -195,27 +344,10 @@ export function verifyClient(options = {}) {
         if (visible === 0) emptyFrames += 1
       }
     }
-    if (frameCount !== EXPECTED_FRAME_COUNT) errors.push(kind + ': expected ' + EXPECTED_FRAME_COUNT + ' frames, got ' + frameCount)
+    if (frameCount === 0) errors.push(kind + ': no frames embedded')
     if (emptyFrames > 0) errors.push(kind + ': ' + emptyFrames + ' fully transparent frames')
     verifyEmbeddedRegions(kind, anim, errors)
-    const actionRows = ACTION_SETS?.[kind]
-    if (!Array.isArray(actionRows) || actionRows.length === 0) {
-      errors.push(kind + ': ACTION_SETS entry is missing')
-    } else {
-      const mappedClips = new Set()
-      for (const row of actionRows) {
-        if (!Array.isArray(row) || row.length !== 3) {
-          errors.push(kind + ': malformed action row ' + JSON.stringify(row))
-          continue
-        }
-        const [clipId, labelKey, lineKey] = row
-        mappedClips.add(clipId)
-        if (!anim.clips[clipId]) errors.push(kind + ': action maps to missing clip ' + clipId)
-        if (countKeyOccurrences(source, labelKey) < 2) errors.push(kind + ': action label key ' + labelKey + ' is not defined in both locales')
-        if (countKeyOccurrences(source, lineKey) < 2) errors.push(kind + ': action line key ' + lineKey + ' is not defined in both locales')
-      }
-      for (const clipId of REQUIRED_ACTION_CLIPS) if (!mappedClips.has(clipId)) errors.push(kind + ': action set must expose ' + clipId)
-    }
+    verifyActions(kind, anim, EVENT_CLIPS, errors)
     if (!Array.isArray(anim.microActions) || anim.microActions.length === 0) {
       errors.push(kind + ': microActions is empty')
     } else {
@@ -235,6 +367,20 @@ export function verifyClient(options = {}) {
   if (!source.includes('canTts && settings.sound && ttsConsent')) errors.push('client.js is missing the canTts/sound/consent TTS guard')
   if (!source.includes('window.speechSynthesis.cancel()')) errors.push('client.js never cancels browser speech when switching to a silent character')
   if (!source.includes("localStorage.setItem(CHARACTER_KEY, character)")) errors.push('client.js does not persist the selected character')
+  if (!source.includes('background: \'#ffffff\', color: \'#111111\'')) errors.push('bubble must stay white (#ffffff) with dark (#111111) text')
+  if (!source.includes('1.5px dashed #8f8f8f') || !source.includes('1px solid #9a9a9a')) errors.push('bubble must keep the grey solid/dashed borders')
+  if (!source.includes('function frameDuration(seq, index)')) errors.push('client.js is missing the per-frame (holdMs) duration helper')
+  if (!source.includes('function frameDurations(seq)') || !source.includes('seq.durationMs')) errors.push('client.js does not read durationMs when timing a clip')
+  if (!source.includes('seq.holdMs') || !source.includes('durations[index]')) errors.push('client.js playback does not schedule frames from holdMs')
+  if (source.includes('setInterval(() => setFrameIndex')) errors.push('client.js still uses a fixed-interval frame advance instead of holdMs timeouts')
+  if (!source.includes('function pickSaidLine(pool, key, previous)')) errors.push('client.js is missing the random bubble-line picker')
+  if (!source.includes('previous[key] = line')) errors.push('random bubble-line picker does not remember the previous line')
+  if (!source.includes('pickSaidLine(reaction.says')) errors.push('region taps do not pick a random line from the region says')
+  if (!source.includes('pickSaidLine(action.says')) errors.push('menu actions do not pick a random line from the action says')
+  if (!source.includes('ANIMS[character]?.actions')) errors.push('action panel is not rendered from the embedded species actions')
+  if (!source.includes('action.followUpEvent')) errors.push('menu actions do not schedule follow-up events')
+  if (!source.includes('function onPetClick(event)')) errors.push('client.js is missing the region tap handler')
+  if (source.includes('ACTION_SETS')) errors.push('client.js still contains the obsolete ACTION_SETS table')
 
   const assetsRootOption = Object.prototype.hasOwnProperty.call(options, 'assetsRoot') ? options.assetsRoot : undefined
   const assetsRoot = assetsRootOption === null ? null : resolveAssetsRoot(assetsRootOption)
@@ -245,7 +391,7 @@ export function verifyClient(options = {}) {
       const fresh = buildAnimationData(assetsRoot, { optimize: true })
       const embeddedHash = extractSourceSha256(source)
       if (embeddedHash !== fresh.sourceSha256) errors.push('embedded source-sha256 is stale (embedded ' + embeddedHash + ', assets ' + fresh.sourceSha256 + ')')
-      if (JSON.stringify(ANIMS) !== JSON.stringify(fresh.anims)) errors.push('embedded ANIMS table differs from the current asset pack')
+      if (JSON.stringify(ANIMS) !== JSON.stringify(fresh.anims)) errors.push('embedded ANIMS table differs from the current asset pack (clips/regions/actions)')
       if (JSON.stringify(SPRITES) !== JSON.stringify(fresh.sprites)) errors.push('embedded SPRITES differ from the current asset pack')
       stats.assetsRoot = assetsRoot
     } catch (error) {
@@ -277,4 +423,3 @@ export async function main(argv = process.argv.slice(2)) {
 
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 if (invokedDirectly) await main()
-

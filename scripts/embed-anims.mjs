@@ -4,7 +4,7 @@
  *
  * Source of truth:
  *   ../../desktop-games/public/assets/pet/anim/{human,cat,dog}/
- *     manifest.json + <clip>/<clip>_NN.png   (12 clips / 68 frames each, 96x96 RGBA)
+ *     manifest.json + <clip>/<clip>_NN.png   (12 clips, per-character frame counts, 96x96 RGBA)
  *   ../../desktop-games/public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/
  *     regions.json                           (version/canvas/regions/gestures)
  *
@@ -15,12 +15,15 @@
  * at runtime.
  *
  * What it does:
- *   1. reads the three manifests and validates the shared anim contract, then
- *      reads + validates each character's regions.json tap-region document;
+ *   1. reads the three manifests and validates the shared anim contract (frame
+ *      counts / fps / holdMs / durationMs are per-character data, never a fixed
+ *      68), then reads + validates each character's regions.json tap-region
+ *      document (head/body/tail zones, random bubble lines, species actions);
  *   2. reads every PNG and (by default) re-encodes it losslessly as an indexed
  *      PNG with the smallest bit depth - pixel-identical, roughly half the bytes;
  *   3. renders a generated JS block with `const ANIMS` (per-character clip table
- *      + bubble/TTS policy + tap regions) and `const SPRITES` (base64 PNG data,
+ *      including per-frame holdMs/durationMs + bubble/TTS policy + tap regions
+ *      with random says + species actions) and `const SPRITES` (base64 PNG data,
  *      one key per frame) and injects it between the two marker comments in
  *      client.js.
  *
@@ -58,12 +61,20 @@ export const DEFAULT_CHARACTERS_ROOT = resolve(PLUGIN_ROOT, '..', '..', 'desktop
 export const REGION_CHARACTER_DIRS = { human: 'pet-tinglan-anim', cat: 'pet-cat', dog: 'pet-dog' }
 /** Region gesture events the client knows how to play as animation clips. */
 export const REGION_EVENTS = ['pat', 'stand_wag', 'chase_tail']
+/**
+ * Species-action events the client knows (client.js EVENT_CLIPS maps each to an
+ * animation clip; talk is deliberately bubble-only and keeps the idle loop).
+ * Shared with the standalone famling hero, which emits the same event names.
+ */
+export const ACTION_EVENTS = ['pat', 'stand_wag', 'chase_tail', 'ball_throw', 'ball_chase', 'paw_face', 'scratch', 'run', 'feed', 'talk']
 const REGION_ID_RE = /^[a-z][a-z0-9_.-]{0,63}$/
 const REGION_EVENT_RE = /^[a-z][a-z0-9_.-]{0,63}$/
 const MAX_REGIONS = 32
 const MAX_GESTURES = 64
 const MAX_STATES = 8
 const MAX_SAY = 120
+const MAX_SAYS = 6
+const MAX_ACTIONS = 8
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -339,6 +350,18 @@ function asRegionString(kind, value, what, max) {
   return value
 }
 
+/**
+ * Random bubble lines: 2..MAX_SAYS strings. Two is the minimum that lets a
+ * repeated tap/action pick a different line (the client never repeats the
+ * previous line for one key), so a one-line array is a data bug, not a dialog.
+ */
+function asRegionSays(kind, value, what) {
+  if (!Array.isArray(value) || value.length < 2 || value.length > MAX_SAYS) {
+    regionFail(kind, what + ' must be an array of 2..' + MAX_SAYS + ' random lines')
+  }
+  return value.map((line, index) => asRegionString(kind, line, what + '[' + index + ']', MAX_SAY))
+}
+
 function asRegionFinite(kind, value, what) {
   if (typeof value !== 'number' || !Number.isFinite(value)) regionFail(kind, what + ' must be a finite number')
   return value
@@ -409,10 +432,49 @@ export function loadRegionConfig(charactersRoot, kind) {
         return value
       })
     }
-    const say = rule.say === undefined ? undefined : asRegionString(kind, rule.say, 'gestures[' + index + '].say', MAX_SAY)
-    return { region, ...(states !== undefined ? { states } : {}), ...(gesture !== undefined ? { gesture } : {}), event, ...(say !== undefined ? { say } : {}) }
+    // Random bubble lines. The legacy single-string say field from the
+    // first region contract is normalized to a one-line says array.
+    const legacySay = typeof rule.say === 'string' ? [rule.say] : undefined
+    let says
+    if (rule.says !== undefined) says = asRegionSays(kind, rule.says, 'gestures[' + index + '].says')
+    else if (legacySay !== undefined) says = asRegionSays(kind, legacySay, 'gestures[' + index + '].say')
+    else regionFail(kind, 'gestures[' + index + '] must define says (or the legacy say string)')
+    return { region, ...(states !== undefined ? { states } : {}), ...(gesture !== undefined ? { gesture } : {}), event, says }
   })
-  return { version: 1, canvas: [canvas[0], canvas[1]], regions, gestures }
+  let actions
+  if (raw.actions !== undefined) {
+    if (!Array.isArray(raw.actions) || raw.actions.length === 0 || raw.actions.length > MAX_ACTIONS) {
+      regionFail(kind, 'actions must be a non-empty array (<= ' + MAX_ACTIONS + ')')
+    }
+    const actionIds = new Set()
+    actions = raw.actions.map((entry, index) => {
+      const action = asRegionRecord(kind, entry, 'actions[' + index + ']')
+      const id = asRegionString(kind, action.id, 'actions[' + index + '].id', 64)
+      if (!REGION_ID_RE.test(id)) regionFail(kind, 'actions[' + index + '].id "' + id + '" is not a safe id')
+      if (actionIds.has(id)) regionFail(kind, 'duplicate action id "' + id + '"')
+      actionIds.add(id)
+      const label = asRegionString(kind, action.label, 'actions[' + index + '].label', 32)
+      const event = asRegionString(kind, action.event, 'actions[' + index + '].event', 64)
+      if (!REGION_EVENT_RE.test(event)) regionFail(kind, 'actions[' + index + '].event "' + event + '" is not a safe event name')
+      if (!ACTION_EVENTS.includes(event)) regionFail(kind, 'actions[' + index + '].event "' + event + '" has no client clip mapping')
+      let followUpEvent
+      if (action.followUpEvent !== undefined) {
+        followUpEvent = asRegionString(kind, action.followUpEvent, 'actions[' + index + '].followUpEvent', 64)
+        if (!REGION_EVENT_RE.test(followUpEvent)) regionFail(kind, 'actions[' + index + '].followUpEvent "' + followUpEvent + '" is not a safe event name')
+        if (!ACTION_EVENTS.includes(followUpEvent)) regionFail(kind, 'actions[' + index + '].followUpEvent "' + followUpEvent + '" has no client clip mapping')
+        if (followUpEvent === event) regionFail(kind, 'actions[' + index + '].followUpEvent must differ from event')
+      }
+      let followUpMs
+      if (action.followUpMs !== undefined) {
+        followUpMs = asRegionFinite(kind, action.followUpMs, 'actions[' + index + '].followUpMs')
+        if (followUpMs < 0 || followUpMs > 5000) regionFail(kind, 'actions[' + index + '].followUpMs must be 0..5000')
+        if (followUpEvent === undefined) regionFail(kind, 'actions[' + index + '].followUpMs requires followUpEvent')
+      }
+      const says = asRegionSays(kind, action.says, 'actions[' + index + '].says')
+      return { id, label, event, ...(followUpEvent !== undefined ? { followUpEvent } : {}), ...(followUpMs !== undefined ? { followUpMs } : {}), says }
+    })
+  }
+  return { version: 1, canvas: [canvas[0], canvas[1]], regions, gestures, ...(actions !== undefined ? { actions } : {}) }
 }
 
 function loadPack(assetsRoot, kind) {
@@ -427,6 +489,28 @@ function loadPack(assetsRoot, kind) {
   let total = 0
   for (const [clipId, clip] of Object.entries(clips)) {
     if (!Number.isInteger(clip.frames) || clip.frames < 1) throw new Error(kind + '/' + clipId + ': invalid frame count')
+    if (!Number.isInteger(clip.fps) || clip.fps < 1 || clip.fps > 240) throw new Error(kind + '/' + clipId + ': invalid fps')
+    if (clip.holdMs !== undefined) {
+      if (!Array.isArray(clip.holdMs) || clip.holdMs.length !== clip.frames) {
+        throw new Error(kind + '/' + clipId + ': holdMs must have exactly one duration per frame')
+      }
+      for (const value of clip.holdMs) {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value < 30 || value > 60_000) {
+          throw new Error(kind + '/' + clipId + ': holdMs entries must be finite 30..60000 ms')
+        }
+      }
+    }
+    if (clip.durationMs !== undefined) {
+      if (typeof clip.durationMs !== 'number' || !Number.isFinite(clip.durationMs) || clip.durationMs <= 0) {
+        throw new Error(kind + '/' + clipId + ': durationMs must be a positive finite number')
+      }
+      if (Array.isArray(clip.holdMs)) {
+        const held = clip.holdMs.reduce((sum, value) => sum + value, 0)
+        if (Math.abs(held - clip.durationMs) > 1) {
+          throw new Error(kind + '/' + clipId + ': durationMs ' + clip.durationMs + ' does not match the sum of holdMs ' + held)
+        }
+      }
+    }
     for (let index = 0; index < clip.frames; index += 1) {
       const relativePath = clipId + '/' + clipId + '_' + String(index).padStart(2, '0') + '.png'
       const absolutePath = join(assetsRoot, kind, relativePath)
@@ -443,26 +527,24 @@ function loadPack(assetsRoot, kind) {
   return { manifest, clips, frames }
 }
 
-/** Load + cross-validate the three packs against the shared anim contract. */
+/**
+ * Load + cross-validate the three packs against the shared anim contract.
+ *
+ * Frame counts are deliberately NOT hardcoded: every clip's frame count comes
+ * from its own manifest (dog/human 68 total today, cat 72 after the 10-frame
+ * stand_wag), and a clip's fps/holdMs may differ per species. Only the clip-ID
+ * set is shared, because the plugin's hand-written EVENT_CLIPS/menu mapping
+ * addresses clips by id.
+ */
 export function loadPacks(assetsRoot) {
   const packs = {}
   for (const kind of CHARACTERS) packs[kind] = loadPack(assetsRoot, kind)
   const reference = packs[CHARACTERS[0]].clips
-  const referenceIds = Object.keys(reference)
-  if (referenceIds.length !== 12) throw new Error('expected 12 clips, got ' + referenceIds.length)
+  const referenceIds = Object.keys(reference).sort()
+  if (referenceIds.length === 0) throw new Error(CHARACTERS[0] + ': manifest has no clips')
   for (const kind of CHARACTERS) {
-    const clips = packs[kind].clips
-    const ids = Object.keys(clips)
+    const ids = Object.keys(packs[kind].clips).sort()
     if (ids.join(',') !== referenceIds.join(',')) throw new Error(kind + ': clip ids differ from ' + CHARACTERS[0])
-    for (const clipId of referenceIds) {
-      const expected = reference[clipId]
-      const actual = clips[clipId]
-      if (actual.frames !== expected.frames || actual.fps !== expected.fps || Boolean(actual.loop) !== Boolean(expected.loop)) {
-        throw new Error(kind + '/' + clipId + ': frame count/fps/loop differs from ' + CHARACTERS[0])
-      }
-    }
-    const totalFrames = packs[kind].frames.length
-    if (totalFrames !== 68) throw new Error(kind + ': expected 68 frames, got ' + totalFrames)
   }
   return packs
 }
@@ -497,10 +579,15 @@ export function buildAnimationData(assetsRoot, options = {}) {
     }
     hash.update('regions/' + kind + ':')
     hash.update(JSON.stringify(regions))
+    // Clip metadata (fps/loop/holdMs/durationMs) is part of the source hash too:
+    // a timing-only manifest change must invalidate --check as well.
+    hash.update('clips/' + kind + ':')
+    hash.update(JSON.stringify(pack.clips))
     const clips = {}
     for (const [clipId, clip] of Object.entries(pack.clips)) {
       clips[clipId] = { frames: [], fps: clip.fps, loop: clip.loop === true, layer: clip.layer || 'base', category: clip.category || '', priority: Number(clip.priority) || 0 }
       if (Array.isArray(clip.holdMs)) clips[clipId].holdMs = clip.holdMs.slice()
+      if (Number.isFinite(clip.durationMs) && clip.durationMs > 0) clips[clipId].durationMs = clip.durationMs
     }
     let sourceBytes = 0
     let embeddedBytes = 0
@@ -524,6 +611,9 @@ export function buildAnimationData(assetsRoot, options = {}) {
     anims[kind] = {
       clips,
       regions,
+      // Species-specific menu actions (dog fetch/retrieve, cat stretch/wash,
+      // human paper/wave/tidy/talk), rendered data-driven by the client.
+      actions: regions.actions,
       bubble: voice.bubble === 'thought' ? 'thought' : 'speech',
       canTts: voice.canTts === true,
       voiceMode: typeof voice.mode === 'string' ? voice.mode : 'none',
@@ -544,9 +634,10 @@ export function renderBlock(data) {
   lines.push('    ' + BEGIN_MARKER)
   lines.push('    // @generated by scripts/embed-anims.mjs - do not edit this block by hand.')
   lines.push('    // source: ../../desktop-games/public/assets/pet/anim (96x96 RGBA PNG; losslessly re-encoded indexed PNG, hard alpha kept)')
-  lines.push('    // regions: ../../desktop-games/public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/regions.json (head/body/tail tap zones, idle gating)')
+  lines.push('    // regions: ../../desktop-games/public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/regions.json (head/body/tail tap zones, random says, species actions, idle gating)')
   lines.push('    // source-sha256: ' + data.sourceSha256)
-  lines.push('    // characters: human/cat/dog - 12 clips - ' + totalFrames + ' frames - base64 chars: ' + totalBase64)
+  const clipCount = Object.keys(data.anims[CHARACTERS[0]].clips).length
+  lines.push('    // characters: human/cat/dog - ' + clipCount + ' clips - ' + totalFrames + ' frames - base64 chars: ' + totalBase64)
   lines.push('    const ANIMS = ' + JSON.stringify(data.anims, null, 2).split('\n').join('\n    '))
   lines.push('    const SPRITES = {')
   const entries = Object.entries(data.sprites)
