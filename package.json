@@ -1,8 +1,11 @@
 {
   "name": "dsh-famling",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "private": false,
   "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan interactions and a link to the standalone famling app.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {

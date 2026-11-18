@@ -31,11 +31,32 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - `POST /api/famling/bridge`（同源、owner-only、JSON ≤16KB）
 - `op:"echo"` → 本地回显
-- `op:"chat"` → Host `ctx.llm.stream`，使用 DSH 当前 provider/model（Key 只在 Host）
+- `op:"chat"` → Host `ctx.llm.stream`；provider/model 来自 DSH 默认模型选择或本插件 Config，**不写死**（Key 只在 Host）
 - `op:"brief"` → 只读 `~/.advisers/pet-brief.json`，只投影计数/今天/承诺，不代传 Advisers TOS
 - `op:"task"` → `ctx.schedule.create` 一次性提醒（绝对时间；不自己实现定时器）
 - TTS/ASR 各自独立同意；默认关闭；浏览器语音会明确说明音频去向
 - 未实现 LLM/TTS/ASR/记忆写入；下一步见 `docs/DSH-FAMLING-BRIDGE-2026-11-17.md`
+
+### 模型选择（2026-11-18 起不再写死）
+
+`op:"chat"` 的 provider/model 按以下顺序解析（`index.js` 的 `resolveSelection`）：
+
+1. **插件 Config 显式覆盖**（可选）：`provider`/`model` 必须成对出现，否则加载时报错；`reasoningEffort` 可选。
+2. **DSH 默认模型选择**：从 Host 服务 `agentDefaultModel.currentSelection()` 读取（即 DSH 设置/模型选择器里的默认模型），换模型后宠物对话自动跟随。
+3. 两者都取不到时 `chat` 返回 503 `E_LLM`，**不静默回退到写死的模型**。
+
+固定模型（仅在你清楚要这么做时）由用户 patch 层提供，例如：
+
+```yaml
+- id: dsh-famling
+  name: dsh-famling
+  config:
+    provider: deepseek-official
+    model: deepseek-flash
+    reasoningEffort: max   # 可选
+```
+
+不要改 DSH 自带的 profile bundle；优先用 DSH 的模型选择器。```
 
 ## 安装（本地）
 
@@ -47,6 +68,8 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 ## 验证
 
 - `node --check client.js`
+- `node --check index.js`
+- `npm test`（`node --test test/`，Host 桥接的 fake-context 测试，不调用真实模型）
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`
 - 本版本已用 DSH 0.2.2-rc.3 的 `sidebar.footer.action` slot 编写；实际渲染需在 DSH Web UI 验证。
 - 代码：**PolyForm Noncommercial 1.0.0**（`LICENSE`）；

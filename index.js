@@ -14,10 +14,54 @@ export const inject = ['connection', 'llm', 'schedule']
 const MAX_INPUT_CHARS = 2000
 const MAX_BODY_BYTES = 16 * 1024
 const BRIDGE_PATH = '/api/famling/bridge'
-const LLM_PROVIDER = 'deepseek-official'
-const LLM_MODEL = 'deepseek-flash'
 const LLM_TIMEOUT_MS = 25_000
 const SYSTEM_PROMPT = '你是汀岚，一只安静、简洁的桌面小生灵。用中文回答，1-3 句；不知道就说不知道。不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
+
+/** Normalize an optional string: trim it, and treat a blank value as absent. */
+function optionalString(value) {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : ''
+}
+
+/**
+ * Validate the optional plugin config override. Provider and model must be
+ * configured together — a lone field is a startup error, not a silent
+ * fallback, so a typo in the profile patch cannot silently pick a wrong model.
+ * @returns the override selection, or null when DSH's default model is used.
+ */
+function configSelection(config) {
+  if (config === undefined || config === null) return null
+  if (typeof config !== 'object' || Array.isArray(config)) throw new Error('dsh-famling: config must be an object.')
+  const provider = optionalString(config.provider)
+  const model = optionalString(config.model)
+  const reasoningEffort = optionalString(config.reasoningEffort)
+  if (!provider && !model && !reasoningEffort) return null
+  if (!provider || !model) throw new Error('dsh-famling: config.provider and config.model must be configured together.')
+  return { provider, model, source: 'plugin-config', ...(reasoningEffort === '' ? {} : { reasoningEffort }) }
+}
+
+/**
+ * Read the current DSH default model selection (the profile setting / model
+ * picker) from the Host. This is the normal source: pet chat must follow the
+ * model the user configured in DSH, never a frozen provider/model literal.
+ * @returns the profile selection, or null when the service is unavailable.
+ */
+function profileSelection(ctx) {
+  const service = typeof ctx.get === 'function' ? ctx.get('agentDefaultModel') : undefined
+  if (!service || typeof service.currentSelection !== 'function') return null
+  let selection
+  try { selection = service.currentSelection() } catch { return null }
+  if (!selection || typeof selection !== 'object') return null
+  const provider = optionalString(selection.provider)
+  const model = optionalString(selection.model)
+  if (!provider || !model) return null
+  const reasoningEffort = optionalString(selection.reasoningEffort)
+  return { provider, model, source: 'dsh-profile', ...(reasoningEffort === '' ? {} : { reasoningEffort }) }
+}
+
+/** Resolve this call's model: explicit plugin config wins, else the DSH profile default. */
+function resolveSelection(ctx, config) {
+  return configSelection(config) || profileSelection(ctx)
+}
 
 function json(status, body) {
   return new Response(JSON.stringify(body), {
@@ -73,14 +117,17 @@ async function readBriefProjection() {
   }
 }
 
-async function chatWithDsh(ctx, input) {
+async function chatWithDsh(ctx, input, config) {
+  const selection = resolveSelection(ctx, config)
+  if (!selection) throw new Error('no-model')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
   let reply = ''
   try {
     for await (const chunk of ctx.llm.stream({
-      provider: LLM_PROVIDER,
-      model: LLM_MODEL,
+      provider: selection.provider,
+      model: selection.model,
+      ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort }),
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: [{ type: 'text', text: input }] }],
       maxTokens: 300,
@@ -93,13 +140,13 @@ async function chatWithDsh(ctx, input) {
     }
     const trimmed = reply.trim()
     if (!trimmed) throw new Error('empty reply')
-    return trimmed
+    return { text: trimmed, selection }
   } finally {
     clearTimeout(timer)
   }
 }
 
-async function handleBridge(ctx, request) {
+async function handleBridge(ctx, request, config) {
   if (request.method !== 'POST') return error('E_METHOD', 'POST required.', 405)
   const text = await request.text()
   if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) return error('E_INPUT', 'Request is too large.', 413)
@@ -152,18 +199,31 @@ async function handleBridge(ctx, request) {
   const input = payload.text.trim()
   if (input.length === 0 || input.length > MAX_INPUT_CHARS) return error('E_INPUT', 'Text length is invalid.')
   try {
-    const reply = await chatWithDsh(ctx, input)
-    return json(200, { v: 1, ok: true, reply, bubbleKind: 'speech', meta: { stage: 'P2', provider: LLM_PROVIDER, model: LLM_MODEL } })
+    const chat = await chatWithDsh(ctx, input, config)
+    return json(200, {
+      v: 1,
+      ok: true,
+      reply: chat.text,
+      bubbleKind: 'speech',
+      meta: { stage: 'P2', provider: chat.selection.provider, model: chat.selection.model, modelSource: chat.selection.source },
+    })
   } catch {
     return error('E_LLM', 'DSH LLM is unavailable or failed.', 503)
   }
 }
 
-export function apply(ctx) {
+/**
+ * @param ctx - Host context.
+ * @param config - optional `{ provider, model, reasoningEffort }` override. When
+ *   omitted the bridge follows the DSH default model selection, so switching the
+ *   model in DSH never leaves pet chat on a frozen literal.
+ */
+export function apply(ctx, config) {
+  configSelection(config) // fail fast on a half-configured override
   return ctx.effect(() => ctx.connection.fetch.register({
     path: BRIDGE_PATH,
     methods: ['POST'],
     requestBody: 'buffered',
-    fetch: (request) => handleBridge(ctx, request),
+    fetch: (request) => handleBridge(ctx, request, config),
   }), 'dsh-famling: authenticated bridge route')
 }
