@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { CHARACTERS, CHUNK_NAMES, PLUGIN_ROOT, chunkPath, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
 import { FIRST_SCREEN_BUDGET_BYTES, loadChunkModule, loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
 import { AUDIT_BASELINE_BYTES } from '../scripts/measure-bundle.mjs'
+import { CONTENT_EXTENSION_POINTS, CONTENT_PACK_EXAMPLE, validateContentPack } from '../content-extension.mjs'
 
 const clientPath = join(PLUGIN_ROOT, 'client.js')
 const clientSource = readFileSync(clientPath, 'utf8')
@@ -193,8 +194,9 @@ test('client code enforces the TTS policy guard, persists the character and keep
   assert.ok(clientSource.includes('localStorage.setItem(CHARACTER_KEY, character)'), 'character persisted')
   assert.ok(clientSource.includes("'dsh-famling/character'"), 'character storage key')
   assert.ok(clientSource.includes('window.speechSynthesis.cancel()'), 'silent characters cancel running speech')
-  assert.ok(clientSource.includes("background: '#ffffff', color: '#111111'"), 'bubble keeps the white background and dark text')
-  assert.ok(clientSource.includes('1.5px dashed #8f8f8f') && clientSource.includes('1px solid #9a9a9a'), 'bubble keeps the grey dashed/solid borders')
+  assert.ok(clientSource.includes("'--dsh-famling-bubble-bg': '#ffffff'") && clientSource.includes("'--dsh-famling-bubble-text': '#111111'"), 'default theme keeps the white bubble with dark text')
+  assert.ok(clientSource.includes('var(--dsh-famling-bubble-bg, #ffffff)') && clientSource.includes('var(--dsh-famling-bubble-text, #111111)'), 'bubble is painted from the theme CSS variables')
+  assert.ok(clientSource.includes('var(--dsh-famling-bubble-thought-border, #8f8f8f)') && clientSource.includes('var(--dsh-famling-bubble-border, #9a9a9a)'), 'bubble keeps the grey dashed/solid theme borders')
 })
 
 test('chat payload carries the active character with a human fallback', () => {
@@ -269,13 +271,124 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.8.6, publishes the lazy chunks and leaves the stage-one boot barrier', async () => {
+test('package version is 0.9.0, publishes the lazy chunks, content contract and leaves the stage-one boot barrier', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.8.6')
+  assert.equal(pkg.version, '0.9.0')
+  assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'package exports the content extension contract')
+  assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
   assert.equal(pkg.dsh.client.immediately, false, 'footer pet is not a stage-one registration barrier')
   assert.equal(pkg.scripts['measure:bundle'], 'node scripts/measure-bundle.mjs')
   const module = await import('../index.js')
   assert.equal(typeof module.apply, 'function')
   assert.equal(module.name, 'dsh-famling')
+})
+
+test('client.js wires the 4th content button, the content-center panel and one settings entry', () => {
+  assert.ok(clientSource.includes("content: '内容'"), 'zh sidebar label for the content button')
+  assert.ok(clientSource.includes("content: 'Content'"), 'en sidebar label for the content button')
+  assert.ok(clientSource.includes("contentTitle: '内容中心'"), 'zh content-center title')
+  assert.ok(clientSource.includes("contentEntry: '内容与角色…'"), 'single settings entry row')
+  assert.ok(clientSource.includes("contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题' }"), 'four category tabs')
+  assert.ok(clientSource.includes("onClick: () => openPanel('content')"), 'the settings row and the 4th button open the content center')
+  assert.equal(clientSource.includes("key: 'character', style: { marginBottom: 7 }"), false, 'settings no longer contains the scattered character block')
+  assert.equal(clientSource.includes("key: 'tts-note'"), false, 'the voice hint moved out of settings into the content center')
+  assert.ok(clientSource.includes('const contentCards = {') && clientSource.includes('contentCards[contentTab]'), 'category bodies are rendered from the content catalog')
+  assert.ok(clientSource.includes('characters: CHARACTER_IDS.map') && clientSource.includes('dialogue: DIALOGUE_MODE_IDS.map') && clientSource.includes('themes: THEME_IDS.map'), 'all four categories build their cards from the catalog ids')
+  assert.ok(clientSource.includes("'aria-pressed': active"), 'selectable cards expose their current state')
+  assert.equal(/location\.(?:reload|href|assign|replace)\s*[=(]/.test(clientSource), false, 'content switches never reload or navigate')
+  assert.equal(clientSource.includes('.innerHTML ='), false, 'no innerHTML injection')
+  assert.equal(/\beval\s*\(|new Function\s*\(/.test(clientSource), false, 'no eval/Function in the client')
+})
+
+test('content center persists dialogue/theme choices and only the human gets browser voices', () => {
+  assert.ok(clientSource.includes("const DIALOGUE_KEY = 'dsh-famling/dialogue'"), 'dialogue storage key')
+  assert.ok(clientSource.includes('localStorage.setItem(DIALOGUE_KEY, dialogueMode)'), 'dialogue mode persisted')
+  assert.ok(clientSource.includes("const THEME_KEY = 'dsh-famling/theme'"), 'theme storage key')
+  assert.ok(clientSource.includes('localStorage.setItem(THEME_KEY, themeId)'), 'theme persisted')
+  assert.ok(clientSource.includes('function availableVoices()'), 'browser voice lister exists')
+  assert.ok(clientSource.includes('getVoices()'), 'speechSynthesis.getVoices() is used')
+  assert.ok(clientSource.includes("canTts ? h('label', { key: 'sound'"), 'TTS toggle only renders when the character can speak')
+  assert.ok(clientSource.includes('L.voiceSilent'), 'cat/dog show the silent thought-bubble policy')
+  assert.ok(clientSource.includes('maxChars: 90') && clientSource.includes('bubbleChance: 0.35'), 'brief/quiet modes have bounded, documented effects')
+  assert.ok(clientSource.includes("source !== 'direct' && dialogue.bubbleChance < 1"), 'quiet mode lowers ambient bubble probability')
+  assert.ok(clientSource.includes("line.slice(0, dialogue.maxChars - 1)"), 'brief mode filters over-long replies')
+  assert.ok(clientSource.includes('utterance.voice = voice'), 'the selected browser voice is applied to speech')
+})
+
+test('content extension points publish the reserved pure-data pack contract', () => {
+  assert.equal(CONTENT_EXTENSION_POINTS.version, 1)
+  assert.equal(CONTENT_EXTENSION_POINTS.status, 'reserved')
+  assert.deepEqual({ ...CONTENT_EXTENSION_POINTS.transport }, { network: false, execute: false, innerHTML: false, worker: false })
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.entry.kinds], ['character', 'voice', 'dialogue', 'theme'])
+  for (const field of ['kind', 'id', 'name', 'preview', 'apply', 'source', 'permissions', 'version']) assert.ok(CONTENT_EXTENSION_POINTS.entry.fields.includes(field), 'entry field: ' + field)
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.pack.sources], ['bundled', 'local', 'remote'])
+  assert.ok(Number.isFinite(CONTENT_EXTENSION_POINTS.pack.limits.maxBytes) && CONTENT_EXTENSION_POINTS.pack.limits.maxBytes > 0)
+  assert.ok(Array.isArray(CONTENT_EXTENSION_POINTS.entry.permissions) && CONTENT_EXTENSION_POINTS.entry.permissions.includes('apply:theme'))
+  for (const kind of CONTENT_EXTENSION_POINTS.entry.kinds) assert.ok(CONTENT_EXTENSION_POINTS.entry.schemas[kind].apply, kind + ': apply schema')
+  assert.equal(validateContentPack(JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))).ok, true, 'example pack is schema-valid')
+  const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
+  assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'contract is a package export')
+})
+
+test('third-party content packs with scripts, traversal, unknown enums or oversized payloads are rejected', () => {
+  const example = () => JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
+  const cases = []
+  const withFunction = example()
+  withFunction.entries[0].apply.variables['--dsh-famling-bubble-bg'] = () => '#fff'
+  cases.push(['function payload', withFunction])
+  const withDate = example()
+  withDate.entries[0].apply.variables['--dsh-famling-bubble-bg'] = new Date()
+  cases.push(['non-plain value', withDate])
+  const unknownKind = example()
+  unknownKind.entries[0].kind = 'script'
+  cases.push(['unknown kind', unknownKind])
+  const pathLikeId = example()
+  pathLikeId.entries[0].id = '../evil'
+  cases.push(['path-like id', pathLikeId])
+  const traversal = example()
+  traversal.entries[0].preview = { kind: 'image', path: '../../secret.png' }
+  cases.push(['path traversal', traversal])
+  const remote = example()
+  remote.source = 'remote'
+  cases.push(['remote source without opt-in', remote])
+  const prototype = example()
+  prototype.entries[0].apply.variables = JSON.parse('{"__proto__": "#ffffff"}')
+  cases.push(['prototype key', prototype])
+  const unsafeCss = example()
+  unsafeCss.entries[0].apply.variables['--dsh-famling-bubble-bg'] = 'url(https://evil.example/x.png)'
+  cases.push(['unsafe CSS value', unsafeCss])
+  const markup = example()
+  markup.entries[0].name = '<script>alert(1)</script>'
+  cases.push(['markup in text', markup])
+  const unknownPermission = example()
+  unknownPermission.entries[0].permissions = ['apply:theme', 'admin:root']
+  cases.push(['unknown permission', unknownPermission])
+  const unknownField = example()
+  unknownField.entries[0].onApply = 'alert(1)'
+  cases.push(['unknown field', unknownField])
+  const wrongSource = example()
+  wrongSource.entries[0].source = 'bundled'
+  cases.push(['entry source mismatch', wrongSource])
+  const tooMany = example()
+  tooMany.entries = Array.from({ length: 33 }, (_, index) => ({ ...example().entries[0], id: 'theme-' + index }))
+  cases.push(['too many entries', tooMany])
+  for (const [name, pack] of cases) {
+    const result = validateContentPack(pack)
+    assert.equal(result.ok, false, name + ' must be rejected')
+    assert.ok(result.errors.length > 0, name + ': errors are reported')
+  }
+  const allowedRemote = example()
+  allowedRemote.source = 'remote'
+  allowedRemote.entries[0].source = 'remote'
+  assert.equal(validateContentPack(allowedRemote, { allowRemote: true }).ok, true, 'remote stays reserved but schema-valid behind an explicit future opt-in')
+  const oversized = example()
+  const key = '--dsh-famling-' + 'a'.repeat(28)
+  const value = 'rgb(' + '1,'.repeat(23) + '1)'
+  const variables = {}
+  for (let index = 0; index < 24; index += 1) variables[key + index] = value
+  oversized.entries = Array.from({ length: 32 }, (_, index) => ({ ...example().entries[0], id: 'big-' + index, apply: { variables } }))
+  const oversizedResult = validateContentPack(oversized)
+  assert.equal(oversizedResult.ok, false, 'oversized pack is rejected')
+  assert.ok(oversizedResult.errors.some((error) => /JSON size|exceeds/.test(error)), 'size limit error is reported: ' + oversizedResult.errors.join('; '))
 })

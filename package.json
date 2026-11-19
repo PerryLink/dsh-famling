@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.8.6",
+  "version": "0.9.0",
   "private": false,
   "type": "module",
   "scripts": {
@@ -11,11 +11,12 @@
     "measure:bundle": "node scripts/measure-bundle.mjs",
     "qa:anims": "node scripts/embed-anims.mjs --qa"
   },
-  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations, region-aware pet interactions with species-specific actions and random bubble lines, chat personas, and a link to the standalone famling app.",
+  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations, a content center (characters / voices / dialogue / themes), region-aware interactions, chat personas, and a reserved third-party content-pack contract.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
+    "./content-extension": "./content-extension.mjs",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.png"
   },
@@ -25,6 +26,7 @@
     "client.anims.human.js",
     "client.anims.cat.js",
     "client.anims.dog.js",
+    "content-extension.mjs",
     "cordis.patch.yml",
     "locale/*.json",
     "docs",

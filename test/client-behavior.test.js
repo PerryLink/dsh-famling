@@ -172,6 +172,8 @@ function createHarness(options = {}) {
   storage.set('dsh-famling/settings', JSON.stringify({ sound: true, motion: false, bubble: true, ...(options.settings || {}) }))
   storage.set('dsh-famling/consent/v1', JSON.stringify({ tts: true, asr: false, ...(options.consent || {}) }))
   if (options.character) storage.set('dsh-famling/character', options.character)
+  if (options.dialogue) storage.set('dsh-famling/dialogue', options.dialogue)
+  if (options.theme) storage.set('dsh-famling/theme', options.theme)
   const localStorage = {
     getItem(key) { return storage.has(key) ? storage.get(key) : null },
     setItem(key, value) { storage.set(key, String(value)) },
@@ -197,6 +199,7 @@ function createHarness(options = {}) {
     speechSynthesis: {
       cancel() { speech.cancel += 1 },
       speak(utterance) { speech.speak.push(utterance) },
+      getVoices() { return options.voices || [] },
     },
     innerWidth: 1400,
     innerHeight: 900,
@@ -223,6 +226,10 @@ function createHarness(options = {}) {
     console,
   }
   sandbox.globalThis = sandbox
+  const random = { fn: options.random || null }
+  const mathStub = Object.create(Math)
+  mathStub.random = () => (random.fn ? random.fn() : Math.random())
+  sandbox.Math = mathStub
   vm.createContext(sandbox)
   vm.runInContext(clientSource, sandbox, { filename: 'client.js' })
   assert.ok(definition, 'client.js registers a module')
@@ -265,7 +272,7 @@ function createHarness(options = {}) {
   assert.equal(typeof Component, 'function', 'FamlingFooter is registered into the sidebar footer slot')
   const ui = createUi(Component, React)
   ui.render()
-  return { ui, speech, fetchCalls, storage, timers }
+  return { ui, speech, fetchCalls, storage, timers, module: moduleObject, setRandom(fn) { random.fn = fn } }
 }
 
 function idleSrc(kind) {
@@ -356,22 +363,49 @@ test('idle loop advances frame by frame using the per-frame delays', () => {
   assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle', 0), 'idle loop wraps back to frame 0')
 })
 
-test('settings panel switches to the Selkirk Rex cat, persists it and disables voice', () => {
-  const { ui, speech, storage } = createHarness()
+/** Open the content center (4th sidebar button) and optionally one category tab. */
+function openContent(ui, tab) {
+  ui.clickExact('内容')
+  ui.render()
+  if (tab) { ui.clickExact(tab); ui.render() }
+}
+
+function contentDialog(ui) {
+  return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '内容中心')[0]
+}
+
+test('settings only links to the content center and keeps the other toggles', () => {
+  const { ui } = createHarness()
   ui.clickText('设置')
   ui.render()
-  ui.clickText('塞尔凯克卷毛猫')
+  assert.ok(ui.findButtonExact('内容与角色…'), 'settings has one content entry row')
+  assert.equal(ui.findButtonExact('塞尔凯克卷毛猫'), undefined, 'no scattered character buttons in settings')
+  assert.equal(ui.findButtonExact('金毛'), undefined, 'no scattered character buttons in settings')
+  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 2, 'settings keeps motion + bubble toggles')
+  ui.clickExact('内容与角色…')
+  ui.render()
+  assert.ok(contentDialog(ui), 'content center opens from the settings entry')
+})
+
+test('content center cards switch the Selkirk Rex cat instantly with a current marker', () => {
+  const { ui, speech, storage } = createHarness()
+  openContent(ui, '角色')
+  const dialog = contentDialog(ui)
+  assert.ok(dialog, 'content center panel is open')
+  for (const tab of ['角色', '声音', '对话', '主题']) assert.ok(ui.findButtonExact(tab), 'category tab: ' + tab)
+  assert.ok(ui.text(dialog).includes('CONTENT_EXTENSION_POINTS'), 'extension contract is named in the panel')
+  assert.equal(ui.findButton('汀岚').props['aria-pressed'], true, 'current character card is marked')
+  assert.equal(ui.findButton('塞尔凯克卷毛猫').props['aria-pressed'], false)
+  ui.click(ui.findButton('塞尔凯克卷毛猫'))
   ui.render()
   assert.equal(ui.tree.props['data-character'], 'cat')
   assert.equal(ui.findPetButton().props['aria-label'], '塞尔凯克卷毛猫', 'pet aria-label uses the Selkirk Rex name')
   assert.equal(petImage(ui).props.src, idleSrc('cat'))
   assert.equal(storage.get('dsh-famling/character'), 'cat')
-  const checkboxes = ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox')
-  assert.equal(checkboxes[0].props.disabled, true, 'voice checkbox disabled for cat')
-  assert.equal(checkboxes[0].props.checked, false)
-  assert.ok(ui.findAll((node) => node.type === 'p').some((node) => ui.text(node).includes('仅汀岚')), 'voice hint shown')
+  assert.equal(ui.findButton('塞尔凯克卷毛猫').props['aria-pressed'], true, 'current marker moved to the cat')
   assert.equal(speech.speak.length, 0)
   assert.ok(speech.cancel >= 1, 'switching to a silent character cancels browser speech')
+  assert.ok(contentDialog(ui), 'panel stays open (state switch, no page reload)')
 })
 
 test('cat menu is species-specific (no ball/fetch actions) and bubbles stay silent thoughts', () => {
@@ -389,8 +423,8 @@ test('cat menu is species-specific (no ball/fetch actions) and bubbles stay sile
   const bubble = ui.findBubble()
   assert.ok(bubble, 'thought bubble renders')
   assert.ok(says.includes(ui.text(bubble)), 'cat wash line comes from the action says: ' + ui.text(bubble))
-  assert.equal(bubble.props.style.background, '#ffffff')
-  assert.equal(bubble.props.style.color, '#111111')
+  assert.equal(bubble.props.style.background, 'var(--dsh-famling-bubble-bg, #ffffff)')
+  assert.equal(bubble.props.style.color, 'var(--dsh-famling-bubble-text, #111111)')
   assert.match(bubble.props.style.border, /dashed/)
   assert.match(bubble.props.style.border, /#8f8f8f/)
   assert.equal(speech.speak.length, 0, 'cat must never call speechSynthesis')
@@ -409,8 +443,8 @@ test('human menu is species-specific with solid speech and TTS lines from the ac
   assert.equal(petImage(ui).props.src, clipSrc('human', 'pat_head'))
   const bubble = ui.findBubble()
   assert.ok(bubble)
-  assert.equal(bubble.props.style.background, '#ffffff')
-  assert.equal(bubble.props.style.color, '#111111')
+  assert.equal(bubble.props.style.background, 'var(--dsh-famling-bubble-bg, #ffffff)')
+  assert.equal(bubble.props.style.color, 'var(--dsh-famling-bubble-text, #111111)')
   assert.match(bubble.props.style.border, /solid/)
   assert.match(bubble.props.style.border, /#9a9a9a/)
   assert.ok(says.includes(ui.text(bubble)), 'human pat line comes from the action says')
@@ -472,20 +506,24 @@ test('chat bridge sends the active character so the Host can switch personas', a
     ui.clickText('发送')
     await ui.settle()
   }
+  function pickCharacter(name) {
+    ui.clickExact('内容')
+    ui.render()
+    ui.clickExact('角色')
+    ui.render()
+    ui.click(ui.findButton(name))
+    ui.render()
+    ui.clickExact('内容')
+    ui.render()
+  }
   ui.clickText('输入')
   ui.render()
   await typeAndSend('你好')
-  ui.clickText('设置')
-  ui.render()
-  ui.clickText('塞尔凯克卷毛猫')
-  ui.render()
+  pickCharacter('塞尔凯克卷毛猫')
   ui.clickText('输入')
   ui.render()
   await typeAndSend('今天好懒')
-  ui.clickText('设置')
-  ui.render()
-  ui.clickText('金毛')
-  ui.render()
+  pickCharacter('金毛')
   ui.clickText('输入')
   ui.render()
   await typeAndSend('去玩球')
@@ -676,4 +714,106 @@ test('English UI localizes action button labels while lines stay data-driven', (
   ui.clickExact('Pat')
   ui.render()
   assert.ok(actionSays('human', 'pat').includes(ui.text(ui.findBubble())), 'line still comes from the shared data')
+})
+
+test('content center voices tab lists speechSynthesis voices, persists the choice and speaks with it (human only)', () => {
+  const voices = [
+    { voiceURI: 'voice-alpha', name: 'Alpha', lang: 'zh-CN' },
+    { voiceURI: 'voice-beta', name: 'Beta', lang: 'en-US' },
+  ]
+  const { ui, speech, storage } = createHarness({ voices })
+  openContent(ui, '声音')
+  const select = ui.findAll((node) => node.type === 'select')[0]
+  assert.ok(select, 'voice select renders from speechSynthesis.getVoices()')
+  assert.deepEqual(select.children.filter((node) => node && node.type === 'option').map((node) => node.props.value), ['', 'voice-alpha', 'voice-beta'])
+  ui.change(select, 'voice-beta')
+  ui.render()
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).voiceURI, 'voice-beta', 'voice choice persisted')
+  ui.clickExact('内容')
+  ui.render()
+  ui.clickText('互动')
+  ui.render()
+  ui.clickExact('摸头')
+  ui.render()
+  assert.equal(speech.speak.length, 1)
+  assert.equal(speech.speak[0].voice.voiceURI, 'voice-beta', 'the selected browser voice is attached to the utterance')
+})
+
+test('cat/dog content voices tab shows the thought-bubble policy instead of TTS controls', () => {
+  const { ui } = createHarness({ character: 'cat', voices: [{ voiceURI: 'voice-alpha', name: 'Alpha', lang: 'zh-CN' }] })
+  openContent(ui, '声音')
+  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 0, 'no TTS toggle for cat')
+  assert.equal(ui.findAll((node) => node.type === 'select').length, 0, 'no voice list for cat')
+  assert.ok(ui.findAll((node) => node.type === 'p').some((node) => ui.text(node).includes('没有语音')), 'silent policy note is shown')
+})
+
+test('brief dialogue mode filters over-long replies and persists the mode', async () => {
+  const { ui, storage } = createHarness({ reply: '回'.repeat(150) })
+  openContent(ui, '对话')
+  assert.equal(ui.findButton('标准').props['aria-pressed'], true, 'standard is the default mode')
+  ui.click(ui.findButton('简短'))
+  ui.render()
+  assert.equal(storage.get('dsh-famling/dialogue'), 'brief', 'dialogue mode persisted')
+  assert.equal(ui.findButton('简短').props['aria-pressed'], true, 'brief is marked as current')
+  ui.clickExact('内容')
+  ui.render()
+  ui.clickText('输入')
+  ui.render()
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  ui.change(textarea, '说长一点')
+  ui.render()
+  ui.clickText('发送')
+  await ui.settle()
+  const bubble = ui.findBubble()
+  assert.ok(bubble, 'reply bubble renders')
+  const text = ui.text(bubble)
+  assert.ok(text.length <= 90, 'brief mode caps the reply length: ' + text.length)
+  assert.ok(text.endsWith('…'), 'capped reply is marked with an ellipsis')
+})
+
+test('quiet dialogue mode lowers ambient bubble probability while direct replies still show', async () => {
+  const hidden = createHarness({ character: 'cat', dialogue: 'quiet', random: () => 0.99 })
+  hidden.ui.clickPetAt(50, 35)
+  hidden.ui.render()
+  assert.equal(hidden.ui.findBubble(), undefined, 'quiet suppresses ambient bubbles when the roll is above the chance')
+  assert.equal(petImage(hidden.ui).props.src, clipSrc('cat', 'pat_head'), 'the animation still plays without a bubble')
+  const shown = createHarness({ character: 'cat', dialogue: 'quiet', random: () => 0.01 })
+  shown.ui.clickPetAt(50, 35)
+  shown.ui.render()
+  assert.ok(shown.ui.findBubble(), 'quiet still shows ambient bubbles when the roll is below the chance')
+  const direct = createHarness({ character: 'human', dialogue: 'quiet', random: () => 0.99, reply: '嗯，我在。' })
+  direct.ui.clickText('输入')
+  direct.ui.render()
+  const textarea = direct.ui.findAll((node) => node.type === 'textarea')[0]
+  direct.ui.change(textarea, '你好')
+  direct.ui.render()
+  direct.ui.clickText('发送')
+  await direct.ui.settle()
+  assert.ok(direct.ui.findBubble(), 'direct chat replies are not suppressed by quiet mode')
+})
+
+test('content center themes apply default/paper/night through widget CSS variables and persist', () => {
+  const { ui, storage } = createHarness()
+  openContent(ui, '主题')
+  const rootStyle = () => ui.tree.props.style
+  assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#ffffff', 'default white bubble variable')
+  assert.equal(rootStyle()['--dsh-famling-bubble-text'], '#111111', 'default dark text variable')
+  assert.equal(ui.findButton('默认').props['aria-pressed'], true)
+  ui.click(ui.findButton('纸张'))
+  ui.render()
+  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'theme persisted')
+  assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#fff8ec')
+  assert.match(contentDialog(ui).props.style.background, /var\(--dsh-famling-panel-bg/, 'panel painted from the theme variable')
+  ui.click(ui.findButton('夜间'))
+  ui.render()
+  assert.equal(storage.get('dsh-famling/theme'), 'night')
+  assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#1b2433', 'night bubble variable')
+  assert.equal(rootStyle()['--dsh-famling-bubble-text'], '#e6edf7', 'night text variable')
+  ui.clickExact('内容')
+  ui.render()
+  ui.clickText('互动')
+  ui.render()
+  ui.clickExact('摸头')
+  ui.render()
+  assert.equal(ui.findBubble().props.style.background, 'var(--dsh-famling-bubble-bg, #ffffff)', 'bubble still reads the theme variable')
 })
