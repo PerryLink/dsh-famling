@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": false,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "measure:bundle": "node scripts/measure-bundle.mjs",
     "qa:anims": "node scripts/embed-anims.mjs --qa"
   },
-  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations, a content center (characters / voices / dialogue / themes), region-aware interactions, chat personas, and a reserved third-party content-pack contract.",
+  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations, a content center (characters / voices / dialogue / themes / backgrounds / fonts), region-aware interactions, chat personas, and a reserved third-party content-pack contract.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": "./index.js",

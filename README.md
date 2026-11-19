@@ -18,14 +18,14 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 ## 当前实现
 
 - slot：`sidebar.footer.action`（DSH 侧栏账号信息下方的 footer 区域）。
-- 最终交互结构：人物右侧竖排 **输入 / 互动 / 设置 / 内容** 四个按钮；点击人物的头/身体/尾巴分别触发按区域反应（0.8.2），互动菜单按当前形象渲染物种专属动作并随机挑一句回话（0.8.3，见下）；「内容」打开内容中心（0.9.0，见下）。
+- 最终交互结构：人物右侧竖排 **输入 / 互动 / 设置 / 内容** 四个按钮；点击人物的头/身体/尾巴分别触发按区域反应（0.8.2），互动菜单按当前形象渲染物种专属动作并随机挑一句回话（0.8.3，见下）；「内容」打开内容中心（0.9.1，见下）。
 - **72px 像素桌宠**（96×96 帧按 `image-rendering: pixelated` 显示为 72px），可切换 **汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛** 三个形象；点击头部/身体/尾巴分别触发摸头/摇尾/追尾，点击透明或未声明区域不动作。
 - 待机是真正的帧动画：3 个角色各 12 clip（帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）；`idle` 循环 + `idle_blink` 眨眼替换 + 随机微动作（`paw_face` / `scratch` / `stand_wag` / `chase_tail`）；每帧时长读 manifest 的 `holdMs`（缺省 1000/fps），非循环 clip 按 `durationMs`/hold 总和结束（0.8.4）。
 - 输入面板：人物右侧展开文本框 + 语音输入按钮（浏览器 SpeechRecognition），预留 `window.__DSH_FAMLING_BRIDGE__` 给 DSH/Advisers Host。
 - 互动面板（0.8.3）：直接读嵌入的 `ANIMS[character].actions`（来自与独立 famling 共用的 `regions.json`），按形象渲染物种专属动作——汀岚：摸头 / 递纸 / 挥手 / 整理蝴蝶结 / 聊两句；塞尔凯克卷毛猫：摸头 / 伸懒腰 / 洗脸 / 追尾巴 / 跑一跑；金毛：摸头 / 丢球·捡球 / 捡球 / 追尾巴 / 跑一跑（丢球后 500ms 自动接追球）。猫和人没有球类/捡球动作，绝不会把 A 角色的动作放到 B 角色身上。
-- 设置（0.9.0）：只保留一行 **内容与角色…** 入口（打开内容中心）以及帧动画、说话气泡、Advisers 摘要等其它设置；形象/语音/对话模式/主题全部移入内容中心，各存本机 localStorage（`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`，默认汀岚 / 标准 / 默认主题）。
+- 设置（0.9.1）：只保留一行 **内容与角色…** 入口（打开内容中心）以及帧动画、说话气泡、Advisers 摘要等其它设置；形象/语音/对话模式/主题/背景/字体全部移入内容中心，各存本机 localStorage（`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`，默认汀岚 / 标准 / 默认主题 / 透明背景 / 系统字体）。
 - 气泡（0.8.3）：点击区域或动作时，从该区域/动作自己的 `says` 数组随机挑一句（同一位置连续点击不会重复同一句）；**汀岚**的台词是实心 speech 气泡，可配合浏览器 TTS（保留原有独立同意）；**塞尔凯克卷毛猫（卷毛灰白）/金毛**只用空心 thought 气泡，永不调用 `speechSynthesis`，内容中心的声音页对它们只显示「思考气泡，无语音」；切到猫/狗时若正在朗读会立即停止。气泡默认白底 `#ffffff`、深色 `#111111` 字、灰色实线/虚线边框（内容中心可切 paper / night 主题），不常驻、不遮挡人物。
-- 内容中心（0.9.0）：角色 / 声音 / 对话 / 主题四类内置内容集中在一个面板（与设置同级），切换即时生效、不刷新页面；第三方内容包契约 `content-extension.mjs`（`CONTENT_EXTENSION_POINTS` + 纯数据 `validateContentPack`）已预留但不加载任何 pack（见下）。
+- 内容中心（0.9.1）：角色 / 声音 / 对话 / 主题 / 背景 / 字体六类内置内容集中在一个面板（与设置同级），切换即时生效、不刷新页面；第三方内容包契约 `content-extension.mjs` v2（`CONTENT_EXTENSION_POINTS` + 纯数据 `validateContentPack`）已预留但不加载任何 pack（见下）。
 - 聊天人格随形象切换（0.8.1）：输入面板的聊天请求会带当前形象（`human`/`cat`/`dog`，缺省 `human`）；Host 按形象选择 system prompt，切猫/狗后回复语气随之变化。
 - 输入面板的 LLM/TTS/ASR/记忆需要 Host 桥接；未接入时如实提示，不伪造回复。
 - 不宣传 roleplay；不包含完整桌宠/游戏基座。
@@ -33,11 +33,11 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 ## 多角色动画数据（0.8.0）
 
-三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` 约 62.6 KiB（0.9.0 内容中心 UI 加入后；gzip 18.1 KiB），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 124.3 KiB，全部角色加载后才约 309.9 KiB。旧的“base64 全量嵌在 client.js”结构已移除：
+三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` 约 69.0 KiB（0.9.1 内容中心六分类 UI 加入后；gzip 19.6 KiB），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 130.7 KiB，全部角色加载后才约 316.3 KiB。首屏预算在 0.9.1 由 64 KiB 调到 72 KiB（仍 < 拆分前审计基线的 25%）。旧的“base64 全量嵌在 client.js”结构已移除：
 
 - 数据源：私有仓 `desktop-games/public/assets/pet/anim/{human,cat,dog}/`（`manifest.json` + 帧 PNG）。
 - 生成器：`scripts/embed-anims.mjs` —— 读取 manifest/PNG、校验三套 clip 契约、把 RGBA 帧**无损**重编码为最小位深索引 PNG（硬 alpha 保留，体积约减半），再按 marker 注入 `client.js`。**禁止手改生成块**，改数据重跑脚本即可。
-- 体积（0.9.0 实测）：源 351.6 KiB → 入口 `client.js` 62.6 KiB（gzip 18.1 KiB），3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB），全量按需加载；首屏仍远小于拆分前 314.8 KiB 基线（入口 -79.6%，首帧 -59.6%）。
+- 体积（0.9.1 实测）：源 351.6 KiB → 入口 `client.js` 69.0 KiB（gzip 19.6 KiB），3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB），全量按需加载；首屏仍远小于拆分前 314.8 KiB 基线（入口 -77.6%，首帧 -57.5%）。
 - 重新生成：`npm run embed:anims`；只校验不写：`node scripts/embed-anims.mjs --check`；`npm run verify:anims`；量化：`npm run measure:bundle`。
 - 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并在私有资产可用时逐字节比对嵌入块是否过期。
 - 静态 QA：`node scripts/embed-anims.mjs --qa` 生成 `scripts/qa/anim-data.js`，浏览器直接打开 `scripts/qa/index.html` 可切角色、播 12 个 clip、看实心/空心气泡并跑数据自检，不需要重启 DSH。
@@ -63,9 +63,9 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `client.js` 播放改为逐帧 `setTimeout`：第 n 帧停留 `holdMs[n] ?? round(1000/fps)` 毫秒；非循环 clip 播完最后一帧回到 `idle`，若 manifest 的 `durationMs` 大于 hold 总和则延长最后一帧。cat 伸懒腰 = 300+300+300+350+400+400+400+350+250+150 = **3200ms**（10 帧），不再被固定 `setInterval(1000/fps)` 播快；攻击帧也按 attack 的 holdMs（83/83/63/42/42/63/63）播放。
 - `holdMs`/`durationMs` 进入 `source-sha256` 与 `--check`：只改 timing 的 manifest 变更同样会让嵌入块变旧；`verify-anims.mjs` 校验 holdMs 逐帧覆盖、总和等于 durationMs。
 
-## 内容中心与内容扩展接口（0.9.0）
+## 内容中心与内容扩展接口（0.9.1）
 
-角色、声音、对话模式与气泡主题不再散落在设置页：人物右侧新增第 4 个按钮 **内容 / Content**，打开与设置同级的「内容中心」面板；设置页只保留一行「内容与角色…」入口（以及帧动画 / 说话气泡 / Advisers 摘要等其它设置）。所有切换都是本地 React state + localStorage，**不刷新页面**。
+角色、声音、对话模式、气泡主题、背景与字体不再散落在设置页：人物右侧新增第 4 个按钮 **内容 / Content**，打开与设置同级的「内容中心」面板；设置页只保留一行「内容与角色…」入口（以及帧动画 / 说话气泡 / Advisers 摘要等其它设置）。所有切换都是本地 React state + localStorage，**不刷新页面**；不改 DSH 全局主题。
 
 面板分类（tabs）：
 
@@ -73,18 +73,20 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - **声音**：仅 **human** 显示浏览器 TTS 开关（沿用独立 TTS 同意）与 `speechSynthesis.getVoices()` 声音列表；选中 `voiceURI` 持久化在 `dsh-famling/settings`，朗读时作为 `SpeechSynthesisUtterance.voice`（无效/未选回退浏览器默认）。塞尔凯克卷毛猫/金毛只显示「思考气泡，无语音」。
 - **对话**：`standard` / `brief` / `quiet` 三档，持久化到 `dsh-famling/dialogue`。`brief` 把超过 90 字的回话截断并以 `…` 结尾；`quiet` 只显示约 35% 的 ambient（区域点击/动作/微动作）气泡，用户主动聊天与系统错误的回话始终显示。区域与动作的 `says` 仍全部来自嵌入的 `regions.json` 数据。
 - **主题**：`default` / `paper` / `night` 三套本地气泡+面板主题，持久化到 `dsh-famling/theme`。主题以 widget 根节点的 CSS 变量（`--dsh-famling-bubble-bg` / `-bubble-text` / `-bubble-border` / `-bubble-thought-border` / `-panel-bg` / `-panel-text` / `-panel-border` / `-accent`）应用，气泡与所有面板读取 `var(...)`；默认主题仍是白底 `#ffffff` + 深色字 `#111111`。不使用网络字体、不加载远程资源。
+- **背景**：`transparent` / `paper` / `dark` 三套本地纯 CSS 背板（无图片、渐变或网络资源），持久化到 `dsh-famling/background`。背景只给 widget 背板着色，并给气泡/面板加同色 `--dsh-famling-widget-bg` 外圈，**不修改 DSH 全局主题**；默认透明保持原外观。
+- **字体**：`system` / `serif` / `mono` 三套本地安全字体栈，另有字号（11/12/14px）与行高（1.4/1.5/1.8）预设，持久化到 `dsh-famling/font`（JSON）。字体、字号与行高通过 widget 根节点 CSS 变量应用到面板与气泡，**不加载网络字体**。
 
 ### 内容扩展接口（预留，不联网）
 
 [`content-extension.mjs`](content-extension.mjs) 是给未来本地/远程内容包的公开契约（package export：`dsh-famling/content-extension`），导出：
 
-- `CONTENT_EXTENSION_POINTS` — 版本 1、`status: "reserved"`、`transport: { network: false, execute: false, innerHTML: false, worker: false }`、pack 字段/限制、entry schema（`kind / id / name / description / preview / apply / source / permissions / version`）、各 kind 的 `apply` 数据形状、预览类型（`glyph` / `text` / `color` / `image`）与权限枚举（`select:character` / `select:voice` / `select:dialogue` / `apply:theme` / `store:selection`）。
-- `validateContentPack(pack, { allowRemote? })` — **纯数据**校验：拒绝函数 / symbol / 非有限数、未知字段与枚举、超长字符串/数组、超过 64 KiB 的 JSON、原型链键（`__proto__` / `constructor` / `prototype`）、路径穿越/绝对路径/URL、`<` 与控制字符、`url()` / `expression()` / `@import` 等危险 CSS 值；主题变量必须 `--dsh-famling-*` 且值为安全颜色（hex / `rgb()` / `hsl()` / 关键字），预览图片路径必须相对、≤3 段、无 `..`、限定 `.png/.webp/.jpg`。`source: "remote"` 默认被拒绝，只有未来启用网络的 Host 显式传 `{ allowRemote: true }` 才通过 schema 校验。
+- `CONTENT_EXTENSION_POINTS` — 版本 2（pack `schemaVersion: 2`）、`status: "reserved"`、`transport: { network: false, execute: false, innerHTML: false, worker: false }`、pack 字段/限制、entry schema（`kind / id / name / description / preview / apply / source / permissions / version`）、**六类 kind**（character / voice / dialogue / theme / background / font）各自的 `apply` 数据形状、预览类型（`glyph` / `text` / `color` / `image`）与权限枚举（`select:character` / `select:voice` / `select:dialogue` / `apply:theme` / `apply:background` / `apply:font` / `store:selection`）。
+- `validateContentPack(pack, { allowRemote? })` — **纯数据**校验：拒绝函数 / symbol / 非有限数、未知字段与枚举、超长字符串/数组、超过 64 KiB 的 JSON、原型链键（`__proto__` / `constructor` / `prototype`）、路径穿越/绝对路径/URL、`<` 与控制字符、`url()` / `expression()` / `@import` 等危险 CSS 值；主题变量必须 `--dsh-famling-*` 且值为安全颜色（hex / `rgb()` / `hsl()` / 关键字），预览图片路径必须相对、≤3 段、无 `..`、限定 `.png/.webp/.jpg`；background 的 apply 只允许 `{ kind: "transparent" }` 或 `{ kind: "color", value: 安全颜色 }`；font 的 apply 只允许 `{ family: 本地字体栈, size?: 10..24, lineHeight?: 1..2.5 }`，family 必须是 1..8 个不带引号的字体名（字母/数字/空格/点/下划线/连字符），拒绝引号、`url()`、`var()`、分号、花括号与 @ 规则。`source: "remote"` 默认被拒绝，只有未来启用网络的 Host 显式传 `{ allowRemote: true }` 才通过 schema 校验。
 - `CONTENT_PACK_EXAMPLE` — 一份合法的示例 pack（仅数据，不会被自动加载）。
 
 本版本**不加载任何 pack**：没有网络请求、没有 pack 脚本执行、没有 `innerHTML`；内容中心只展示内置目录与预留说明。未来接入加载器时也必须是「纯数据 + 在 Host 侧解析/校验 + UI 只渲染数据」。完整 schema、限制与示例见 [docs/DETAIL.md](docs/DETAIL.md)。
 
-> 与独立 famling 的共享内容模型 `famling.content/0.1`（characters / voices / dialoguePacks / themes / backgrounds / fonts）是**目标超集关系**，不是同一份 schema：前四类可经适配层一一映射（`builtin` ≡ `bundled`），插件侧暂无 backgrounds/fonts；主题 CSS 前缀、语音来源（浏览器 speechSynthesis vs DeepSeek stella/tide）与校验返回结构不同。content-extension v2 之前两套契约并存、各自 fail-closed，详见 [docs/DETAIL.md](docs/DETAIL.md)。
+> 与独立 famling 的共享内容模型 `famling.content/0.1`（characters / voices / dialoguePacks / themes / backgrounds / fonts）是**目标超集关系**，不是同一份 schema：六类可与插件六种 kind 一一映射（`builtin` ≡ `bundled`），插件契约把“选择/应用”建模为 `apply` + permissions，共享模型是目录条目 + 解析函数；主题 CSS 前缀、语音来源（浏览器 speechSynthesis vs DeepSeek stella/tide）与校验返回结构仍不同。两套契约并存、各自 fail-closed，收敛通过适配层（content-extension 后续 MAJOR），详见 [docs/DETAIL.md](docs/DETAIL.md)。
 
 ## Host bridge（P0/P1/P2/P4 已实现）
 
@@ -142,7 +144,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `node --check client.js`
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + 客户端生成块/多角色行为测试 + 内容中心/内容扩展契约测试，61 项，不调用真实模型）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + 客户端生成块/多角色行为测试 + 内容中心/内容扩展契约测试，64 项，不调用真实模型）
 - `npm run check:anims`（嵌入块与私有动画包一致）
 - `npm run verify:anims`（3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射）
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）

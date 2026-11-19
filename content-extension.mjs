@@ -1,9 +1,9 @@
 /**
- * dsh-famling content extension points (reserved, schema version 1).
+ * dsh-famling content extension points (reserved, schema version 2).
  *
- * The content center ships bundled characters, browser voices, dialogue modes
- * and local CSS-variable themes. This module is the public contract for a future
- * local/remote content pack: it defines the entry schema for each kind and a
+ * The content center ships bundled characters, browser voices, dialogue modes,
+ * local CSS-variable themes, plain-CSS backgrounds and local font stacks. This
+ * module is the public contract for a future local/remote content pack: it defines the entry schema for each kind and a
  * pure-data validator. Nothing here touches the network, the DOM, the file
  * system or any host API - callers own transport, storage and UI.
  *
@@ -20,6 +20,11 @@
  *   - CSS limits: theme variables must be named --dsh-famling-* and their
  *     values must be safe colors (hex / rgb()/hsl() / keyword) - no url(),
  *     @import, expression(), markup or control characters;
+ *   - backgrounds: only { kind: "transparent" } or solid safe colors, never
+ *     images/gradients/URLs;
+ *   - fonts: 1..8 unquoted local family names (letters/digits/space/dot/_/-),
+ *     bounded size (10..24) / lineHeight (1..2.5); no quotes, url(), var(),
+ *     semicolons or at-rules;
  *   - prototype-pollution guard: __proto__ / constructor / prototype keys are
  *     rejected anywhere in the tree;
  *   - remote packs stay disabled unless a future network-enabled host passes
@@ -34,10 +39,10 @@
  */
 
 /** Schema version of the pack document itself. */
-export const CONTENT_PACK_SCHEMA_VERSION = 1
+export const CONTENT_PACK_SCHEMA_VERSION = 2
 
 /** Closed entry-kind set shared with the bundled content center. */
-export const CONTENT_KINDS = ['character', 'voice', 'dialogue', 'theme']
+export const CONTENT_KINDS = ['character', 'voice', 'dialogue', 'theme', 'background', 'font']
 /** Entry sources. "remote" is reserved and rejected by default (see validator). */
 export const CONTENT_SOURCES = ['bundled', 'local', 'remote']
 /** Dialogue modes implemented by the bundled content center. */
@@ -53,12 +58,16 @@ export const CONTENT_PERMISSIONS = {
   voice: 'select:voice',
   dialogue: 'select:dialogue',
   theme: 'apply:theme',
+  background: 'apply:background',
+  font: 'apply:font',
 }
 export const CONTENT_ENTRY_PERMISSIONS = [
   'select:character',
   'select:voice',
   'select:dialogue',
   'apply:theme',
+  'apply:background',
+  'apply:font',
   'store:selection',
 ]
 
@@ -97,7 +106,7 @@ const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg']
  */
 export const CONTENT_EXTENSION_POINTS = Object.freeze({
   /** Contract revision; bump only with a documented migration. */
-  version: 1,
+  version: 2,
   /** "reserved" = schema published, no pack loader ships in this package yet. */
   status: 'reserved',
   /** What the runtime guarantees. All flags are false by design. */
@@ -135,6 +144,15 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
           variables: '1..' + CONTENT_LIMITS.maxVars + ' entries, keys --dsh-famling-*, safe CSS color values',
         }),
       }),
+      background: Object.freeze({
+        apply: Object.freeze({ kind: ['transparent', 'color'], value: 'safe CSS color required for kind=color' }),
+      }),
+      font: Object.freeze({
+        apply: Object.freeze({
+          family: 'local font stack: 1..8 unquoted family names, no quotes/url()/var()/semicolons',
+          optional: ['size', 'lineHeight'],
+        }),
+      }),
     }),
   }),
   validation: Object.freeze({
@@ -170,6 +188,18 @@ export function isSafeContentPath(value) {
   if (!PATH_RE.test(value) || value.startsWith('/') || value.includes('..') || value.includes('\\') || value.includes(':')) return false
   if (value.split('/').length > 3) return false
   return IMAGE_EXTENSIONS.some((extension) => value.toLowerCase().endsWith(extension))
+}
+
+/**
+ * Local font stacks only: 1..8 comma-separated unquoted family names made of
+ * letters/digits/spaces/dots/underscores/hyphens. No quotes, url(), var(),
+ * braces, semicolons or @ rules, so a pack cannot inject CSS declarations.
+ */
+export function isSafeFontStack(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 200) return false
+  const families = value.split(',').map((family) => family.trim())
+  if (families.length === 0 || families.length > 8) return false
+  return families.every((family) => /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,47}$/.test(family))
 }
 
 /** Walk a value: reject non-JSON values, oversize strings/arrays/objects, prototype keys. */
@@ -240,7 +270,7 @@ function validateApply(kind, apply, where, errors) {
     if (apply.bubbleChance !== undefined && (typeof apply.bubbleChance !== 'number' || !Number.isFinite(apply.bubbleChance) || apply.bubbleChance < 0 || apply.bubbleChance > 1)) {
       errors.push(where + '.bubbleChance: number 0..1')
     }
-  } else {
+  } else if (kind === 'theme') {
     exactKeys(apply, ['variables'], [], where, errors)
     const variables = apply.variables
     if (!isPlainObject(variables)) {
@@ -256,6 +286,20 @@ function validateApply(kind, apply, where, errors) {
         errors.push(where + '.variables["' + key + '"]: safe CSS color <= ' + CONTENT_LIMITS.maxVarValueChars + ' chars')
       }
     }
+  } else if (kind === 'background') {
+    exactKeys(apply, ['kind'], ['value'], where, errors)
+    if (!['transparent', 'color'].includes(apply.kind)) {
+      errors.push(where + '.kind: must be transparent/color')
+    } else if (apply.kind === 'color') {
+      if (typeof apply.value !== 'string' || !COLOR_RE.test(apply.value)) errors.push(where + '.value: safe CSS color required for color backgrounds')
+    } else if (apply.value !== undefined) {
+      errors.push(where + '.value: only allowed for kind=color')
+    }
+  } else {
+    exactKeys(apply, ['family'], ['size', 'lineHeight'], where, errors)
+    if (!isSafeFontStack(apply.family)) errors.push(where + '.family: local font stack (1..8 unquoted families, no quotes/url()/var()/semicolons)')
+    if (apply.size !== undefined && (!Number.isInteger(apply.size) || apply.size < 10 || apply.size > 24)) errors.push(where + '.size: integer 10..24')
+    if (apply.lineHeight !== undefined && (typeof apply.lineHeight !== 'number' || !Number.isFinite(apply.lineHeight) || apply.lineHeight < 1 || apply.lineHeight > 2.5)) errors.push(where + '.lineHeight: number 1..2.5')
   }
 }
 

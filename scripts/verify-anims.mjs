@@ -58,8 +58,14 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 export const ACTION_BEGIN = '// <dsh-famling:actions:begin>'
 export const ACTION_END = '// <dsh-famling:actions:end>'
 export const CLIENT_PATH = join(PLUGIN_ROOT, 'client.js')
-/** First-screen budget for client.js itself (sprite payloads are lazy chunks). */
-export const FIRST_SCREEN_BUDGET_BYTES = 64 * 1024
+/**
+ * First-screen budget for client.js itself (sprite payloads are lazy chunks).
+ * 0.9.1 raises it from 64 KiB to 72 KiB: the content center now ships six
+ * categories (characters / voices / dialogue / themes / backgrounds / fonts) plus
+ * the background/font CSS-variable wiring. The sprite payload stays lazy, so the
+ * entry is still far below the pre-split audit baseline (checked in the tests).
+ */
+export const FIRST_SCREEN_BUDGET_BYTES = 72 * 1024
 /** Package-local lazy chunk file names, accepted by the DSH client module table. */
 export const CLIENT_CHUNK_RE = /^client\.anims\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 /** Absolute external URLs in a load path would break the offline/no-network contract. */
@@ -518,6 +524,10 @@ export function verifyClient(options = {}) {
   if (!source.includes('function availableVoices()') || !source.includes('getVoices()')) errors.push('content center voice tab must read speechSynthesis.getVoices()')
   if (!source.includes('CONTENT_EXTENSION_POINTS')) errors.push('content center must reference the reserved CONTENT_EXTENSION_POINTS contract')
   if (!source.includes('content-extension.mjs')) errors.push('content center must document content-extension.mjs')
+  if (!source.includes("const BACKGROUND_IDS = ['transparent', 'paper', 'dark']") || !source.includes('localStorage.setItem(BACKGROUND_KEY, backgroundId)')) errors.push('content center must expose persisted transparent/paper/dark backgrounds')
+  if (!source.includes("const FONT_IDS = ['system', 'serif', 'mono']") || !source.includes('localStorage.setItem(FONT_KEY, JSON.stringify(fontChoice))')) errors.push('content center must expose persisted system/serif/mono local font stacks')
+  if (!source.includes('var(--dsh-famling-widget-bg, transparent)') || !source.includes('var(--dsh-famling-font-family, inherit)')) errors.push('background/font choices must be applied through widget CSS variables')
+  if (/fonts\.googleapis|@import|url\(\s*['"]?https?:/i.test(source)) errors.push('backgrounds/fonts must not load network images or web fonts')
   if (!source.includes('function frameDuration(seq, index)')) errors.push('client.js is missing the per-frame (holdMs) duration helper')
   if (!source.includes('function frameDurations(seq)') || !source.includes('seq.durationMs')) errors.push('client.js does not read durationMs when timing a clip')
   if (!source.includes('seq.holdMs') || !source.includes('durations[index]')) errors.push('client.js playback does not schedule frames from holdMs')

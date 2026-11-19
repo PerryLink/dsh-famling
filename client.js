@@ -99,6 +99,27 @@ window.__ModuleLoader__.load({
         '--dsh-famling-panel-border': '#35415a', '--dsh-famling-accent': '#7aa2ff',
       } },
     }
+    const BACKGROUND_KEY = 'dsh-famling/background'
+    const FONT_KEY = 'dsh-famling/font'
+    const BACKGROUND_IDS = ['transparent', 'paper', 'dark']
+    // Backgrounds only recolor the widget backdrop (no images/gradients/network);
+    // bubble and panel popups get the same --dsh-famling-widget-bg ring so they
+    // visually sit on the chosen backdrop without touching the DSH global theme.
+    const BACKGROUNDS = {
+      transparent: { vars: { '--dsh-famling-widget-bg': 'transparent', '--dsh-famling-widget-fg': 'inherit' } },
+      paper: { vars: { '--dsh-famling-widget-bg': '#f6f1e7', '--dsh-famling-widget-fg': '#2b2620' } },
+      dark: { vars: { '--dsh-famling-widget-bg': '#14161a', '--dsh-famling-widget-fg': '#e8eaf0' } },
+    }
+    const FONT_IDS = ['system', 'serif', 'mono']
+    // Local font stacks only (no web fonts); size/line height are bounded presets.
+    const FONTS = {
+      system: { family: "system-ui, -apple-system, 'Segoe UI', 'Noto Sans SC', sans-serif" },
+      serif: { family: "Georgia, 'Noto Serif SC', 'Songti SC', serif" },
+      mono: { family: "ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace" },
+    }
+    const FONT_SIZES = [11, 12, 14]
+    const FONT_LINE_HEIGHTS = [1.4, 1.5, 1.8]
+    const DEFAULT_FONT = { family: 'system', size: 12, lineHeight: 1.5 }
     /** Browser speech voices, bounded and defensive against a hostile vendor API. */
     function availableVoices() {
       try {
@@ -116,6 +137,17 @@ window.__ModuleLoader__.load({
     function loadThemeId() {
       try { const stored = localStorage.getItem(THEME_KEY); if (THEME_IDS.includes(stored)) return stored } catch {}
       return 'default'
+    }
+    function loadBackgroundId() {
+      try { const stored = localStorage.getItem(BACKGROUND_KEY); if (BACKGROUND_IDS.includes(stored)) return stored } catch {}
+      return 'transparent'
+    }
+    function loadFontChoice() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(FONT_KEY) || 'null')
+        if (stored && FONT_IDS.includes(stored.family) && FONT_SIZES.includes(stored.size) && FONT_LINE_HEIGHTS.includes(stored.lineHeight)) return { family: stored.family, size: stored.size, lineHeight: stored.lineHeight }
+      } catch {}
+      return { ...DEFAULT_FONT }
     }
     // <dsh-famling:content:end>
     // <dsh-famling:lazy:begin>
@@ -259,7 +291,10 @@ window.__ModuleLoader__.load({
         pet: '汀岚', title: 'Famling · {pet}', close: '关闭',
         character: '形象', characters: { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛' },
         content: '内容', contentTitle: '内容中心', contentEntry: '内容与角色…',
-        contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题' },
+        contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题', backgrounds: '背景', fonts: '字体' },
+        backgrounds: { transparent: '透明', paper: '纸张', dark: '暗色' }, backgroundDescriptions: { transparent: '透明，不画背板', paper: '暖白纸张背板', dark: '深色背板' },
+        fonts: { system: '系统', serif: '衬线', mono: '等宽' }, fontDescriptions: { system: '系统 UI 本地字体栈', serif: '衬线本地字体栈', mono: '等宽本地字体栈' },
+        fontSize: '字号', lineHeight: '行高',
         characterDescriptions: { human: '安静简洁的工作搭子', cat: '懒散高冷的卷毛灰白猫', dog: '友善热情的金毛寻回犬' },
         current: '当前', contentHint: '切换即时生效，无需刷新页面。',
         contentExtension: '扩展接口已预留（CONTENT_EXTENSION_POINTS，见 docs/DETAIL.md 与 content-extension.mjs）：未来本地/远程内容包只做纯数据校验，不联网、不执行脚本、不注入 HTML。',
@@ -289,7 +324,10 @@ window.__ModuleLoader__.load({
         pet: 'Tinglan', title: 'Famling · {pet}', close: 'Close',
         character: 'Character', characters: { human: 'Tinglan', cat: 'Selkirk Rex', dog: 'Golden Retriever' },
         content: 'Content', contentTitle: 'Content Center', contentEntry: 'Content & characters…',
-        contentTabs: { characters: 'Characters', voices: 'Voices', dialogue: 'Dialogue', themes: 'Themes' },
+        contentTabs: { characters: 'Characters', voices: 'Voices', dialogue: 'Dialogue', themes: 'Themes', backgrounds: 'Background', fonts: 'Fonts' },
+        backgrounds: { transparent: 'Transparent', paper: 'Paper', dark: 'Dark' }, backgroundDescriptions: { transparent: 'Transparent backdrop', paper: 'Warm paper backdrop', dark: 'Dark backdrop' },
+        fonts: { system: 'System', serif: 'Serif', mono: 'Mono' }, fontDescriptions: { system: 'System UI local font stack', serif: 'Serif local font stack', mono: 'Monospace local font stack' },
+        fontSize: 'Size', lineHeight: 'Line height',
         characterDescriptions: { human: 'Quiet, concise work companion', cat: 'Laid-back, aloof curly grey-white cat', dog: 'Friendly, enthusiastic Golden Retriever' },
         current: 'Current', contentHint: 'Changes apply instantly, no page reload.',
         contentExtension: 'Extension points are reserved (CONTENT_EXTENSION_POINTS, see docs/DETAIL.md and content-extension.mjs): future local/remote packs are validated as pure data - no network, no pack scripts, no HTML injection.',
@@ -360,6 +398,8 @@ window.__ModuleLoader__.load({
       const [themeId, setThemeId] = useState(loadThemeId)
       const [contentTab, setContentTab] = useState('characters')
       const [voices, setVoices] = useState(availableVoices)
+      const [backgroundId, setBackgroundId] = useState(loadBackgroundId)
+      const [fontChoice, setFontChoice] = useState(loadFontChoice)
       const pendingConsent = useRef(null)
       const [brief, setBrief] = useState(null)
       const [briefError, setBriefError] = useState('')
@@ -390,6 +430,12 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         try { localStorage.setItem(THEME_KEY, themeId) } catch {}
       }, [themeId])
+      useEffect(() => {
+        try { localStorage.setItem(BACKGROUND_KEY, backgroundId) } catch {}
+      }, [backgroundId])
+      useEffect(() => {
+        try { localStorage.setItem(FONT_KEY, JSON.stringify(fontChoice)) } catch {}
+      }, [fontChoice])
       useEffect(() => {
         if (mode !== 'content' || contentTab !== 'voices') return undefined
         const load = () => setVoices(availableVoices())
@@ -761,13 +807,17 @@ window.__ModuleLoader__.load({
       // fixed-position panel/bubble rendered as its child (React keeps the DOM
       // hierarchy even for position: fixed).
       const themeVars = (THEMES[themeId] || THEMES.default).vars
+      const backgroundVars = (BACKGROUNDS[backgroundId] || BACKGROUNDS.transparent).vars
+      const activeFont = FONTS[fontChoice.family] || FONTS.system
+      const fontVars = { '--dsh-famling-font-family': activeFont.family, '--dsh-famling-font-size': fontChoice.size + 'px', '--dsh-famling-line-height': String(fontChoice.lineHeight) }
       const panelStyle = {
         position: 'fixed', left: panelAnchor.current.left, bottom: panelAnchor.current.bottom, zIndex: 1200, pointerEvents: 'auto',
         background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
         color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, #e8e8e8))',
         border: '1px solid var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, rgba(255,255,255,.16)))',
         borderRadius: 'var(--dsw-radius-md, 10px)',
-        boxShadow: '0 10px 30px rgba(0,0,0,.32)', padding: 10, fontSize: 12,
+        boxShadow: '0 0 0 3px var(--dsh-famling-widget-bg, transparent), 0 10px 30px rgba(0,0,0,.32)',
+        padding: 10, fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)',
       }
       const inputPanel = mode === 'input' ? h('div', { role: 'dialog', 'aria-label': fillPet(L.inputTitle), style: { ...panelStyle, width: 300, maxWidth: 'calc(100vw - 24px)' } }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } }, [
@@ -870,13 +920,33 @@ window.__ModuleLoader__.load({
           cardText(L.themes[id].name, L.themes[id].desc),
           currentMark(themeId === id),
         ])),
+        backgrounds: BACKGROUND_IDS.map((id) => contentCard('background-' + id, backgroundId === id, () => setBackgroundId(id), [
+          h('span', { key: 'swatch', 'aria-hidden': true, style: { flex: 'none', width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(127,127,127,.55)', background: BACKGROUNDS[id].vars['--dsh-famling-widget-bg'] === 'transparent' ? 'repeating-linear-gradient(45deg, rgba(127,127,127,.4) 0 2px, transparent 2px 6px)' : BACKGROUNDS[id].vars['--dsh-famling-widget-bg'] } }),
+          cardText(L.backgrounds[id], (L.backgroundDescriptions || {})[id] || ''),
+          currentMark(backgroundId === id),
+        ])),
+        fonts: [
+          ...FONT_IDS.map((id) => contentCard('font-' + id, fontChoice.family === id, () => setFontChoice((value) => ({ ...value, family: id })), [
+            h('span', { key: 'aa', 'aria-hidden': true, style: { flex: 'none', width: 24, textAlign: 'center', fontFamily: FONTS[id].family, fontSize: 16 } }, 'Aa'),
+            cardText(L.fonts[id], (L.fontDescriptions || {})[id] || ''),
+            currentMark(fontChoice.family === id),
+          ])),
+          h('div', { key: 'size', style: { marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
+            h('span', { key: 'label', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.fontSize),
+            ...FONT_SIZES.map((size) => h('button', { key: 'size-' + size, type: 'button', 'aria-pressed': fontChoice.size === size, onClick: () => setFontChoice((value) => ({ ...value, size })), style: { ...buttonBase, padding: '2px 7px', fontSize: 11, fontWeight: fontChoice.size === size ? 600 : 400 } }, size + 'px')),
+          ]),
+          h('div', { key: 'line', style: { marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
+            h('span', { key: 'label', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.lineHeight),
+            ...FONT_LINE_HEIGHTS.map((lineHeight) => h('button', { key: 'line-' + lineHeight, type: 'button', 'aria-pressed': fontChoice.lineHeight === lineHeight, onClick: () => setFontChoice((value) => ({ ...value, lineHeight })), style: { ...buttonBase, padding: '2px 7px', fontSize: 11, fontWeight: fontChoice.lineHeight === lineHeight ? 600 : 400 } }, String(lineHeight))),
+          ]),
+        ],
       }
       const contentPanel = mode === 'content' ? h('div', { role: 'dialog', 'aria-label': L.contentTitle, style: { ...panelStyle, width: 340, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(70vh, 560px)', overflowY: 'auto' } }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
           h('strong', { key: 't', style: { flex: 1 } }, L.contentTitle),
           h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
         ]),
-        h('div', { key: 'tabs', role: 'tablist', style: { display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' } }, ['characters', 'voices', 'dialogue', 'themes'].map((id) => h('button', {
+        h('div', { key: 'tabs', role: 'tablist', style: { display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' } }, ['characters', 'voices', 'dialogue', 'themes', 'backgrounds', 'fonts'].map((id) => h('button', {
           key: id, type: 'button', role: 'tab', 'aria-selected': contentTab === id, onClick: () => setContentTab(id),
           style: { ...buttonBase, padding: '4px 8px', fontWeight: contentTab === id ? 600 : 400 },
         }, L.contentTabs[id]))),
@@ -910,11 +980,11 @@ window.__ModuleLoader__.load({
           width: 'fit-content', minWidth: 90, maxWidth: 240, padding: '7px 10px',
           background: 'var(--dsh-famling-bubble-bg, #ffffff)', color: 'var(--dsh-famling-bubble-text, #111111)',
           border: bubbleKind === 'thought' ? '1.5px dashed var(--dsh-famling-bubble-thought-border, #8f8f8f)' : '1px solid var(--dsh-famling-bubble-border, #9a9a9a)',
-          boxShadow: '0 4px 16px rgba(0,0,0,.25)',
-          borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 12, lineHeight: 1.5, overflowWrap: 'anywhere',
+          boxShadow: '0 0 0 3px var(--dsh-famling-widget-bg, transparent), 0 4px 16px rgba(0,0,0,.25)',
+          borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)', overflowWrap: 'anywhere',
         },
       }, bubble) : null
-      return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', ...themeVars } }, [
+      return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', background: 'var(--dsh-famling-widget-bg, transparent)', color: 'var(--dsh-famling-widget-fg, inherit)', fontFamily: 'var(--dsh-famling-font-family, inherit)', borderRadius: 10, ...themeVars, ...backgroundVars, ...fontVars } }, [
         h('button', { key: 'pet', type: 'button', onClick: onPetClick, 'aria-label': charName, title: fillPet(L.title), style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
           h('img', { src, width: SIZE, height: SIZE, alt: charName, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),
         h('div', { key: 'buttons', style: { display: 'flex', flexDirection: 'column', gap: 3, flex: 'none', pointerEvents: 'auto' } }, [

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Famling · Tinglan / Selkirk Rex / Golden Retriever",
-    "description": "Shows a pixel mini pet (Tinglan, Selkirk Rex cat, Golden Retriever) below the DSH account area; a content center gathers characters, voices, dialogue modes and bubble themes; tap head/body/tail for different reactions, species-specific interaction actions with random bubble lines (no ball actions for the cat or human); the chat persona follows the active character; the cat and dog only use silent thought bubbles.",
+    "description": "Shows a pixel mini pet (Tinglan, Selkirk Rex cat, Golden Retriever) below the DSH account area; a content center gathers characters, voices, dialogue modes, bubble themes, backgrounds and fonts; tap head/body/tail for different reactions, species-specific interaction actions with random bubble lines (no ball actions for the cat or human); the chat persona follows the active character; the cat and dog only use silent thought bubbles.",
     "detail": "docs/DETAIL.md"
   }
 }

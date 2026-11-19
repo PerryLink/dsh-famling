@@ -271,9 +271,9 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.9.0, publishes the lazy chunks, content contract and leaves the stage-one boot barrier', async () => {
+test('package version is 0.9.1, publishes the lazy chunks, content contract and leaves the stage-one boot barrier', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.9.0')
+  assert.equal(pkg.version, '0.9.1')
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'package exports the content extension contract')
   assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
@@ -289,19 +289,19 @@ test('client.js wires the 4th content button, the content-center panel and one s
   assert.ok(clientSource.includes("content: 'Content'"), 'en sidebar label for the content button')
   assert.ok(clientSource.includes("contentTitle: '内容中心'"), 'zh content-center title')
   assert.ok(clientSource.includes("contentEntry: '内容与角色…'"), 'single settings entry row')
-  assert.ok(clientSource.includes("contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题' }"), 'four category tabs')
+  assert.ok(clientSource.includes("contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题', backgrounds: '背景', fonts: '字体' }"), 'six category tabs')
   assert.ok(clientSource.includes("onClick: () => openPanel('content')"), 'the settings row and the 4th button open the content center')
   assert.equal(clientSource.includes("key: 'character', style: { marginBottom: 7 }"), false, 'settings no longer contains the scattered character block')
   assert.equal(clientSource.includes("key: 'tts-note'"), false, 'the voice hint moved out of settings into the content center')
   assert.ok(clientSource.includes('const contentCards = {') && clientSource.includes('contentCards[contentTab]'), 'category bodies are rendered from the content catalog')
-  assert.ok(clientSource.includes('characters: CHARACTER_IDS.map') && clientSource.includes('dialogue: DIALOGUE_MODE_IDS.map') && clientSource.includes('themes: THEME_IDS.map'), 'all four categories build their cards from the catalog ids')
+  assert.ok(clientSource.includes('characters: CHARACTER_IDS.map') && clientSource.includes('dialogue: DIALOGUE_MODE_IDS.map') && clientSource.includes('themes: THEME_IDS.map') && clientSource.includes('backgrounds: BACKGROUND_IDS.map') && clientSource.includes('fonts: [') && clientSource.includes('FONT_IDS.map'), 'all six categories build their cards from the catalog ids')
   assert.ok(clientSource.includes("'aria-pressed': active"), 'selectable cards expose their current state')
   assert.equal(/location\.(?:reload|href|assign|replace)\s*[=(]/.test(clientSource), false, 'content switches never reload or navigate')
   assert.equal(clientSource.includes('.innerHTML ='), false, 'no innerHTML injection')
   assert.equal(/\beval\s*\(|new Function\s*\(/.test(clientSource), false, 'no eval/Function in the client')
 })
 
-test('content center persists dialogue/theme choices and only the human gets browser voices', () => {
+test('content center persists dialogue/theme/background/font choices and only the human gets browser voices', () => {
   assert.ok(clientSource.includes("const DIALOGUE_KEY = 'dsh-famling/dialogue'"), 'dialogue storage key')
   assert.ok(clientSource.includes('localStorage.setItem(DIALOGUE_KEY, dialogueMode)'), 'dialogue mode persisted')
   assert.ok(clientSource.includes("const THEME_KEY = 'dsh-famling/theme'"), 'theme storage key')
@@ -314,17 +314,24 @@ test('content center persists dialogue/theme choices and only the human gets bro
   assert.ok(clientSource.includes("source !== 'direct' && dialogue.bubbleChance < 1"), 'quiet mode lowers ambient bubble probability')
   assert.ok(clientSource.includes("line.slice(0, dialogue.maxChars - 1)"), 'brief mode filters over-long replies')
   assert.ok(clientSource.includes('utterance.voice = voice'), 'the selected browser voice is applied to speech')
+  assert.ok(clientSource.includes("const BACKGROUND_KEY = 'dsh-famling/background'") && clientSource.includes('localStorage.setItem(BACKGROUND_KEY, backgroundId)'), 'background persisted')
+  assert.ok(clientSource.includes("const FONT_KEY = 'dsh-famling/font'") && clientSource.includes('localStorage.setItem(FONT_KEY, JSON.stringify(fontChoice))'), 'font choice persisted as bounded JSON')
+  assert.ok(clientSource.includes('var(--dsh-famling-widget-bg, transparent)') && clientSource.includes('var(--dsh-famling-font-family, inherit)'), 'background/font applied through widget CSS variables')
+  assert.ok(clientSource.includes('FONT_SIZES = [11, 12, 14]') && clientSource.includes('FONT_LINE_HEIGHTS = [1.4, 1.5, 1.8]'), 'font size/line height presets are bounded')
+  assert.ok(clientSource.includes('fonts.googleapis') === false && clientSource.includes('@import') === false, 'no web fonts or CSS imports')
 })
 
 test('content extension points publish the reserved pure-data pack contract', () => {
-  assert.equal(CONTENT_EXTENSION_POINTS.version, 1)
+  assert.equal(CONTENT_EXTENSION_POINTS.version, 2)
   assert.equal(CONTENT_EXTENSION_POINTS.status, 'reserved')
   assert.deepEqual({ ...CONTENT_EXTENSION_POINTS.transport }, { network: false, execute: false, innerHTML: false, worker: false })
-  assert.deepEqual([...CONTENT_EXTENSION_POINTS.entry.kinds], ['character', 'voice', 'dialogue', 'theme'])
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.entry.kinds], ['character', 'voice', 'dialogue', 'theme', 'background', 'font'])
   for (const field of ['kind', 'id', 'name', 'preview', 'apply', 'source', 'permissions', 'version']) assert.ok(CONTENT_EXTENSION_POINTS.entry.fields.includes(field), 'entry field: ' + field)
   assert.deepEqual([...CONTENT_EXTENSION_POINTS.pack.sources], ['bundled', 'local', 'remote'])
   assert.ok(Number.isFinite(CONTENT_EXTENSION_POINTS.pack.limits.maxBytes) && CONTENT_EXTENSION_POINTS.pack.limits.maxBytes > 0)
   assert.ok(Array.isArray(CONTENT_EXTENSION_POINTS.entry.permissions) && CONTENT_EXTENSION_POINTS.entry.permissions.includes('apply:theme'))
+  for (const permission of ['apply:background', 'apply:font']) assert.ok(CONTENT_EXTENSION_POINTS.entry.permissions.includes(permission), 'new permission: ' + permission)
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.schemaVersion, 2, 'pack schema version 2 adds background/font kinds')
   for (const kind of CONTENT_EXTENSION_POINTS.entry.kinds) assert.ok(CONTENT_EXTENSION_POINTS.entry.schemas[kind].apply, kind + ': apply schema')
   assert.equal(validateContentPack(JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))).ok, true, 'example pack is schema-valid')
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
@@ -378,6 +385,33 @@ test('third-party content packs with scripts, traversal, unknown enums or oversi
     assert.equal(result.ok, false, name + ' must be rejected')
     assert.ok(result.errors.length > 0, name + ': errors are reported')
   }
+  const backgroundPack = (apply) => {
+    const pack = example()
+    pack.permissions = ['apply:background']
+    pack.entries = [{ ...example().entries[0], kind: 'background', permissions: ['apply:background'], preview: { kind: 'color', value: '#ffffff' }, apply }]
+    return pack
+  }
+  const fontPack = (apply) => {
+    const pack = example()
+    pack.permissions = ['apply:font']
+    pack.entries = [{ ...example().entries[0], kind: 'font', permissions: ['apply:font'], preview: { kind: 'text', value: 'Aa' }, apply }]
+    return pack
+  }
+  cases.push(['background with url()', backgroundPack({ kind: 'color', value: 'url(https://evil.example/bg.png)' })])
+  cases.push(['unknown background kind', backgroundPack({ kind: 'image', value: '#ffffff' })])
+  cases.push(['font stack with quotes and declarations', fontPack({ family: "'Comic Sans'; background: url(x)" })])
+  cases.push(['font stack with too many families', fontPack({ family: Array.from({ length: 9 }, () => 'serif').join(', ') })])
+  cases.push(['font size out of range', fontPack({ family: 'Georgia, serif', size: 99 })])
+  cases.push(['font line height out of range', fontPack({ family: 'Georgia, serif', lineHeight: 0.5 })])
+  cases.push(['font with unknown apply field', fontPack({ family: 'serif', weight: 700 })])
+  for (const [name, pack] of cases) {
+    const result = validateContentPack(pack)
+    assert.equal(result.ok, false, name + ' must be rejected')
+    assert.ok(result.errors.length > 0, name + ': errors are reported')
+  }
+  assert.equal(validateContentPack(backgroundPack({ kind: 'transparent' })).ok, true, 'plain transparent background pack is valid')
+  assert.equal(validateContentPack(backgroundPack({ kind: 'color', value: 'rgb(20, 22, 26)' })).ok, true, 'safe color background pack is valid')
+  assert.equal(validateContentPack(fontPack({ family: 'Georgia, serif', size: 14, lineHeight: 1.6 })).ok, true, 'local font stack pack is valid')
   const allowedRemote = example()
   allowedRemote.source = 'remote'
   allowedRemote.entries[0].source = 'remote'
