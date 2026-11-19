@@ -1,11 +1,11 @@
 # Famling · 汀岚
 
-在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；**0.10.7 起有 Host 能力协商**（bridge wire 2 的 hello/probe 握手、可选 llm/schedule 降级、content-extension v3 契约握手）；版本/README/LEGAL/locale/package 真值由测试统一校验。
+在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；**0.10.7 起有 Host 能力协商**（bridge wire 2 的 hello/probe 握手、可选 llm/schedule 降级、content-extension v3 契约握手）；**0.10.9 起 content-extension v3 追加可选合规字段**（license / aiProvenance / pack 级 compatibility / canonical usage statement，向后兼容、严格模式可选）；版本/README/LEGAL/locale/package 真值由测试统一校验。
 
 - 显示 72px 像素桌宠：汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛，台词、动作与聊天人格随形象变化。
 - 动画：每角色 12 clip，帧数按 manifest（dog 68 / cat 72 / human 68，共 208 帧；clip：idle 循环、idle_blink 眨眼、pat_head、ball_throw、ball_chase、paw_face、scratch、stand_wag、chase_tail、walk、run、attack），随机微动作只取本形象的 clip。
 - 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.7 实测：入口 **95.2 KiB**（97,472 B，gzip 27.2 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6/0.10.7 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.97%）、首帧约 156.9 KiB、全量约 342.5 KiB；chunk sha256 进入 embed/verify 门禁。
-- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（65.9 KiB，gzip 18.3 KiB，0.10.7 增加 Host 能力面板），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
+- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（68.1 KiB，gzip 19.1 KiB，0.10.9 实测；0.10.7 增加 Host 能力面板，0.10.9 增加合规元数据展示），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
 - 帧时长（0.8.4）：每帧停留时间读 manifest `holdMs`（缺省 1000/fps），非循环 clip 播完后按 `durationMs`/hold 总和回到 idle；cat 伸懒腰 10 帧 / 3200ms 按 300/300/300/350/400/400/400/350/250/150 逐帧播放。
 - 点击区域（0.8.2）：点击人物头部/身体/尾巴分别触发 pat_head/stand_wag/chase_tail；区域来自与独立 famling 共用的 `regions.json`（96×96 逻辑画布 + idle gating），非 idle/idle_blink 状态或空白区域不动作，不回退随机动作。
 - 随机回话（0.8.3）：每条区域规则与每个互动动作都带 `says` 数组，命中时随机挑一条且连续两次不会重复；气泡文案全量来自共用 `regions.json`。
@@ -15,7 +15,7 @@
 - 聊天安全地板（0.10.2 / MB-020/021/022/024）：`index.js` 在 `ctx.llm.stream` 之前用 `crisisKeyword` 做本地危机关键词短路（自伤/自杀、伤害他人、家暴/性侵、急症；中文短语子串匹配、英文按词首匹配，避免 `scraped` 误命中 `raped`），命中返回固定 12356/110/120/专业机构文案且 `meta.safety="crisis-local-resource"`、`llmCalls:0`、不回显/不落盘/明确「不是诊断」；输入面板常驻 AI 声明含发送去向（文本经 DSH Host 发给 DSH 中配置的模型供应商）与危机求助；设置「数据与边界」含发送去向、危机资源、与 DSH 的边界说明、「AI 聊天」开关、「清除本机设置与同意」（删除本插件 `dsh-famling/*` 浏览器键 = 撤回 TTS/ASR 同意，不改 DSH/供应商数据）；首次安装显示一次性可关闭安全卡（UI 在懒加载 chunk，仅写 `dsh-famling/first-run/v1`）。
 - 语音规则：汀岚可用浏览器 TTS（独立同意）；塞尔凯克卷毛猫/金毛只用空心 thought 气泡，永不调用 `speechSynthesis`。
 - 内容中心（0.10.0）：角色 / 自定义 / 内容包 / 市场 四个一级 tabs；入口在右键菜单「内容与角色…」。设置弹窗（0.10.1）集中所有可调项并含折叠的高级/调试组。切换即时生效、不刷新页面，不改 DSH 全局主题。
-- 内容扩展接口（0.10.0，预留 v3）：`content-extension.mjs` 导出 `CONTENT_EXTENSION_POINTS`（七类 kind，含 role）、`validateContentPack`、`CONTENT_PACK_EXAMPLE`；纯数据契约，不联网 / 不执行 pack 脚本 / 不注入 HTML / 不加载资产；所有 pack 强制 `usageDeclaration`；本版本不加载任何 pack。
+- 内容扩展接口（0.10.0，预留 v3；0.10.9 补可选合规字段）：`content-extension.mjs` 导出 `CONTENT_EXTENSION_POINTS`（七类 kind，含 role + 0.10.9 `compliance` 元数据）、`validateContentPack`、`CONTENT_PACK_EXAMPLE`；纯数据契约，不联网 / 不执行 pack 脚本 / 不注入 HTML / 不加载资产；所有 pack 强制 `usageDeclaration`；0.10.9 起可选 `license` / `aiProvenance` / pack 级 `compatibility` 与 canonical 声明锚点（向后兼容，`requireCompliance` 严格模式可选）；本版本不加载任何 pack。
 - 不宣传 roleplay；不替代独立 famling 应用。
 
 限制：这是 DSH 客户端插件，不是完整桌宠；完整可执行版在 `PerryLink/famling`。
@@ -48,7 +48,7 @@
 - 生效值 = `global × axis` 后 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px）、组件 0.5×–2×。气泡宽度硬上限 240px 且左边界按视口夹取；菜单/面板用「布局尺寸 ÷ zoom + transform scale」在缩放后仍夹在视口内。
 - 持久化 `dsh-famling/scale/model` + `/global` + `/ui-text` + `/image` + `/component/<id>`；默认/跟随值不写轴键，恢复默认只写 `global=1` 与版本标记。旧绝对倍率 `dsh-famling/scale`（数字或 `{pet,text}` JSON）/ `dsh-famling/text-scale` 只在没有版本标记时一次性迁移（global=100%，等效值不变），旧键保留但失效；清除本机设置会删除全部 `dsh-famling/*` 缩放键。
 - 键盘 / ARIA：原生 range（方向键可用）+ `aria-label`/`aria-valuetext`；高级组 `aria-expanded`；组件下拉 `aria-label`；跟随时「跟随整体」`disabled`；设置弹窗 `role="dialog"`。
-- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无业务 bridge 请求），`npm test` 合计 179 项。
+- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无业务 bridge 请求），`npm test` 合计 190 项。
 
 ## 低打扰：安静时段 / 动画偏好 / 暂时隐藏（0.10.6，E7 剩余 / P-04）
 
@@ -65,7 +65,7 @@
 - 设置弹窗新增「低打扰」分组（`client.content.js` 的 `lowDisturbGroup`）：开关、两个 `input[type=time]`（非法/空值保留原值）、三选一动画偏好（`aria-pressed`）、状态行（当前是否在安静时段）与两个隐藏按钮；「更多」菜单与设置内隐藏入口指向同一实现。
 - 隐藏不是永久退出：`exit`（退出，刷新恢复）仍与隐藏分开；隐藏按截止时间自动恢复，且跨重载保持（`loadHiddenUntil` 只接受未来时间戳）。
 - 首屏预算：输入面板/同意弹窗/使用限制弹窗与低打扰 UI 文案全部在懒加载 `client.content.js`；`client.js` 只保留纯模型与接线。
-- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 179 项。
+- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 190 项。
 
 
 ## DSH 宿主能力协商 hello/probe（0.10.7，MB-034 / E3-T2）
@@ -101,11 +101,20 @@
 - `isContentExtensionCompatible(version)`：仅接受整数 3，未知/旧/新版本 fail-closed。
 - hello/probe 的 `contract.contentExtension` 与该模块同源；测试同时冻结模块常量与 wire 字段，防止 schema 与握手各自漂移。
 
+0.10.9（MB-032/033）在**同一条 v3 revision** 内追加可选合规字段（不升 v4、不改 wire）：
+
+- pack / entry 可选 `license`（`spdx` + `attribution`，可选 `url` / `file`）与 `aiProvenance`（`generated` + `disclosure`，可选 `tools`）；pack 还可选 `compatibility`（`minPluginVersion` + 可选 `maxPluginVersion`）。role entry 的 `compatibility` 仍必填。
+- `usageDeclaration` 可追加 canonical `statement` / `statementRef` / `statementSha256`，出现时必须等于冻结锚点（`CONTENT_USAGE_STATEMENT` / `_REF` / `_SHA256`，与 client `SHARED_CONTENT_SEMANTICS` 同源）。
+- 字段缺失默认只进 `warnings`（`ok` 不变），pre-0.10.9 的 v3 pack 继续合法；Host 可用 `{ requireCompliance: true }` 严格 fail-closed，用 `{ pluginVersion: "x.y.z" }` 校验 pack/role 兼容区间（纯函数 `isPackCompatibleWithPlugin`）。
+- 冻结的第一方锚点：`CONTENT_LICENSE_TEMPLATE` / `CONTENT_AI_PROVENANCE_TEMPLATE`；内容中心「内容包」页展示内置包的许可 / AI 来源 / 兼容性。
+
 ### 测试
 
 - `test/host-bridge.test.js`：inject 最小化、最小 Host 激活、hello 字段/版本来源/契约不兼容、probe 无副作用、缺能力 503、wire 1/2 矩阵、版本不一致提示。
 - `test/client-behavior.test.js`：挂载 hello 载荷（含 `__DSH_BOOT__.release`）、缺 llm/schedule 的发送与面板降级、老 Host 兼容模式、版本/契约不一致提示、手动 probe。
-- `test/client-static.test.js`：静态冻结 `CONTENT_EXTENSION_VERSION` / 兼容策略 / hello wire 字段。
+- `test/client-static.test.js`：静态冻结 `CONTENT_EXTENSION_VERSION` / 兼容策略 / hello wire 字段，以及 v3 合规字段的可选性与示例 pack。
+- `test/content-extension-compliance.test.js`（0.10.9）：旧 v3 pack 向后兼容（warning-only）、canonical 声明锚点、license / aiProvenance / compatibility 的 fail-closed 校验、严格模式必需字段、`pluginVersion` 版本门、纯函数 `isPackCompatibleWithPlugin` 与校验器纯数据/不抛异常。
+- `test/parity-contract.test.js`：双端冻结 license / aiProvenance / canonical usage statement 锚点（含 SHA-256 重算）与 `CONTENT_LIMITS` 新上限。
 
 ## 内容中心：角色就是主题（0.10.0）
 
@@ -117,7 +126,7 @@
 |---|---|---|
 | 角色 | 汀岚 / 塞尔凯克卷毛猫 / 金毛三张角色卡（glyph 头像 + 名称 + 一句说明 + 声音/对话/外观摘要 + 「一键应用」+ ✓ 当前标记） | 一键应用同时设置 character、voice(TTS 策略)、dialogue mode、theme/background/font，并写 `dsh-famling/role`；角色卡不预加载其它角色动画 chunk；origami 仅数据预留，素材未安装，不出卡片。 |
 | 自定义 | 声音 / 对话 / 主题 / 背景 / 字体分组紧凑控件（保留 0.9.1 能力：TTS 开关与浏览器 voiceURI、standard/brief/quiet、default/paper/night、transparent/paper/dark、system/serif/mono + 字号/行高） | 顶部说明「仅修改当前角色的搭配，不改变角色预设」并显示「角色预设 / 已自定义」；组件改动只写对应旧键，角色 id 不变；「恢复角色默认」按当前角色 bundle 重置全部组件。 |
-| 内容包 | 已安装内容（当前只有内置包）、v3 声明检查状态、资产包导入入口（需 Host 支持） | 显示内置 4 bundle 包与「没有导入的外部内容包」；声明检查：researchOnly=true + 六项禁止用途；资产包 zip/文件夹清单 + sha256 由 Host 解析，本版本不读取文件、不执行脚本、不加载素材、不联网。 |
+| 内容包 | 已安装内容（当前只有内置包）、v3 声明检查状态、0.10.9 合规元数据展示、资产包导入入口（需 Host 支持） | 显示内置 4 bundle 包与「没有导入的外部内容包」；声明检查：researchOnly=true + 六项禁止用途；合规元数据：内置包的 license（spdx + attribution）/ AI 来源（generated + disclosure）/ compatibility（content-extension v3 + minPluginVersion）；资产包 zip/文件夹清单 + sha256 由 Host 解析，本版本不读取文件、不执行脚本、不加载素材、不联网。 |
 | 市场 | 远程市场占位与接口说明 | 固定显示「远程市场接口已预留，服务器未配置」；展示预留 `catalogUrl` / `configKey` 字段（`dsh-famling/market/catalog` / `dsh-famling.market`）；不发起网络请求、不展示伪造商品。 |
 
 ### 角色 bundle 与回填
@@ -150,7 +159,7 @@
 
 ### 懒加载与预算
 
-入口 `client.js` 95.2 KiB（97,472 B / gzip 27.2 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.97%，首帧 156.9 KiB = 51.1%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 `client.content.js` 65.9 KiB（gzip 18.3 KiB）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
+入口 `client.js` 95.2 KiB（97,472 B / gzip 27.2 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.97%，首帧 156.9 KiB = 51.1%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 `client.content.js` 68.1 KiB（gzip 19.1 KiB，0.10.9 实测）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
 
 ## 内容扩展接口 CONTENT_EXTENSION_POINTS v3（预留）
 
@@ -158,11 +167,14 @@
 
 导出：
 
-- `CONTENT_EXTENSION_POINTS`：version / status / transport（`network:false, execute:false, innerHTML:false, worker:false, assets:false`）/ pack schema（schemaVersion、fields、optionalFields、sources、limits、idPattern、versionPattern、usageDeclaration、assets、remoteCatalog）/ entry schema（**七类 kinds**：role / character / voice / dialogue / theme / background / font；fields、roleFields、idPattern、preview 类型与路径策略、permissions、各 kind 的 apply 形状、role 的六组件与 compatibility、本地字体栈策略）/ validation。
-- `validateContentPack(pack, { allowRemote? }) → { ok, errors }`：纯数据校验，不抛异常、不执行、不解析 URL、不读文件、不联网。
-- `CONTENT_PACK_EXAMPLE`：合法 v3 示例 pack（完整 usageDeclaration + 一个 role bundle + 一个 theme entry）。
-- `CONTENT_EXTENSION_VERSION` / `CONTENT_EXTENSION_COMPATIBILITY` / `isContentExtensionCompatible(version)`（0.10.7）：v3 单版本兼容策略（`additive-within-major`；未知/非整数版本 fail-closed），hello/probe 的 `contract.contentExtension` 直接引用该版本号。
-- `PROHIBITED_USES` / `USAGE_DECLARATION_TEMPLATE`：六项禁止用途的 canonical 列表与声明模板。
+- `CONTENT_EXTENSION_POINTS`：version / status / transport（`network:false, execute:false, innerHTML:false, worker:false, assets:false`）/ **compliance（0.10.9：可选合规字段形状、冻结锚点与严格模式选项）** / pack schema（schemaVersion、fields、optionalFields、sources、limits、idPattern、versionPattern、usageDeclaration、assets、remoteCatalog）/ entry schema（**七类 kinds**：role / character / voice / dialogue / theme / background / font；fields、optionalFields、roleFields、idPattern、preview 类型与路径策略、permissions、各 kind 的 apply 形状、role 的六组件与 compatibility、本地字体栈策略）/ validation。
+- `validateContentPack(pack, { allowRemote?, requireCompliance?, pluginVersion? }) → { ok, errors, warnings }`：纯数据校验，不抛异常、不执行、不解析 URL、不读文件、不联网；`warnings` 报告缺失的可选合规字段（不改变 `ok`）。
+- `CONTENT_PACK_EXAMPLE`：合法 v3 示例 pack（完整 usageDeclaration + canonical 声明字段、license / aiProvenance / compatibility、一个 role bundle + 一个 theme entry；默认与严格模式都合法）。
+- `CONTENT_EXTENSION_VERSION` / `CONTENT_EXTENSION_COMPATIBILITY` / `isContentExtensionCompatible(version)`（0.10.7）：v3 单版本兼容策略（`additive-within-major`；未知/非整数版本 fail-closed），hello/probe 的 `contract.contentExtension` 直接引用该版本号；0.10.9 的合规字段不改变该 revision。
+- `CONTENT_USAGE_STATEMENT` / `CONTENT_USAGE_STATEMENT_REF` / `CONTENT_USAGE_STATEMENT_SHA256`：canonical 研究用途短句、来源文件与 SHA-256 锚点（与 client `SHARED_CONTENT_SEMANTICS` 同源）。
+- `CONTENT_LICENSE_TEMPLATE` / `CONTENT_AI_PROVENANCE_TEMPLATE`：冻结的第一方许可与 AI 来源锚点（parity 测试与 client 块逐项对齐）。
+- `isPackCompatibleWithPlugin(compatibility, pluginVersion)`：兼容区间纯函数，畸形输入 fail-closed。
+- `PROHIBITED_USES` / `USAGE_DECLARATION_TEMPLATE`：六项禁止用途的 canonical 列表与**最小**声明模板（0.10.9 的 canonical 字段是可追加项，不进入该模板）。
 
 ### 强制 usageDeclaration
 
@@ -179,6 +191,31 @@
 ```
 
 缺失/`researchOnly !== true`、少一项、多一项、重复、未知 token 或未知字段一律拒绝。role entry 不豁免 pack 级声明。
+
+### 合规字段（0.10.9，可选且向后兼容）
+
+v3 在 0.10.9 以**追加可选字段**补齐合规元数据（不升 v4）：
+
+| 字段 | 位置 | 形状 | 缺失时 |
+|---|---|---|---|
+| `license` | pack / entry 可选 | `{ spdx, attribution, url?, file? }`；spdx 2..64 字符（如 `CC-BY-4.0` / `LicenseRef-...`），attribution ≤200 纯文本，url 仅 https（不 fetch），file 仅安全相对路径（不打开） | 只进 `warnings` |
+| `aiProvenance` | pack / entry 可选 | `{ generated: boolean, disclosure, tools? }`；disclosure ≤280 纯文本，`generated=true` 需真实声明；tools 1..8 个小写工具 id（不执行） | 只进 `warnings` |
+| `compatibility` | pack 可选；role entry 必填 | `{ minPluginVersion, maxPluginVersion? }`，`x.y.z`；非法/倒置拒绝 | pack 级只进 `warnings`；role entry 缺失拒绝 |
+
+`usageDeclaration` 还可追加 `statement` / `statementRef` / `statementSha256`；出现时必须与 `CONTENT_USAGE_STATEMENT` / `_REF` / `_SHA256` 完全一致（逐字 + SHA-256），否则拒绝。声明了任何合规字段就按上述规则 fail-closed；没声明默认只产生 `warnings`，pre-0.10.9 的 v3 pack 继续有效。内容中心「内容包」页展示内置包的许可 / AI 来源 / 兼容性。
+
+### 严格模式与版本门（0.10.9）
+
+Host 加载不受信 pack 时使用：
+
+```js
+validateContentPack(pack, { requireCompliance: true, pluginVersion: '0.10.9' })
+// => { ok, errors, warnings }
+```
+
+- `requireCompliance: true`：缺 `pack.license` / `pack.aiProvenance` / `pack.compatibility` / `usageDeclaration.statement` / `usageDeclaration.statementRef` 直接进 `errors`（fail-closed）。
+- `pluginVersion`：pack 级与 role entry 的兼容区间必须包含该版本；对应纯函数 `isPackCompatibleWithPlugin(compatibility, version)`。
+- `warnings` 只报告缺失的可选合规字段，任何情况下都不会自行把 `ok` 变 false；`errors` 仍 fail-closed。
 
 ### role kind
 
@@ -204,7 +241,7 @@ pack 可选 `remoteCatalog: { status: "reserved", url?: "https://..." }`。statu
 
 ### 其它校验（与 v2 一致并延续）
 
-- 纯数据：函数 / symbol / bigint / undefined / 非 plain object / 非有限数一律拒绝；未知字段一律拒绝（pack、entry、preview、apply、usageDeclaration、assets、remoteCatalog）。
+- 纯数据：函数 / symbol / bigint / undefined / 非 plain object / 非有限数一律拒绝；未知字段一律拒绝（pack、entry、preview、apply、usageDeclaration、assets、remoteCatalog、license、aiProvenance、compatibility）。
 - 长度：JSON ≤ 65536 字节；entries ≤ 32（每 kind ≤ 16）；id ≤ 64；name ≤ 64；description ≤ 240；文本 ≤ 280；预览文本 ≤ 120；变量 ≤ 24；变量值 ≤ 80；权限 ≤ 8；嵌套深度 ≤ 8；数组/对象规模有上限。
 - 枚举：kind ∈ role|character|voice|dialogue|theme|background|font；source ∈ bundled|local|remote；permission ∈ apply:role|select:character|select:voice|select:dialogue|apply:theme|apply:background|apply:font|store:selection（entry 必须含本 kind 对应权限）；preview.kind ∈ glyph|text|color|image；dialogue apply.mode ∈ standard|brief|quiet；background apply.kind ∈ transparent|color；theme 变量名必须匹配 `^--dsh-famling-[a-z0-9-]{1,32}$`。
 - 路径：image preview 相对路径、≤3 段、无 `..`、无绝对路径/盘符/URL scheme/反斜杠、≤160 字符且以 .png/.webp/.jpg 结尾；asset path 见上。
@@ -212,6 +249,7 @@ pack 可选 `remoteCatalog: { status: "reserved", url?: "https://..." }`。statu
 - 背景/字体：background 的 kind=color 必须有安全颜色 value，kind=transparent 不得带 value；font.family 必须是 1..8 个不带引号的本地字体名（字母/数字/空格/点/下划线/连字符，≤200 字符），size 为 10..24 的整数，lineHeight 为 1..2.5 的有限数；拒绝引号、url()、var()、分号、花括号与 `@` 规则等任何 CSS 注入。
 - 原型污染：任何层级出现 `__proto__` / `constructor` / `prototype` 均拒绝。
 - 重复：同一 (kind,id) / 同一 asset path 重复拒绝；entry.source 必须与 pack.source 一致；role compatibility 的 min 不得大于 max。
+- 0.10.9 合规字段（可选，声明即 fail-closed）：license.spdx 2..64 字符、attribution 1..200 纯文本、url 仅无凭据 https（不 fetch）、file 仅安全相对路径（不打开）；aiProvenance.generated 布尔、disclosure 1..280 且 generated=true 需真实声明、tools 1..8 个小写工具 id（不执行、不重复）；compatibility 版本必须 `x.y.z`；usageDeclaration.statement / statementRef / statementSha256 出现时必须等于 canonical 锚点。未声明的可选字段只进 `warnings`（严格模式下才进 `errors`）。
 
 未来加载器的硬约束：不 eval / 不 new Function / 不执行 pack 脚本 / 不 innerHTML / 不加载远程字体与样式表 / 不自动解包资产；只读取上述纯数据字段，由 Host 侧解析与校验后交给 UI 渲染。
 

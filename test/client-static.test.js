@@ -478,6 +478,13 @@ test('content extension points publish the reserved v3 role/pack contract', () =
   assert.ok(CONTENT_EXTENSION_POINTS.pack.fields.includes('usageDeclaration'), 'usageDeclaration is a required pack field')
   assert.ok(CONTENT_EXTENSION_POINTS.pack.optionalFields.includes('assets'), 'assets manifest is reserved')
   assert.ok(CONTENT_EXTENSION_POINTS.pack.optionalFields.includes('remoteCatalog'), 'remote catalog is reserved')
+  for (const field of ['license', 'aiProvenance', 'compatibility']) {
+    assert.ok(CONTENT_EXTENSION_POINTS.pack.optionalFields.includes(field), 'optional v3 compliance pack field: ' + field)
+  }
+  assert.equal(CONTENT_EXTENSION_POINTS.compliance.additive, true, 'compliance fields are additive (backward compatible)')
+  for (const field of ['license', 'aiProvenance']) {
+    assert.ok(CONTENT_EXTENSION_POINTS.entry.optionalFields.includes(field), 'optional v3 compliance entry field: ' + field)
+  }
   assert.equal(CONTENT_EXTENSION_POINTS.pack.usageDeclaration.required, true)
   assert.equal(CONTENT_EXTENSION_POINTS.pack.usageDeclaration.researchOnly, true)
   assert.deepEqual([...CONTENT_EXTENSION_POINTS.pack.usageDeclaration.prohibitedUses], [...PROHIBITED_USES], 'six prohibited uses')
@@ -493,6 +500,10 @@ test('content extension points publish the reserved v3 role/pack contract', () =
   assert.ok(CONTENT_EXTENSION_POINTS.entry.schemas.role.compatibility, 'role compatibility schema')
   const example = JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
   assert.equal(validateContentPack(example).ok, true, 'example pack is schema-valid')
+  assert.equal(validateContentPack(example, { requireCompliance: true }).ok, true, 'example pack also passes strict compliance validation')
+  assert.ok(example.license && example.license.spdx, 'example declares a licence')
+  assert.ok(example.aiProvenance && example.aiProvenance.disclosure, 'example declares AI provenance')
+  assert.ok(example.compatibility && example.compatibility.minPluginVersion, 'example declares host compatibility')
   assert.equal(example.schemaVersion, 3)
   assert.equal(example.usageDeclaration.researchOnly, true)
   assert.deepEqual(example.usageDeclaration.prohibitedUses, [...USAGE_DECLARATION_TEMPLATE.prohibitedUses])
@@ -545,7 +556,8 @@ test('every v3 pack must declare research use and all six prohibited uses', () =
   pack = clone(); pack.usageDeclaration.prohibitedUses = [...PROHIBITED_USES.slice(0, 5)]; cases.push(['missing prohibited use', pack])
   pack = clone(); pack.usageDeclaration.prohibitedUses = [...PROHIBITED_USES, 'extra-use']; cases.push(['unknown prohibited use', pack])
   pack = clone(); pack.usageDeclaration.prohibitedUses = [PROHIBITED_USES[0], ...PROHIBITED_USES.slice(0, 5)]; cases.push(['duplicate prohibited use', pack])
-  pack = clone(); pack.usageDeclaration = { ...pack.usageDeclaration, statement: 'x' }; cases.push(['unknown declaration field', pack])
+  pack = clone(); pack.usageDeclaration = { ...pack.usageDeclaration, license: 'x' }; cases.push(['unknown declaration field', pack])
+  pack = clone(); pack.usageDeclaration.statement = 'x'; cases.push(['mutated canonical statement', pack])
   pack = clone(); pack.schemaVersion = 2; cases.push(['old schema version', pack])
   for (const [name, value] of cases) {
     const result = validateContentPack(value)

@@ -12,6 +12,13 @@
  *   - every v3 pack must carry a usageDeclaration: researchOnly=true plus all
  *     six prohibited-use tokens (emotional companionship / virtual partner /
  *     professional advice / minor intimacy / impersonation / illegal use);
+ *   - compliance metadata is additive in v3 (0.10.9): packs/entries may declare
+ *     license {spdx, attribution, url?, file?}, aiProvenance {generated,
+ *     disclosure, tools?} and a pack-level compatibility plugin-version range;
+ *     they are validated fail-closed when present, reported as warnings when
+ *     absent (backward compatible with pre-0.10.9 v3 packs), and become required
+ *     only when a host passes { requireCompliance: true }. A declared canonical
+ *     usage statement/ref/SHA must equal the shared anchors;
  *   - pure data: functions, symbols, bigints, undefined, non-finite numbers and
  *     non-plain objects are rejected;
  *   - length limits: pack <= 64 KiB of JSON, entries <= 32 (<= 16 per kind),
@@ -43,6 +50,14 @@
  * single-version policy and the bridge hello/probe handshake reports the same
  * revision through CONTENT_EXTENSION_POINTS.version, so wire and schema cannot
  * drift independently.
+ *
+ * v3 compliance (0.10.9, MB-032/033): the contract stays v3 (no v4) and gains
+ * the compliance fields as additive optional fields, so a pre-0.10.9 v3 pack
+ * keeps validating and an old host keeps reading the same wire contract. The
+ * canonical usage statement/ref/SHA, license and AI-provenance anchors are
+ * exported here and frozen in the client content block
+ * (SHARED_CONTENT_SEMANTICS); the parity tests check both ends and the
+ * vendored v2 pack shapes without merging the two schemas.
  *
  * Import (Node / tooling):
  *   import { CONTENT_EXTENSION_POINTS, validateContentPack } from 'dsh-famling/content-extension'
@@ -117,6 +132,36 @@ export const USAGE_DECLARATION_TEMPLATE = Object.freeze({
   prohibitedUses: PROHIBITED_USES,
 })
 
+/**
+ * Canonical research-only statement shared with famling
+ * docs/legal/USE-RESTRICTIONS-2026-11-19.md and with the client content block
+ * (SHARED_CONTENT_SEMANTICS.usageStatement). A v3 usageDeclaration may restate
+ * it with optional statement / statementRef / statementSha256 fields; when any
+ * of them is present it must match these anchors exactly (fail closed). Strict
+ * mode requires statement + statementRef, while a plain pre-0.10.9 declaration
+ * (researchOnly + six tokens only) stays valid.
+ */
+export const CONTENT_USAGE_STATEMENT =
+  '本项目及其全部代码、美术、音频、文案、角色素材和衍生物仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、心理治疗/医疗/法律/金融建议、未成年人亲密关系、冒充真人/官方，或任何违反法律法规/平台规则的用途。'
+export const CONTENT_USAGE_STATEMENT_REF = 'docs/legal/USE-RESTRICTIONS-2026-11-19.md'
+export const CONTENT_USAGE_STATEMENT_SHA256 = '0353536cefd702014b12a8365c4a486f19848d049652e9692027216adb80c743'
+
+/**
+ * Frozen first-party compliance anchors (0.10.9, MB-033). These are the values
+ * the bundled project declares and the client block freezes; a third-party pack
+ * declares its own licence and AI provenance (structurally validated), it is
+ * not forced onto these first-party values.
+ */
+export const CONTENT_LICENSE_TEMPLATE = Object.freeze({
+  spdx: 'LicenseRef-PolyForm-Noncommercial-1.0.0',
+  attribution: 'Famling maintainers; placeholder art under LICENSE-ART (CC BY-NC-SA 4.0)',
+})
+export const CONTENT_AI_PROVENANCE_TEMPLATE = Object.freeze({
+  generated: false,
+  disclosure: '内置占位像素帧由确定性脚本生成，未使用生成式 AI；最终美术替换后须更新本声明。',
+  tools: Object.freeze(['deterministic-python-renderer']),
+})
+
 /** Permission tokens a pack/entry may declare. */
 export const CONTENT_PERMISSIONS = {
   role: 'apply:role',
@@ -159,6 +204,11 @@ export const CONTENT_LIMITS = Object.freeze({
   maxArrayItems: 64,
   maxObjectKeys: 32,
   maxErrors: 32,
+  maxSpdxChars: 64,
+  maxLicenseAttributionChars: 200,
+  maxAiDisclosureChars: 280,
+  maxAiTools: 8,
+  maxAiToolChars: 48,
 })
 
 const PACK_ID_RE = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){0,3}$/
@@ -171,6 +221,8 @@ const PATH_RE = /^[A-Za-z0-9_-][A-Za-z0-9_.\/-]{0,158}$/
 const SHA256_RE = /^[0-9a-f]{64}$/
 const ASSET_FILE_RE = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}\.[A-Za-z0-9]{1,8}$/
 const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg']
+const SPDX_RE = /^[A-Za-z0-9][A-Za-z0-9.+-]{1,63}$/
+const AI_TOOL_RE = /^[a-z0-9][a-z0-9._-]{0,47}$/
 
 /**
  * The extension-point document. Treat it as read-only: it is frozen at every
@@ -195,10 +247,60 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
     fields: ['status', 'url?'],
     configKeys: ['dsh-famling/market/catalog', 'dsh-famling.market.catalogUrl'],
   }),
+  /**
+   * v3 compliance metadata (0.10.9, MB-032/033): additive optional fields that
+   * mirror the famling.content-pack/0.2 licence / AI provenance / compatibility
+   * semantics without merging the two schemas. Validated fail closed when
+   * present; missing values are warnings by default and errors only with
+   * { requireCompliance: true }.
+   */
+  compliance: Object.freeze({
+    additive: true,
+    backwardCompatible: 'a pre-0.10.9 v3 pack without these fields still validates (warnings only)',
+    strictOption: 'requireCompliance',
+    strictRequires: ['pack.license', 'pack.aiProvenance', 'pack.compatibility', 'pack.usageDeclaration.statement', 'pack.usageDeclaration.statementRef'],
+    packFields: ['license', 'aiProvenance', 'compatibility'],
+    entryOptionalFields: ['license', 'aiProvenance'],
+    license: Object.freeze({
+      fields: ['spdx', 'attribution'],
+      optionalFields: ['url', 'file'],
+      spdxPattern: SPDX_RE.source,
+      spdxExample: 'CC-BY-4.0',
+      attributionMaxChars: CONTENT_LIMITS.maxLicenseAttributionChars,
+      urlPolicy: 'https only, <= ' + CONTENT_LIMITS.maxCatalogUrlChars + ' chars, metadata only; never fetched',
+      filePolicy: 'relative file path (at most 6 segments, file extension, no ".."/scheme/absolute path), never opened',
+    }),
+    aiProvenance: Object.freeze({
+      fields: ['generated', 'disclosure'],
+      optionalFields: ['tools'],
+      disclosureMaxChars: CONTENT_LIMITS.maxAiDisclosureChars,
+      toolsPolicy: '1..' + CONTENT_LIMITS.maxAiTools + ' lowercase tool ids (a-z0-9._-, <= ' + CONTENT_LIMITS.maxAiToolChars + ' chars), metadata only; never executed',
+      note: 'generated=true needs a real disclosure; honest for deterministic or human-made content too',
+    }),
+    compatibility: Object.freeze({
+      fields: ['minPluginVersion'],
+      optionalFields: ['maxPluginVersion'],
+      versionPattern: VERSION_RE.source,
+      option: 'pluginVersion',
+      note: 'host plugin version range; checked structurally always and against options.pluginVersion when provided (fail closed)',
+    }),
+    usageDeclaration: Object.freeze({
+      optionalFields: ['statement', 'statementRef', 'statementSha256'],
+      statement: CONTENT_USAGE_STATEMENT,
+      statementRef: CONTENT_USAGE_STATEMENT_REF,
+      statementSha256: CONTENT_USAGE_STATEMENT_SHA256,
+      note: 'when restated these must equal the canonical shared anchors; strict mode requires statement + statementRef',
+    }),
+    anchors: Object.freeze({
+      license: CONTENT_LICENSE_TEMPLATE,
+      aiProvenance: CONTENT_AI_PROVENANCE_TEMPLATE,
+      note: 'frozen first-party anchors shared with the client SHARED_CONTENT_SEMANTICS; third-party packs declare their own values',
+    }),
+  }),
   pack: Object.freeze({
     schemaVersion: CONTENT_PACK_SCHEMA_VERSION,
     fields: ['schemaVersion', 'id', 'name', 'version', 'source', 'usageDeclaration', 'entries'],
-    optionalFields: ['permissions', 'assets', 'remoteCatalog'],
+    optionalFields: ['permissions', 'assets', 'remoteCatalog', 'license', 'aiProvenance', 'compatibility'],
     sources: CONTENT_SOURCES,
     limits: CONTENT_LIMITS,
     idPattern: PACK_ID_RE.source,
@@ -208,7 +310,7 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
       required: true,
       researchOnly: true,
       prohibitedUses: PROHIBITED_USES,
-      note: 'every pack (bundled/local/remote) must declare researchOnly=true and all six prohibited uses; a missing or mutated declaration is rejected',
+      note: 'every pack (bundled/local/remote) must declare researchOnly=true and all six prohibited uses; a missing or mutated declaration is rejected. Since 0.10.9 an optional canonical statement/statementRef/statementSha256 may be restated and must equal the shared anchors (strict mode requires statement + statementRef)',
     }),
     assets: Object.freeze({
       supported: true,
@@ -231,8 +333,9 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
   }),
   entry: Object.freeze({
     kinds: CONTENT_KINDS,
-    /** kind, id, name, preview, apply, source, permissions and version are required; description is optional; role entries also require compatibility. */
+    /** kind, id, name, preview, apply, source, permissions and version are required; description / license / aiProvenance are optional; role entries also require compatibility. */
     fields: ['kind', 'id', 'name', 'description', 'preview', 'apply', 'source', 'permissions', 'version'],
+    optionalFields: ['description', 'license', 'aiProvenance'],
     roleFields: ['compatibility'],
     optionalRoleFields: ['usageDeclaration'],
     idPattern: ENTRY_ID_RE.source,
@@ -285,6 +388,16 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
     allowRemoteByDefault: false,
     loadsAssets: false,
     fetchesCatalog: false,
+    returns: Object.freeze({
+      ok: 'boolean',
+      errors: 'string[] (fail closed)',
+      warnings: 'string[] (missing optional compliance metadata; never flips ok by itself)',
+    }),
+    options: Object.freeze({
+      allowRemote: 'boolean (default false): reserved remote sources need an explicit future-host opt-in',
+      requireCompliance: 'boolean (default false): require pack.license/aiProvenance/compatibility and the canonical usage statement/ref',
+      pluginVersion: 'x.y.z (optional): compatibility ranges must admit this host version',
+    }),
     rejects: [
       'missing/mutated usageDeclaration (researchOnly must be true; all six prohibited uses required)',
       'functions / symbols / bigints / undefined',
@@ -298,6 +411,9 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
       'remote sources without an explicit future opt-in',
       'duplicate entry ids or asset paths',
       'invalid role bundles (missing component, mismatched voice policy, bad compatibility)',
+      'invalid licence / AI provenance / compatibility metadata',
+      'mutated canonical usage statement/ref/SHA when declared',
+      'compatibility ranges that exclude the provided options.pluginVersion',
     ],
   }),
 })
@@ -325,6 +441,16 @@ export function isSafeAssetPath(value) {
   const segments = value.split('/')
   if (segments.length > 6) return false
   return ASSET_FILE_RE.test(segments[segments.length - 1])
+}
+
+/**
+ * Relative licence/NOTICE file path: the same data-only relative-path policy as
+ * an asset file (bounded segments, file extension, no traversal/scheme/absolute
+ * path). The file is listed as metadata only and is never opened by this
+ * package.
+ */
+export function isSafeLicenseFile(value) {
+  return isSafeAssetPath(value)
 }
 
 /** Reserved remote-catalog URL: absolute https only, metadata only, never fetched. */
@@ -413,13 +539,36 @@ function versionLessOrEqual(left, right) {
   return true
 }
 
-/** v3 pack-wide declaration: researchOnly plus every prohibited-use token. */
-function validateUsageDeclaration(value, where, errors) {
+/**
+ * Whether a v3 compatibility range (minPluginVersion + optional
+ * maxPluginVersion) admits a concrete plugin version. Malformed ranges/versions
+ * fail closed; a range without a host version cannot be decided.
+ * @param {unknown} compatibility Candidate compatibility object.
+ * @param {unknown} pluginVersion Concrete host/plugin version (x.y.z).
+ * @returns {boolean}
+ */
+export function isPackCompatibleWithPlugin(compatibility, pluginVersion) {
+  if (!isPlainObject(compatibility)) return false
+  if (typeof pluginVersion !== 'string' || !VERSION_RE.test(pluginVersion)) return false
+  const plugin = versionTuple(pluginVersion)
+  const min = typeof compatibility.minPluginVersion === 'string' && VERSION_RE.test(compatibility.minPluginVersion) ? versionTuple(compatibility.minPluginVersion) : null
+  const max = compatibility.maxPluginVersion === undefined ? null : (typeof compatibility.maxPluginVersion === 'string' && VERSION_RE.test(compatibility.maxPluginVersion) ? versionTuple(compatibility.maxPluginVersion) : undefined)
+  if (!plugin || !min || max === undefined) return false
+  return versionLessOrEqual(min, plugin) && (max === null || versionLessOrEqual(plugin, max))
+}
+
+/**
+ * v3 pack-wide declaration: researchOnly plus every prohibited-use token. The
+ * optional canonical statement/ref/SHA (0.10.9) must match the shared anchors
+ * when declared. Strict mode (options.requireCompliance) additionally requires
+ * statement + statementRef; a pre-0.10.9 declaration without them stays valid.
+ */
+function validateUsageDeclaration(value, where, errors, strict = false) {
   if (!isPlainObject(value)) {
     errors.push(where + ': must be a plain object')
     return
   }
-  exactKeys(value, ['researchOnly', 'prohibitedUses'], [], where, errors)
+  exactKeys(value, ['researchOnly', 'prohibitedUses'], ['statement', 'statementRef', 'statementSha256'], where, errors)
   if (value.researchOnly !== true) errors.push(where + '.researchOnly: must be true (research/prototype use only)')
   const uses = value.prohibitedUses
   if (!Array.isArray(uses) || uses.length !== PROHIBITED_USES.length) {
@@ -436,6 +585,78 @@ function validateUsageDeclaration(value, where, errors) {
     seen.add(token)
   }
   for (const token of PROHIBITED_USES) if (!seen.has(token)) errors.push(where + '.prohibitedUses: missing "' + token + '"')
+  if (value.statement !== undefined && value.statement !== CONTENT_USAGE_STATEMENT) {
+    errors.push(where + '.statement: must equal the canonical shared research-only statement')
+  }
+  if (value.statementRef !== undefined && value.statementRef !== CONTENT_USAGE_STATEMENT_REF) {
+    errors.push(where + '.statementRef: must equal ' + CONTENT_USAGE_STATEMENT_REF)
+  }
+  if (value.statementSha256 !== undefined && value.statementSha256 !== CONTENT_USAGE_STATEMENT_SHA256) {
+    errors.push(where + '.statementSha256: must equal the canonical statement SHA-256')
+  }
+  if (strict) {
+    if (value.statement === undefined) errors.push(where + '.statement: required when options.requireCompliance is true')
+    if (value.statementRef === undefined) errors.push(where + '.statementRef: required when options.requireCompliance is true')
+  }
+}
+
+/**
+ * v3 compliance metadata (0.10.9): pack/entry licence. Pure metadata: the
+ * optional HTTPS url is never fetched and the optional relative file is never
+ * opened.
+ */
+function validateLicense(value, where, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(where + ': must be a plain object')
+    return
+  }
+  exactKeys(value, ['spdx', 'attribution'], ['url', 'file'], where, errors)
+  if (typeof value.spdx !== 'string' || value.spdx.length > CONTENT_LIMITS.maxSpdxChars || !SPDX_RE.test(value.spdx)) {
+    errors.push(where + '.spdx: SPDX-style licence id 2..' + CONTENT_LIMITS.maxSpdxChars + ' chars (e.g. CC-BY-4.0 or LicenseRef-...)')
+  }
+  if (!isBoundedText(value.attribution, CONTENT_LIMITS.maxLicenseAttributionChars)) {
+    errors.push(where + '.attribution: 1..' + CONTENT_LIMITS.maxLicenseAttributionChars + ' plain chars')
+  }
+  if (value.url !== undefined && !isSafeHttpsUrl(value.url)) {
+    errors.push(where + '.url: absolute https URL, metadata only (never fetched)')
+  }
+  if (value.file !== undefined && !isSafeLicenseFile(value.file)) {
+    errors.push(where + '.file: relative licence file path with a file extension, no traversal/scheme/absolute path')
+  }
+}
+
+/**
+ * v3 compliance metadata (0.10.9): AI/automation provenance. Honest either way;
+ * tools are metadata only and never executed.
+ */
+function validateAiProvenance(value, where, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(where + ': must be a plain object')
+    return
+  }
+  exactKeys(value, ['generated', 'disclosure'], ['tools'], where, errors)
+  if (typeof value.generated !== 'boolean') errors.push(where + '.generated: boolean')
+  if (!isBoundedText(value.disclosure, CONTENT_LIMITS.maxAiDisclosureChars)) {
+    errors.push(where + '.disclosure: 1..' + CONTENT_LIMITS.maxAiDisclosureChars + ' plain chars')
+  } else if (value.generated === true && value.disclosure.trim().length < 4) {
+    errors.push(where + '.disclosure: AI-generated content needs a real disclosure')
+  }
+  if (value.tools !== undefined) {
+    const tools = value.tools
+    if (!Array.isArray(tools) || tools.length === 0 || tools.length > CONTENT_LIMITS.maxAiTools) {
+      errors.push(where + '.tools: array of 1..' + CONTENT_LIMITS.maxAiTools + ' tool ids')
+      return
+    }
+    const seen = new Set()
+    for (const tool of tools) {
+      if (typeof tool !== 'string' || tool.length > CONTENT_LIMITS.maxAiToolChars || !AI_TOOL_RE.test(tool)) {
+        errors.push(where + '.tools: lowercase tool id <= ' + CONTENT_LIMITS.maxAiToolChars + ' chars (a-z0-9._-)')
+        continue
+      }
+      if (seen.has(tool)) errors.push(where + '.tools: duplicate tool id "' + tool + '"')
+      seen.add(tool)
+    }
+  }
 }
 
 /** Optional asset-pack manifest: listed and hashed, never opened by this package. */
@@ -487,18 +708,30 @@ function validateRemoteCatalog(value, where, errors) {
   if (value.url !== undefined && !isSafeHttpsUrl(value.url)) errors.push(where + '.url: absolute https URL, metadata only (never fetched)')
 }
 
-/** Role bundle compatibility metadata (v0.10 role kind). */
-function validateCompatibility(value, where, errors) {
+/**
+ * Compatibility range (0.10.9): used by role entries (required) and by the
+ * optional pack-level compatibility field. Structural validation always runs;
+ * when options.pluginVersion is a concrete x.y.z it must fall inside the range
+ * (fail closed). This is the v3 side of the v2 pack compatibility metadata:
+ * same min/max host-version semantics, plugin-owned version instead of app.
+ */
+function validateCompatibility(value, where, errors, pluginVersion) {
   if (!isPlainObject(value)) {
     errors.push(where + ': must be a plain object')
     return
   }
+  const before = errors.length
   exactKeys(value, ['minPluginVersion'], ['maxPluginVersion'], where, errors)
   const min = typeof value.minPluginVersion === 'string' && VERSION_RE.test(value.minPluginVersion) ? versionTuple(value.minPluginVersion) : null
   const max = value.maxPluginVersion === undefined ? null : (typeof value.maxPluginVersion === 'string' && VERSION_RE.test(value.maxPluginVersion) ? versionTuple(value.maxPluginVersion) : undefined)
   if (min === null) errors.push(where + '.minPluginVersion: semver x.y.z')
   if (max === undefined || (value.maxPluginVersion !== undefined && max === null)) errors.push(where + '.maxPluginVersion: semver x.y.z')
   if (min && max && !versionLessOrEqual(min, max)) errors.push(where + ': minPluginVersion must be <= maxPluginVersion')
+  if (pluginVersion !== undefined && errors.length === before) {
+    if (!isPackCompatibleWithPlugin(value, pluginVersion)) {
+      errors.push(where + ': excludes the current plugin version ' + pluginVersion + ' (minPluginVersion/maxPluginVersion)')
+    }
+  }
 }
 
 /** Validate the data-only apply payload of one entry kind. */
@@ -583,15 +816,15 @@ function validateRoleApply(apply, where, errors) {
   else validateApply('font', font, where + '.font', errors)
 }
 
-/** Validate one entry (schema fields + per-kind apply payload). */
-function validateEntry(entry, index, packSource, errors) {
+/** Validate one entry (schema fields + per-kind apply payload + compliance). */
+function validateEntry(entry, index, packSource, errors, pluginVersion) {
   const where = 'entries[' + index + ']'
   if (!isPlainObject(entry)) {
     errors.push(where + ': must be a plain object')
     return
   }
   const required = ['kind', 'id', 'name', 'preview', 'apply', 'source', 'permissions', 'version']
-  const optional = ['description']
+  const optional = ['description', 'license', 'aiProvenance']
   if (entry.kind === 'role') {
     required.push('compatibility')
     optional.push('usageDeclaration')
@@ -619,9 +852,11 @@ function validateEntry(entry, index, packSource, errors) {
     }
   }
   if (kind === 'role') {
-    validateCompatibility(entry.compatibility, where + '.compatibility', errors)
+    validateCompatibility(entry.compatibility, where + '.compatibility', errors, pluginVersion)
     if (entry.usageDeclaration !== undefined) validateUsageDeclaration(entry.usageDeclaration, where + '.usageDeclaration', errors)
   }
+  if (entry.license !== undefined) validateLicense(entry.license, where + '.license', errors)
+  if (entry.aiProvenance !== undefined) validateAiProvenance(entry.aiProvenance, where + '.aiProvenance', errors)
   const preview = entry.preview
   if (!isPlainObject(preview)) errors.push(where + '.preview: must be a plain object')
   else if (!['glyph', 'text', 'color', 'image'].includes(preview.kind)) errors.push(where + '.preview.kind: unsupported preview kind')
@@ -650,22 +885,51 @@ function validateEntry(entry, index, packSource, errors) {
  * for malformed input, never executes or resolves anything, never fetches the
  * remote catalog and never opens an asset archive.
  *
+ * Compliance is backward compatible: license / aiProvenance / compatibility and
+ * the canonical usage statement are optional in v3 (missing ones are reported
+ * in `warnings`), and a host that loads untrusted packs can opt into fail-closed
+ * validation with { requireCompliance: true }. A concrete host version can be
+ * supplied as { pluginVersion: 'x.y.z' } to check the declared compatibility
+ * ranges.
+ *
  * @param {unknown} pack Candidate pack document (see CONTENT_EXTENSION_POINTS.pack).
- * @param {{ allowRemote?: boolean }} [options] Remote sources are rejected by default.
- * @returns {{ ok: boolean, errors: string[] }}
+ * @param {{ allowRemote?: boolean, requireCompliance?: boolean, pluginVersion?: string }} [options]
+ *   Remote sources are rejected by default; requireCompliance makes the
+ *   compliance metadata mandatory (fail closed); pluginVersion checks the
+ *   compatibility ranges against a concrete host.
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
  */
 export function validateContentPack(pack, options = {}) {
   const errors = []
+  const warnings = []
   scanData(pack, 0, 'pack', errors)
-  if (!isPlainObject(pack)) return { ok: false, errors: errors.length > 0 ? errors : ['pack: must be a plain object'] }
-  exactKeys(pack, ['schemaVersion', 'id', 'name', 'version', 'source', 'usageDeclaration', 'entries'], ['permissions', 'assets', 'remoteCatalog'], 'pack', errors)
+  if (!isPlainObject(pack)) {
+    return { ok: false, errors: errors.length > 0 ? errors : ['pack: must be a plain object'], warnings: [] }
+  }
+  const requireCompliance = options.requireCompliance === true
+  const pluginVersion = typeof options.pluginVersion === 'string' && VERSION_RE.test(options.pluginVersion) ? options.pluginVersion : undefined
+  if (options.pluginVersion !== undefined && pluginVersion === undefined) {
+    errors.push('options.pluginVersion: semver x.y.z (compatibility ranges cannot be checked)')
+  }
+  exactKeys(pack, ['schemaVersion', 'id', 'name', 'version', 'source', 'usageDeclaration', 'entries'], ['permissions', 'assets', 'remoteCatalog', 'license', 'aiProvenance', 'compatibility'], 'pack', errors)
   if (pack.schemaVersion !== CONTENT_PACK_SCHEMA_VERSION) errors.push('pack.schemaVersion: must be ' + CONTENT_PACK_SCHEMA_VERSION)
   if (typeof pack.id !== 'string' || !PACK_ID_RE.test(pack.id)) errors.push('pack.id: must match the pack id pattern')
   if (!isBoundedText(pack.name, CONTENT_LIMITS.maxNameChars)) errors.push('pack.name: 1..' + CONTENT_LIMITS.maxNameChars + ' plain chars')
   if (typeof pack.version !== 'string' || !VERSION_RE.test(pack.version)) errors.push('pack.version: semver x.y.z')
   if (!CONTENT_SOURCES.includes(pack.source)) errors.push('pack.source: must be one of ' + CONTENT_SOURCES.join('/'))
   else if (pack.source === 'remote' && options.allowRemote !== true) errors.push('pack.source: remote packs are reserved; a future host must opt in with { allowRemote: true }')
-  validateUsageDeclaration(pack.usageDeclaration, 'pack.usageDeclaration', errors)
+  validateUsageDeclaration(pack.usageDeclaration, 'pack.usageDeclaration', errors, requireCompliance)
+  if (pack.license !== undefined) validateLicense(pack.license, 'pack.license', errors)
+  if (pack.aiProvenance !== undefined) validateAiProvenance(pack.aiProvenance, 'pack.aiProvenance', errors)
+  if (pack.compatibility !== undefined) validateCompatibility(pack.compatibility, 'pack.compatibility', errors, pluginVersion)
+  for (const field of ['license', 'aiProvenance', 'compatibility']) {
+    if (pack[field] !== undefined) continue
+    if (requireCompliance) errors.push('pack.' + field + ': required when options.requireCompliance is true')
+    else warnings.push('pack.' + field + ': missing optional compliance metadata (backward compatible; required by options.requireCompliance)')
+  }
+  if (!requireCompliance && isPlainObject(pack.usageDeclaration) && (pack.usageDeclaration.statement === undefined || pack.usageDeclaration.statementRef === undefined)) {
+    warnings.push('pack.usageDeclaration.statement: canonical statement/ref not restated (recommended; required by options.requireCompliance)')
+  }
   if (pack.assets !== undefined) validateAssets(pack.assets, 'pack.assets', errors)
   if (pack.remoteCatalog !== undefined) validateRemoteCatalog(pack.remoteCatalog, 'pack.remoteCatalog', errors)
   if (pack.permissions !== undefined) {
@@ -678,7 +942,7 @@ export function validateContentPack(pack, options = {}) {
   const perKind = {}
   for (let index = 0; index < pack.entries.length; index += 1) {
     const entry = pack.entries[index]
-    validateEntry(entry, index, pack.source, errors)
+    validateEntry(entry, index, pack.source, errors, pluginVersion)
     if (isPlainObject(entry) && typeof entry.kind === 'string' && CONTENT_KINDS.includes(entry.kind) && typeof entry.id === 'string') {
       perKind[entry.kind] = (perKind[entry.kind] || 0) + 1
       if (perKind[entry.kind] > CONTENT_LIMITS.maxEntriesPerKind) errors.push('entries[' + index + ']: more than ' + CONTENT_LIMITS.maxEntriesPerKind + ' ' + entry.kind + ' entries')
@@ -694,7 +958,11 @@ export function validateContentPack(pack, options = {}) {
     errors.push('pack: cannot serialize (cyclic or non-JSON)')
   }
   if (bytes > CONTENT_LIMITS.maxBytes) errors.push('pack: JSON size ' + bytes + ' exceeds ' + CONTENT_LIMITS.maxBytes + ' bytes')
-  return { ok: errors.length === 0, errors: errors.slice(0, CONTENT_LIMITS.maxErrors) }
+  return {
+    ok: errors.length === 0,
+    errors: errors.slice(0, CONTENT_LIMITS.maxErrors),
+    warnings: warnings.slice(0, CONTENT_LIMITS.maxErrors),
+  }
 }
 
 /**
@@ -708,7 +976,20 @@ export const CONTENT_PACK_EXAMPLE = Object.freeze({
   name: 'Warm Example',
   version: '1.0.0',
   source: 'local',
-  usageDeclaration: Object.freeze({ researchOnly: true, prohibitedUses: PROHIBITED_USES }),
+  usageDeclaration: Object.freeze({
+    researchOnly: true,
+    prohibitedUses: PROHIBITED_USES,
+    statement: CONTENT_USAGE_STATEMENT,
+    statementRef: CONTENT_USAGE_STATEMENT_REF,
+    statementSha256: CONTENT_USAGE_STATEMENT_SHA256,
+  }),
+  license: Object.freeze({ spdx: 'CC-BY-4.0', attribution: 'Example pack authors' }),
+  aiProvenance: Object.freeze({
+    generated: false,
+    disclosure: 'Example content is written by hand; no generative AI was used.',
+    tools: Object.freeze(['deterministic-python-renderer']),
+  }),
+  compatibility: Object.freeze({ minPluginVersion: '0.10.0' }),
   permissions: ['apply:role', 'apply:theme', 'store:selection'],
   entries: [
     {
@@ -721,7 +1002,15 @@ export const CONTENT_PACK_EXAMPLE = Object.freeze({
       preview: { kind: 'glyph', value: '🧑' },
       permissions: ['apply:role', 'store:selection'],
       compatibility: { minPluginVersion: '0.10.0' },
-      usageDeclaration: { researchOnly: true, prohibitedUses: PROHIBITED_USES },
+      usageDeclaration: {
+        researchOnly: true,
+        prohibitedUses: PROHIBITED_USES,
+        statement: CONTENT_USAGE_STATEMENT,
+        statementRef: CONTENT_USAGE_STATEMENT_REF,
+        statementSha256: CONTENT_USAGE_STATEMENT_SHA256,
+      },
+      license: { spdx: 'CC-BY-4.0', attribution: 'Example pack authors' },
+      aiProvenance: { generated: false, disclosure: 'Example role bundle is written by hand; no generative AI was used.' },
       apply: {
         character: 'human',
         voicePolicy: { canTts: true, mode: 'speech', sound: true },

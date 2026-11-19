@@ -19,9 +19,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  CONTENT_AI_PROVENANCE_TEMPLATE,
   CONTENT_EXTENSION_POINTS,
+  CONTENT_LICENSE_TEMPLATE,
   CONTENT_LIMITS,
   CONTENT_PACK_SCHEMA_VERSION,
+  CONTENT_USAGE_STATEMENT,
+  CONTENT_USAGE_STATEMENT_REF,
+  CONTENT_USAGE_STATEMENT_SHA256,
   PROHIBITED_USES,
   ROLE_BUNDLE_IDS,
   USAGE_DECLARATION_TEMPLATE,
@@ -33,6 +38,7 @@ const FAM_LING_ROOT = process.env.FAMLING_REPO_DIR ?? join(ROOT, '..', '..', 'de
 const LIBRARY_PATH = join(FAM_LING_ROOT, 'public', 'content', 'library.json')
 const famlingAvailable = existsSync(LIBRARY_PATH)
 const clientSource = readFileSync(join(ROOT, 'client.js'), 'utf8')
+const contentChunkSource = readFileSync(join(ROOT, 'client.content.js'), 'utf8')
 
 function readText(path) { return readFileSync(path, 'utf8') }
 function readJson(path) { return JSON.parse(readFileSync(path, 'utf8')) }
@@ -112,6 +118,9 @@ const FROZEN_PROHIBITED_USES = [
   'emotional-companionship', 'virtual-partner', 'professional-advice',
   'minor-intimacy', 'impersonation', 'illegal-use',
 ]
+const FROZEN_USAGE_STATEMENT = '本项目及其全部代码、美术、音频、文案、角色素材和衍生物仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、心理治疗/医疗/法律/金融建议、未成年人亲密关系、冒充真人/官方，或任何违反法律法规/平台规则的用途。'
+const FROZEN_USAGE_STATEMENT_REF = 'docs/legal/USE-RESTRICTIONS-2026-11-19.md'
+const FROZEN_USAGE_STATEMENT_SHA256 = '0353536cefd702014b12a8365c4a486f19848d049652e9692027216adb80c743'
 const FROZEN_LICENSE = {
   spdx: 'LicenseRef-PolyForm-Noncommercial-1.0.0',
   attribution: 'Famling maintainers; placeholder art under LICENSE-ART (CC BY-NC-SA 4.0)',
@@ -236,17 +245,53 @@ test('compliance metadata (licence / AI provenance) is frozen', () => {
   assert.deepEqual({ ...shared.aiProvenance }, FROZEN_AI_PROVENANCE)
 })
 
+test('v3 content-extension compliance anchors equal the client and frozen compliance values', () => {
+  const shared = content.SHARED_CONTENT_SEMANTICS
+  const declaration = content.USAGE_DECLARATION
+  assert.equal(CONTENT_USAGE_STATEMENT, FROZEN_USAGE_STATEMENT)
+  assert.equal(CONTENT_USAGE_STATEMENT_REF, FROZEN_USAGE_STATEMENT_REF)
+  assert.equal(CONTENT_USAGE_STATEMENT_SHA256, FROZEN_USAGE_STATEMENT_SHA256)
+  assert.equal(createHash('sha256').update(CONTENT_USAGE_STATEMENT, 'utf8').digest('hex'), SHA256_KNOWN, 'canonical statement SHA-256 is recomputed')
+  assert.equal(shared.usageStatement, CONTENT_USAGE_STATEMENT, 'client and wire freeze the same statement')
+  assert.equal(shared.usageStatementRef, CONTENT_USAGE_STATEMENT_REF)
+  assert.equal(shared.usageStatementSha256, CONTENT_USAGE_STATEMENT_SHA256)
+  assert.equal(declaration.statement, CONTENT_USAGE_STATEMENT)
+  assert.equal(declaration.statementRef, CONTENT_USAGE_STATEMENT_REF)
+  assert.equal(declaration.statementSha256, CONTENT_USAGE_STATEMENT_SHA256)
+  assert.deepEqual({ ...CONTENT_LICENSE_TEMPLATE }, FROZEN_LICENSE)
+  assert.deepEqual({ ...CONTENT_AI_PROVENANCE_TEMPLATE }, FROZEN_AI_PROVENANCE)
+  assert.deepEqual({ ...CONTENT_LICENSE_TEMPLATE }, { ...shared.license })
+  assert.deepEqual({ ...CONTENT_AI_PROVENANCE_TEMPLATE }, { ...shared.aiProvenance })
+  for (const text of [FROZEN_LICENSE.spdx, FROZEN_LICENSE.attribution, FROZEN_AI_PROVENANCE.disclosure]) {
+    assert.ok(contentChunkSource.includes(text), 'content chunk shows: ' + text)
+  }
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.compliance.packFields], ['license', 'aiProvenance', 'compatibility'])
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.compliance.entryOptionalFields], ['license', 'aiProvenance'])
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.compliance.usageDeclaration.optionalFields], ['statement', 'statementRef', 'statementSha256'])
+  for (const field of CONTENT_EXTENSION_POINTS.compliance.packFields) {
+    assert.ok(CONTENT_EXTENSION_POINTS.pack.optionalFields.includes(field), 'pack optional field: ' + field)
+  }
+  assert.ok(CONTENT_EXTENSION_POINTS.entry.optionalFields.includes('license'), 'entries may restate a licence')
+  assert.ok(CONTENT_EXTENSION_POINTS.entry.optionalFields.includes('aiProvenance'), 'entries may restate AI provenance')
+})
+
 test('the v3 content-extension contract keeps the shared declaration and frozen limits', () => {
   assert.equal(CONTENT_PACK_SCHEMA_VERSION, 3)
   assert.deepEqual([...ROLE_BUNDLE_IDS], FROZEN_ROLE_IDS)
   assert.deepEqual([...PROHIBITED_USES], FROZEN_PROHIBITED_USES)
   assert.deepEqual({ ...CONTENT_EXTENSION_POINTS.transport }, { network: false, execute: false, innerHTML: false, worker: false, assets: false })
+  assert.equal(CONTENT_EXTENSION_POINTS.compliance.additive, true, 'compliance metadata is additive in v3')
+  assert.equal(CONTENT_EXTENSION_POINTS.compliance.strictOption, 'requireCompliance')
+  assert.equal(typeof CONTENT_EXTENSION_POINTS.validation.options.requireCompliance, 'string', 'strict compliance option is documented')
+  assert.equal(typeof CONTENT_EXTENSION_POINTS.validation.options.pluginVersion, 'string', 'host-version compatibility option is documented')
   assert.deepEqual({ ...CONTENT_LIMITS }, {
     maxBytes: 65536, maxEntries: 32, maxEntriesPerKind: 16, maxDepth: 8,
     maxIdChars: 64, maxNameChars: 64, maxDescriptionChars: 240, maxTextChars: 280,
     maxPathChars: 160, maxAssetPathChars: 160, maxAssetFiles: 32,
     maxAssetTotalBytes: 268435456, maxCatalogUrlChars: 240, maxPermissions: 8,
     maxVars: 24, maxVarValueChars: 80, maxArrayItems: 64, maxObjectKeys: 32, maxErrors: 32,
+    maxSpdxChars: 64, maxLicenseAttributionChars: 200, maxAiDisclosureChars: 280,
+    maxAiTools: 8, maxAiToolChars: 48,
   })
 })
 
@@ -333,6 +378,8 @@ test('famling dialogue/appearance/usage/compliance values equal the frozen plugi
     assert.deepEqual({ ...entry.license }, FROZEN_LICENSE)
     assert.deepEqual({ ...entry.aiProvenance }, FROZEN_AI_PROVENANCE)
   }
+  assert.deepEqual({ ...CONTENT_LICENSE_TEMPLATE }, { ...library.rolePresets[0].license }, 'famling and the v3 wire anchor the same licence')
+  assert.deepEqual({ ...CONTENT_AI_PROVENANCE_TEMPLATE }, { ...library.rolePresets[0].aiProvenance }, 'famling and the v3 wire anchor the same AI provenance')
   for (const background of library.backgrounds) {
     const pluginValue = content.BACKGROUNDS[background.id].vars['--dsh-famling-widget-bg']
     assert.equal(pluginValue, background.value)

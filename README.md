@@ -17,8 +17,9 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
-## 当前实现（0.10.8）
+## 当前实现（0.10.9）
 
+- 0.10.9 v3 合规字段（MB-032/033 / E3）：content-extension **仍为 v3（不升 v4）**，以**追加可选字段**补齐 `license`（`spdx` / `attribution`，可选 `url` / `file`）、`aiProvenance`（`generated` / `disclosure`，可选 `tools`）与 pack 级 `compatibility`（`minPluginVersion` / 可选 `maxPluginVersion`）；`usageDeclaration` 可追加 canonical `statement` / `statementRef` / `statementSha256`（与 client `SHARED_CONTENT_SEMANTICS` 同源，声明值必须逐字一致）。pre-0.10.9 v3 pack 仍通过校验（缺字段只进 `warnings`，不改变 `ok`）；Host 可用 `validateContentPack(pack, { requireCompliance: true })` 对不受信 pack **fail-closed**，并用 `{ pluginVersion }` 校验兼容区间；hello/probe 的契约 revision 保持 3，老 Host 不受影响。「内容包」页展示内置包的许可 / AI 来源 / 兼容性；双端 parity 测试冻结锚点。版本真值同步至 0.10.9。
 - 0.10.7 Host 能力协商（MB-034 / E3-T2）：插件主机半不再把 `llm`/`schedule` 当必需注入（`inject = ['connection']`），最小 Host 上仍能激活；客户端挂载后向同源 bridge 发一次 **`hello`（wire 2）**，Host 返回插件版本、bridge wire 版本、**content-extension v3** 契约、宿主版本及来源、可选服务能力矩阵与逐项 `probes`。缺 `llm` 时聊天、缺 `schedule` 时提醒在 **UI 与发送路径双端降级**（本地明示、不调用模型、不伪造回复）；老 Host 不响应 hello 时回退「兼容模式」并保留旧行为；版本/契约不一致只提示、不崩溃。设置 →「高级 / 调试」显示握手状态、宿主版本、桥接/内容契约版本、能力矩阵与「重新检测 Host 能力」（`probe`）。`content-extension.mjs` 保持 **v3 单版本契约**（新增 `CONTENT_EXTENSION_VERSION` / `CONTENT_EXTENSION_COMPATIBILITY` / `isContentExtensionCompatible`，hello 的 `contract.contentExtension` 直接取该模块）。测试见 `test/host-bridge.test.js` 与 `test/client-behavior.test.js`。
 - 0.10.6 低打扰（E7 剩余 / P-04）：设置弹窗新增「**低打扰**」分组——**安静时段**（默认 22:00–08:00 开启，可改起止时间或整体关闭；时段内自动气泡与随机微动作 = 0，点击、菜单互动与聊天回复仍照常回应；`start === end` 视为关闭，避免手滑造成 24h 静默）、**动画偏好**（跟随系统 `prefers-reduced-motion` / 允许动画 / 减少动态；旧 `motion` 布尔值一次性迁移）、**暂时隐藏**（右键「更多」或设置内隐藏 1 小时 / 到明天；状态持久化到 `dsh-famling/hidden-until`，只留一个 ≥24px 的「显示」恢复控件，到点自动恢复）。自动微动作间隔由 11–20s 提高到 **≥60s**；静音只停语音（气泡字幕保留，正在朗读立即停止）。输入面板 / 同意弹窗 / 使用限制弹窗与新增低打扰 UI 均在懒加载 `client.content.js`，首屏预算保持 96 KiB 以内。测试见 `test/client-lowdisturb.test.js` 与 `test/client-behavior.test.js`。
 - 0.10.4 四层缩放（MB-053）：设置内新增**整体缩放**（第一层，50%–200%，角色图像 + UI/文本 + 气泡 + 菜单/面板一起缩放）、**UI + 文本 / 图像** 独立轴（第二层，100% = 跟随整体，可单独解耦或一键「跟随整体」）、**组件缩放**（第三层，折叠在「高级 / 调试」内，气泡 / 右键菜单 / 面板 / 内容中心 / 设置弹窗默认全部继承 UI + 文本，可覆盖 75%–150% 或恢复继承）。只作用于本插件 widget 的内联样式与私有 CSS 变量，**不改 DSH 全局主题/宿主缩放**；持久化 `dsh-famling/scale/*`（model/global/ui-text/image/component/*），旧绝对倍率 `dsh-famling/scale` / `dsh-famling/text-scale` 一次性迁移（版本标记后失效但保留备份）；气泡 ≤ 240px 且不溢出视口，菜单/面板按缩放后尺寸夹取，默认值不写键；原生 range 滑块 + `aria-valuetext`/`aria-expanded` 键盘可达。详见「四层缩放（0.10.4）」与 `test/client-scale.test.js`。
@@ -55,7 +56,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 生效值 = `global × axis` 后按可读性/安全上限 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px，仍在 240px 侧栏内）、组件 0.5×–2×。气泡宽度硬上限 240px 并按视口夹取左边界，不会溢出侧栏/窗口；菜单与面板用「布局尺寸 ÷ zoom + `transform: scale(zoom)`」在缩放后仍夹在视口内（左/底锚点、`transform-origin` 对齐锚点），内容不裁切。
 - 持久化：`dsh-famling/scale/model`（版本标记）+ `dsh-famling/scale/global`、`/ui-text`、`/image`、`/component/<id>`；跟随/默认值不写轴键（恢复跟随 = 删键），恢复默认缩放只写 `global=1` 与版本标记。首次加载若没有版本标记且存在旧绝对倍率键 `dsh-famling/scale`（数字或 `{pet,text}` JSON）或 `dsh-famling/text-scale`，一次性迁移为 `image`/`uiText`（global=100%，等效值不变）；迁移后旧键保留原处但被标记失效，不会重复应用。清除本机设置会删除 `dsh-famling/*` 下全部缩放键。
 - 键盘 / ARIA：所有缩放滑块是原生 `<input type="range">`（方向键可用），带 `aria-label` 与 `aria-valuetext`（如「150% · 独立」）；高级组按钮带 `aria-expanded`；组件下拉带 `aria-label`；跟随时「跟随整体」按钮 `disabled`；重置按钮有可读名称；设置弹窗仍是 `role="dialog"`。
-- 测试：`test/client-scale.test.js` 覆盖纯模型（clamp/解析/持久化/迁移/上限）+ fake React 行为（三层 IA、整体/独立轴、组件覆盖与继承、持久化/恢复、240px 气泡与视口夹取、菜单缩放夹取、键盘/ARIA、无 fetch）+ 静态门禁（widget 私有样式、无 `document.documentElement`、无外部 URL）。`npm test` 合计 179 项全绿。
+- 测试：`test/client-scale.test.js` 覆盖纯模型（clamp/解析/持久化/迁移/上限）+ fake React 行为（三层 IA、整体/独立轴、组件覆盖与继承、持久化/恢复、240px 气泡与视口夹取、菜单缩放夹取、键盘/ARIA、无 fetch）+ 静态门禁（widget 私有样式、无 `document.documentElement`、无外部 URL）。`npm test` 合计 190 项全绿。
 
 ## 低打扰（0.10.6，E7 剩余 / P-04）
 
@@ -71,7 +72,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - 清理入口「清除本机设置与同意」同时删除 `hidden-until`；设置「高级 / 调试」的存储键列表会列出它。
 - 全部文案与控件在懒加载 `client.content.js`（输入面板/同意弹窗/使用限制弹窗也自 0.10.6 起移入该 chunk），入口 `client.js` 保持 96 KiB 首屏预算内。
-- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 179 项全绿。
+- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 190 项全绿。
 
 ## Host 能力协商 hello/probe（0.10.7，MB-034 / E3-T2）
 
@@ -88,16 +89,16 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - **版本来源诚实标注**：Host 进程有 `process.env.DSH_CLIENT_VERSION` 时优先用（`source: "env:DSH_CLIENT_VERSION"`），否则用客户端上报的 `__DSH_BOOT__.release`（`source: "client-boot"`），都没有则 `source: "unknown"` / `version: null`，不猜。
 - **协议矩阵**：`hello` / `probe` 只接受 `v: 2`（老客户端发 v1 会收到 426 `E_WIRE`）；`echo` / `chat` / `brief` / `task` / `task-delete` 在 wire 1 与 wire 2 都可用，老客户端无需改动。
-- **content-extension v3 兼容**：本版不升 v4；`content-extension.mjs` 导出 `CONTENT_EXTENSION_VERSION = 3`、`CONTENT_EXTENSION_COMPATIBILITY`（单版本、`additive-within-major`）与纯函数 `isContentExtensionCompatible(version)`；hello 的 `contract.contentExtension` 从该模块直接取值，测试冻结二者一致，避免 wire 与 schema 各自漂移。
+- **content-extension v3 兼容**：本版不升 v4；`content-extension.mjs` 导出 `CONTENT_EXTENSION_VERSION = 3`、`CONTENT_EXTENSION_COMPATIBILITY`（单版本、`additive-within-major`）与纯函数 `isContentExtensionCompatible(version)`；hello 的 `contract.contentExtension` 从该模块直接取值，测试冻结二者一致，避免 wire 与 schema 各自漂移。0.10.9 在同一 v3 revision 内追加可选合规字段（license / aiProvenance / pack 级 compatibility / canonical usage statement），因此 hello/probe 的 wire 与 revision **都不变**，老 Host/老 pack 继续工作。
 - 测试：`test/host-bridge.test.js`（inject 最小化、hello/probe 字段、版本来源、契约不兼容、缺能力 503、wire 1/2 矩阵）与 `test/client-behavior.test.js`（挂载握手载荷、设置/输入面板降级、老 Host 兼容模式、版本不一致提示、手动 probe）；`test/client-static.test.js` 冻结 `CONTENT_EXTENSION_VERSION` / 兼容策略。
 
 ## 多角色动画数据（0.8.0）
 
-三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **95.2 KiB**（0.10.7 实测；gzip 27.2 KiB，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.0%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 156.9 KiB，全部角色加载后才约 342.5 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板，0.10.7 扩容）只在首次安装或首次打开弹窗时下载（65.9 KiB，gzip 18.3 KiB）：
+三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **95.2 KiB**（0.10.7 实测；gzip 27.2 KiB，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.0%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 156.9 KiB，全部角色加载后才约 342.5 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 0.10.9 合规元数据展示）只在首次安装或首次打开弹窗时下载（68.1 KiB，gzip 19.1 KiB，0.10.9 实测）：
 
 - 数据源：私有仓 `desktop-games/public/assets/pet/anim/{human,cat,dog}/`（`manifest.json` + 帧 PNG）。
 - 生成器：`scripts/embed-anims.mjs` —— 读取 manifest/PNG、校验三套 clip 契约、把 RGBA 帧**无损**重编码为最小位深索引 PNG（硬 alpha 保留，体积约减半），再按 marker 注入 `client.js`。**禁止手改生成块**，改数据重跑脚本即可。
-- 体积（0.10.7 实测）：源 351.6 KiB → 入口 `client.js` 95.2 KiB / 97,472 B（gzip 27.2 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 chunk 65.9 KiB 按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**（0.10.6/0.10.7 未再上调）；首启卡、设置内容、低打扰 UI 与输入/同意弹窗仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.97%**（< 31% 门禁），首帧 156.9 KiB = 基线的 **51.1%**（< 52% 门禁）。
+- 体积（0.10.9 实测）：源 351.6 KiB → 入口 `client.js` 95.2 KiB / 97,472 B（gzip 27.2 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 chunk 68.1 KiB（gzip 19.1 KiB）按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**（0.10.6/0.10.7 未再上调）；首启卡、设置内容、低打扰 UI 与输入/同意弹窗仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.97%**（< 31% 门禁），首帧 156.9 KiB = 基线的 **51.1%**（< 52% 门禁）。
 - 重新生成：`npm run embed:anims`；只校验不写：`node scripts/embed-anims.mjs --check`；`npm run verify:anims`；量化：`npm run measure:bundle`。
 - 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并检查 `client.content.js` 存在、四个一级 tabs、无 fetch/外部 URL，并在私有资产可用时逐字节比对嵌入块是否过期。
 - 静态 QA：`node scripts/embed-anims.mjs --qa` 生成 `scripts/qa/anim-data.js`，浏览器直接打开 `scripts/qa/index.html` 可切角色、播 12 个 clip、看实心/空心气泡并跑数据自检，不需要重启 DSH。
@@ -170,13 +171,15 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 [`content-extension.mjs`](content-extension.mjs) 是给未来本地/远程内容包的公开契约（package export：`dsh-famling/content-extension`）：
 
-- `CONTENT_EXTENSION_POINTS` — **version 3**（pack `schemaVersion: 3`）、`status: "reserved"`、`transport: { network: false, execute: false, innerHTML: false, worker: false, assets: false }`。
+- `CONTENT_EXTENSION_POINTS` — **version 3**（pack `schemaVersion: 3`）、`status: "reserved"`、`transport: { network: false, execute: false, innerHTML: false, worker: false, assets: false }`；0.10.9 起顶层 `compliance` 公布可选合规字段的形状、冻结锚点与严格模式选项。
 - `CONTENT_KINDS` — **七类**：`role` / `character` / `voice` / `dialogue` / `theme` / `background` / `font`。`role` 是 v3 新增的 bundle kind：apply 必须包含 `character / voicePolicy / dialogue / theme / background / font` 六个组件，entry 还必须带 `compatibility`（`minPluginVersion`，可选 `maxPluginVersion`）。
-- **所有 pack 必须含 `usageDeclaration`**：`{ researchOnly: true, prohibitedUses: [六项] }`；六项固定为 `emotional-companionship` / `virtual-partner` / `professional-advice` / `minor-intimacy` / `impersonation` / `illegal-use`。缺失、`researchOnly !== true`、少一项、多一项、重复项或未知字段一律拒绝。role entry 不豁免 pack 级声明；role entry 可选地重复一份 `usageDeclaration`，出现时按同一规则校验。声明模板导出为 `USAGE_DECLARATION_TEMPLATE`。
+- **所有 pack 必须含 `usageDeclaration`**：`{ researchOnly: true, prohibitedUses: [六项] }`；六项固定为 `emotional-companionship` / `virtual-partner` / `professional-advice` / `minor-intimacy` / `impersonation` / `illegal-use`。缺失、`researchOnly !== true`、少一项、多一项、重复项或未知字段一律拒绝。role entry 不豁免 pack 级声明；role entry 可选地重复一份 `usageDeclaration`，出现时按同一规则校验。声明模板导出为 `USAGE_DECLARATION_TEMPLATE`。0.10.9 起还可追加 canonical `statement` / `statementRef` / `statementSha256`，出现时三者必须与 `CONTENT_USAGE_STATEMENT` / `CONTENT_USAGE_STATEMENT_REF` / `CONTENT_USAGE_STATEMENT_SHA256` 逐字一致（严格模式要求 `statement` + `statementRef`）。
+- **0.10.9 合规字段（可选、向后兼容）**：pack 可带 `license`（`spdx` + `attribution`，可选 `url` / `file`）、`aiProvenance`（`generated` + `disclosure`，可选 `tools`）与 `compatibility`（`minPluginVersion` + 可选 `maxPluginVersion`）；entry 也可选带 `license` / `aiProvenance`（role entry 的 `compatibility` 仍必填）。声明了就必须逐字段合法（fail-closed），未声明默认只产生 `warnings`，pre-0.10.9 的 v3 pack 继续有效。冻结的第一方锚点导出为 `CONTENT_LICENSE_TEMPLATE` / `CONTENT_AI_PROVENANCE_TEMPLATE`。
+- **严格模式与版本门**：`validateContentPack(pack, { requireCompliance: true })` 供 Host 加载不受信 pack 时 fail-closed——缺 `license` / `aiProvenance` / `compatibility` 或 canonical `usageDeclaration.statement` / `statementRef` 直接进 `errors`；`{ pluginVersion: "x.y.z" }` 额外校验 pack 级与 role entry 的兼容区间是否包含当前插件版本（对应纯函数 `isPackCompatibleWithPlugin`）。
 - **`assets` 预留**：pack 可带 `{ format: "zip" | "folder", files: [{ path, sha256, bytes? }], totalBytes? }`；path 必须是安全相对路径（≤6 段、无 `..`、无 scheme、≤160 字符、带扩展名），sha256 为 64 位小写 hex；**只做数据校验/清单，不读取、不打开、不执行、不加载任何资产**。
 - **`remoteCatalog` 预留**：可选 `{ status: "reserved", url?: "https://..." }`；仅作为元数据校验，**不 fetch、不预热、不加载远程目录**。远程 source（`source: "remote"`）默认拒绝，未来 Host 必须显式 `{ allowRemote: true }` 才通过 schema 校验。
-- `validateContentPack(pack, { allowRemote? }) → { ok, errors }` — **纯数据**校验，不抛异常、不执行、不联网、不读文件。
-- `CONTENT_PACK_EXAMPLE` — 一份合法的 v3 示例 pack（含完整 usageDeclaration、一个 role bundle、一个 theme entry），不会被自动加载。
+- `validateContentPack(pack, { allowRemote?, requireCompliance?, pluginVersion? }) → { ok, errors, warnings }` — **纯数据**校验：`warnings` 报告缺失的可选合规字段（不改变 `ok`），严格模式/版本门见上；不抛异常、不执行、不联网、不读文件。
+- `CONTENT_PACK_EXAMPLE` — 一份合法的 v3 示例 pack（含完整 usageDeclaration + canonical 声明字段、license / aiProvenance / compatibility、一个 role bundle、一个 theme entry；默认与 `requireCompliance: true` 都合法），不会被自动加载。
 
 最小声明与 role 片段：
 
@@ -192,8 +195,14 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
     "prohibitedUses": [
       "emotional-companionship", "virtual-partner", "professional-advice",
       "minor-intimacy", "impersonation", "illegal-use"
-    ]
+    ],
+    "statement": "本项目及其全部代码、美术、音频、文案、角色素材和衍生物仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、心理治疗/医疗/法律/金融建议、未成年人亲密关系、冒充真人/官方，或任何违反法律法规/平台规则的用途。",
+    "statementRef": "docs/legal/USE-RESTRICTIONS-2026-11-19.md",
+    "statementSha256": "0353536cefd702014b12a8365c4a486f19848d049652e9692027216adb80c743"
   },
+  "license": { "spdx": "CC-BY-4.0", "attribution": "Example pack authors" },
+  "aiProvenance": { "generated": false, "disclosure": "Example content is written by hand; no generative AI was used.", "tools": ["deterministic-python-renderer"] },
+  "compatibility": { "minPluginVersion": "0.10.0" },
   "entries": [
     {
       "kind": "role",
@@ -217,11 +226,11 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 }
 ```
 
-其它校验（与 v2 一致并延续）：纯数据（拒绝函数 / symbol / bigint / 非有限数 / 非 plain object）、未知字段/枚举、超长字符串/数组、JSON ≤ 64 KiB、entries ≤ 32（每 kind ≤ 16）、id/name/description 限制、原型链键（`__proto__` / `constructor` / `prototype`）、图片预览路径穿越/绝对路径/URL、`<` 与控制字符、`url()` / `expression()` / `@import` 等危险 CSS；theme 变量必须 `--dsh-famling-*` 且值为安全颜色；background 只允许 transparent/安全纯色；font 只允许 1..8 个不带引号的本地字体名（拒绝引号、`url()`、`var()`、分号、花括号、`@` 规则）。重复 entry id / 重复 asset path / role 兼容范围倒置都会拒绝。
+其它校验（与 v2 一致并延续）：纯数据（拒绝函数 / symbol / bigint / 非有限数 / 非 plain object）、未知字段/枚举、超长字符串/数组、JSON ≤ 64 KiB、entries ≤ 32（每 kind ≤ 16）、id/name/description 限制、原型链键（`__proto__` / `constructor` / `prototype`）、图片预览路径穿越/绝对路径/URL、`<` 与控制字符、`url()` / `expression()` / `@import` 等危险 CSS；theme 变量必须 `--dsh-famling-*` 且值为安全颜色；background 只允许 transparent/安全纯色；font 只允许 1..8 个不带引号的本地字体名（拒绝引号、`url()`、`var()`、分号、花括号、`@` 规则）。重复 entry id / 重复 asset path / role 兼容范围倒置都会拒绝。0.10.9 起合规字段同样纯数据校验：`spdx` 2..64 字符、`attribution` ≤ 200、`url` 仅 https（不 fetch）、`file` 仅安全相对路径（不打开）、`aiProvenance.disclosure` ≤ 280 且 `generated=true` 必须有真实声明、`tools` 1..8 个小写工具 id（不执行）、兼容版本必须 `x.y.z`。
 
 本版本**不加载任何 pack**：没有网络请求、没有 pack 脚本执行、没有 `innerHTML`、没有资产解包；内容中心只展示内置目录、声明检查与预留说明。未来接入加载器时也必须是「纯数据 + 在 Host 侧解析/校验 + UI 只渲染数据」。完整 schema、限制与示例见 [docs/DETAIL.md](docs/DETAIL.md)。
 
-> 与独立 famling 的共享内容模型 `famling.content/0.2`（characters / voices / dialoguePacks / themes / backgrounds / fonts / **rolePresets**）是**目标超集关系**：六类仍可与插件 kind 一一映射（`builtin` ≡ `bundled`），v3 的 `role` 是把六类组合成的角色主题 bundle。0.10.1 起插件 `ROLE_BUNDLES` 与共享 `rolePresets` 的六个组件**逐项对齐**（human/cat/dog），`DIALOGUE_MODES` 与共享 `dialoguePacks` 的 maxChars/bubbleChance 对齐；origami 的 `high-contrast` 主题本插件没有，显式映射为 `night` 且 `available:false`。插件契约把“选择/应用”建模为 `apply` + permissions，共享模型是目录条目 + 解析函数；主题 CSS 前缀、语音来源（浏览器 speechSynthesis vs DeepSeek stella/tide）与校验返回结构仍不同。两套契约并存、各自 fail-closed，收敛通过适配层（content-extension 后续 MAJOR），详见 [docs/DETAIL.md](docs/DETAIL.md)。
+> 与独立 famling 的共享内容模型 `famling.content/0.2`（characters / voices / dialoguePacks / themes / backgrounds / fonts / **rolePresets**）是**目标超集关系**：六类仍可与插件 kind 一一映射（`builtin` ≡ `bundled`），v3 的 `role` 是把六类组合成的角色主题 bundle。0.10.1 起插件 `ROLE_BUNDLES` 与共享 `rolePresets` 的六个组件**逐项对齐**（human/cat/dog），`DIALOGUE_MODES` 与共享 `dialoguePacks` 的 maxChars/bubbleChance 对齐；origami 的 `high-contrast` 主题本插件没有，显式映射为 `night` 且 `available:false`。插件契约把“选择/应用”建模为 `apply` + permissions，共享模型是目录条目 + 解析函数；主题 CSS 前缀、语音来源（浏览器 speechSynthesis vs DeepSeek stella/tide）与校验返回结构仍不同。两套契约并存、各自 fail-closed；0.10.9 把 v2 的 license / aiProvenance / compatibility **形状与语义**投影为 v3 的追加可选字段（并冻结双端锚点），但仍不合并两套 schema、不改 v2 包结构，未来收敛仍通过适配层，详见 [docs/DETAIL.md](docs/DETAIL.md)。
 
 ## Host bridge（P0/P1/P2/P4 已实现；0.10.7 加 hello/probe）
 
@@ -283,10 +292,10 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试，**179 项**，不调用真实模型）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试，**190 项**，不调用真实模型）
 - `npm run check`（= `check:anims`：嵌入块与私有动画包一致）
 - `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
-- `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板 chunk 65.9 KiB 等实测）
+- `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示 chunk 68.1 KiB 等实测）
 - 版本真值：`package.json` 是唯一来源；`node test/version-truth.test.js --write` 从 package.json 重新生成 `client.js`/`client.content.js` 的 `PLUGIN_VERSION` 常量（zh/en 标签由它派生）、README「当前实现」、LEGAL-NOTICE「适用插件版本」与 `locale/*.json` 的 `meta.version`，`npm test` 会校验它们全部一致（含安全地板文档真值）。
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`

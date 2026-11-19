@@ -1,6 +1,6 @@
 # dsh-famling 法律说明（Legal Notice）
 
-> **版本：2026-11-19.4（草案）· 适用插件版本：dsh-famling 0.10.8（0.10.7 新增 Host hello/probe 能力协商与 content-extension v3 握手，缺模型/提醒能力时如实降级、不伪造回复；0.10.6 新增低打扰——安静时段 / 动画偏好 / 暂时隐藏，自动微动作间隔 ≥60s；0.10.4 四层缩放——整体缩放 / UI + 文本 / 图像 / 组件缩放，只作用于本插件 widget 的内联样式，不改 DSH 全局主题，旧绝对倍率设置一次性迁移；0.10.2 落地的插件安全地板保持不变；其余事实时点 2026-11-18）· 状态：DRAFT**
+> **版本：2026-11-19.5（草案）· 适用插件版本：dsh-famling 0.10.9（0.10.9 新增 content-extension v3 可选合规字段——pack/entry 的 license 与 AI 来源、pack 级 compatibility、canonical 研究用途声明锚点；保持向后兼容且本版仍不加载任何 pack；0.10.7 新增 Host hello/probe 能力协商与 content-extension v3 握手，缺模型/提醒能力时如实降级、不伪造回复；0.10.6 新增低打扰——安静时段 / 动画偏好 / 暂时隐藏，自动微动作间隔 ≥60s；0.10.4 四层缩放——整体缩放 / UI + 文本 / 图像 / 组件缩放，只作用于本插件 widget 的内联样式，不改 DSH 全局主题，旧绝对倍率设置一次性迁移；0.10.2 落地的插件安全地板保持不变；其余事实时点 2026-11-18）· 状态：DRAFT**
 > 本文是 `dsh-famling`（DSH 客户端插件）的**法律与合规说明**，不是用户协议（TOS/EULA），**不产生合同效力**，也**不是律师意见**。正式公开发布前须由执业律师复核；与 DSH 宿主条款、模型/语音供应商条款、Advisers TOS 冲突时，以相应正式条款与法律为准。
 > 范围：仅覆盖 DSH 插件 `dsh-famling`（`index.js` + `client.js` + 本目录文档/美术/图标）。**不覆盖**完整 famling 桌面应用、Advisers 核心、DSH 宿主、模型/语音供应商。
 > 事实时点：2026-11-18（基于代码与文档静态阅读；未实机复测 Tauri/浏览器/多用户环境）。
@@ -197,6 +197,7 @@
 | 2026-11-18 | 2026-11-18.1 | 首版：定位/能力/责任分层/数据流/禁止用途/披露/隐私/未成年人/许可/举报/缺口 | DRAFT，待用户/律师复核；基于 dsh-famling 0.7.5 静态代码 |
 | 2026-11-19 | 2026-11-19.1 | 增 §0「统一使用限制（canonical）」：逐字短句 + SHA-256 + canonical 来源 + 落点；§0 一页速览改为 §0.1；§5/§12 同步 | DRAFT，待用户/律师复核 |
 | 2026-11-19 | 2026-11-19.2 | 落地插件安全地板（dsh-famling 0.10.2）：§1.1 增危机短路/发送去向/首启卡事实；§1.2 口径改为「工作助手型 AI 回复」；§3.1/3.2 增危机短路与本地键；§4 增聊天开关/清除撤回/首启卡；§6 披露现状与缺口更新；§7 删除路径更新；§11 缺口表重排（首启/清除/危机资源已落地）；版本号与 `package.json` 真值统一 | DRAFT，待用户/律师复核 |
+| 2026-11-20 | 2026-11-19.5 | dsh-famling 0.10.9（MB-032/033）：content-extension 保持 v3，追加可选合规字段（`license` / `aiProvenance` / pack 级 `compatibility` / canonical `usageDeclaration.statement` 等），缺失只产生 `warnings`（向后兼容），Host 可 `requireCompliance` 严格 fail-closed；本版仍不加载任何 pack、不联网、不执行脚本；内容中心「内容包」页展示内置包的许可 / AI 来源 / 兼容性；版本真值同步 | DRAFT，待用户/律师复核 |
 | 2026-11-19 | 2026-11-19.4 | 发布准备 dsh-famling 0.10.4：新增四层缩放（整体缩放 / UI + 文本 / 图像 / 组件缩放，纯本插件 widget 内联样式，不改 DSH 全局主题；持久化 `dsh-famling/scale/*`，旧绝对倍率键一次性迁移；气泡 ≤ 240px、面板/菜单按缩放夹取、原生 range 键盘可达）；`package.json` 与 client/client.content/README/LEGAL/locale 版本真值同步；聊天/安全行为相对 0.10.3 无变化 | DRAFT，待用户/律师复核 |
 | 2026-11-19 | 2026-11-19.3 | 发布准备 dsh-famling 0.10.3：把 0.10.2 落地的插件安全地板作为对外发布版本；`package.json` 升到 0.10.3 并同步 client/client.content/README/LEGAL/locale 版本真值（`test/version-truth.test.js` 幂等校验）；聊天/UI 行为相对 0.10.2 无变化；修正 `engines.dsh` 以覆盖 0.2.2 预发布宿主 | DRAFT，待用户/律师复核 |
 

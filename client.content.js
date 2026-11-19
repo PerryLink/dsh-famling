@@ -27,7 +27,22 @@ window.__ModuleLoader__.load({
       'minor-intimacy', 'impersonation', 'illegal-use',
     ]
     const BUILTIN_PACK = { id: 'dsh-famling.builtin', entries: 4, source: 'bundled' }
-    const PLUGIN_VERSION = '0.10.8'
+    // Frozen first-party compliance anchors, shared with content-extension.mjs v3
+    // (CONTENT_LICENSE_TEMPLATE / CONTENT_AI_PROVENANCE_TEMPLATE) and the client
+    // SHARED_CONTENT_SEMANTICS block. Metadata only: the UI never fetches or
+    // opens anything; parity tests freeze these values against both ends.
+    const BUILTIN_COMPLIANCE = {
+      license: {
+        spdx: 'LicenseRef-PolyForm-Noncommercial-1.0.0',
+        attribution: 'Famling maintainers; placeholder art under LICENSE-ART (CC BY-NC-SA 4.0)',
+      },
+      aiProvenance: {
+        generated: false,
+        disclosure: '内置占位像素帧由确定性脚本生成，未使用生成式 AI；最终美术替换后须更新本声明。',
+      },
+      compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
+    }
+    const PLUGIN_VERSION = '0.10.9'
 
     const STRINGS = {
       zh: {
@@ -109,7 +124,9 @@ window.__ModuleLoader__.load({
         declarationDetail: '禁止用途：情感陪伴 / 虚拟伴侣 / 专业建议 / 未成年人亲密 / 冒充真人或官方 / 违法用途。',
         importPack: '导入内容包（需 Host 支持）',
         importHint: '资产包（zip / 文件夹）导入接口预留：清单与 sha256 由 Host 解析；本版本不读取文件、不执行脚本、不加载素材、不联网。',
-        packsNoNetwork: '内容包只做纯数据校验（content-extension.mjs v3），不执行脚本、不联网。',
+        compliance: '合规元数据（content-extension v3）',
+        licenseLabel: '许可与署名', aiLabel: 'AI 来源', compatLabel: '兼容性',
+        packsNoNetwork: '内容包只做纯数据校验（content-extension.mjs v3）：用途声明、许可、AI 来源与兼容性字段都按纯数据校验，不执行脚本、不联网。',
         marketStatus: '远程市场接口已预留，服务器未配置。',
         marketNoNetwork: '不会发起任何网络请求，也不会展示伪造商品；市场加载器需由未来 Host 显式启用。',
         catalogUrl: '目录地址 / catalog URL', configKey: '配置键 / config', notConfigured: '未配置',
@@ -194,7 +211,9 @@ window.__ModuleLoader__.load({
         declarationDetail: 'Prohibited: emotional companionship / virtual partner / professional advice / minor intimacy / impersonating a real person or official / illegal use.',
         importPack: 'Import content pack (Host support required)',
         importHint: 'Asset-pack (zip / folder) import interface is reserved: the Host owns manifests and sha256 checks. This version reads no files, executes no scripts, loads no assets and makes no network requests.',
-        packsNoNetwork: 'Content packs are validated as pure data only (content-extension.mjs v3): no script execution, no network.',
+        compliance: 'Compliance metadata (content-extension v3)',
+        licenseLabel: 'Licence & attribution', aiLabel: 'AI provenance', compatLabel: 'Compatibility',
+        packsNoNetwork: 'Content packs are validated as pure data only (content-extension.mjs v3): usage declaration, licence, AI provenance and compatibility fields are all pure-data checked; no script execution, no network.',
         marketStatus: 'The remote market interface is reserved; no server is configured.',
         marketNoNetwork: 'No network request is made and no fake products are shown; a future Host must explicitly enable the market loader.',
         catalogUrl: 'Catalog URL', configKey: 'Config key', notConfigured: 'not configured',
@@ -388,6 +407,12 @@ window.__ModuleLoader__.load({
           h('strong', { key: 'title', style: { display: 'block' } }, T.declaration),
           h('span', { key: 'status', style: { display: 'block', ...captionStyle() } }, declarationOk ? '✓ ' + T.declarationOk : '! ' + T.declarationFailed + declaration.join(', ')),
           h('span', { key: 'detail', style: { display: 'block', marginTop: 3, ...captionStyle() } }, T.declarationDetail),
+        ]),
+        h('div', { key: 'compliance', style: { border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 8, padding: 8, marginBottom: 6 } }, [
+          h('strong', { key: 'title', style: { display: 'block' } }, T.compliance),
+          h('span', { key: 'license', style: { display: 'block', ...captionStyle() } }, T.licenseLabel + ': ' + BUILTIN_COMPLIANCE.license.spdx + ' · ' + BUILTIN_COMPLIANCE.license.attribution),
+          h('span', { key: 'ai', style: { display: 'block', marginTop: 3, ...captionStyle() } }, T.aiLabel + ': generated=' + String(BUILTIN_COMPLIANCE.aiProvenance.generated) + ' · ' + BUILTIN_COMPLIANCE.aiProvenance.disclosure),
+          h('span', { key: 'compat', style: { display: 'block', marginTop: 3, ...captionStyle() } }, T.compatLabel + ': content-extension v3 · minPluginVersion ' + BUILTIN_COMPLIANCE.compatibility.minPluginVersion),
         ]),
         h('button', { key: 'import', type: 'button', disabled: true, title: T.importHint, style: { ...buttonBase, padding: '5px 8px', opacity: 0.6, cursor: 'not-allowed', marginBottom: 5 } }, T.importPack),
         h('p', { key: 'import-hint', style: { margin: '0 0 6px', ...captionStyle() } }, T.importHint),
