@@ -115,7 +115,8 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 ## 物种专属互动与随机回话（0.8.3）
 
 - 互动菜单不再手写固定表：`scripts/embed-anims.mjs` 把 `regions.json` 的 `actions`（id/label/event/followUpEvent/followUpMs/says）和 `gestures[].says` 一起嵌入 `ANIMS[character]`，并纳入 `source-sha256` 与 `--check` 过期检测；改数据后重跑 `npm run embed:anims` 即可。
-- 事件 → clip 映射仍手写在 `client.js` 的 `EVENT_CLIPS`（`pat`→`pat_head`、`ball_throw`→`ball_throw`、`ball_chase`→`ball_chase`、`paw_face`→`paw_face`、`run`→`run`；`feed` 复用 stand/wave clip；`talk` 只出气泡、保持 idle）。`scripts/verify-anims.mjs` 会校验映射完整、猫/人没有球类动作、金毛丢球→追球 follow-up，以及每个动作/区域至少 2 条随机回话。
+- 事件 → clip 映射不再手写：`scripts/gen-content-constants.mjs` 从 famling 的 `public/characters/*/{regions,behavior}.json` + `public/assets/pet/anim/*/manifest.json` 生成 `client.js` 的 `EVENT_CLIPS` 块（`pat`→`pat_head`、`ball_throw`→`ball_throw`、`ball_chase`→`ball_chase`、`paw_face`→`paw_face`、`run`→`run`；`feed` 复用 stand/wave clip；`talk` 只出气泡、保持 idle）；`npm run check:content` 对生成块做过期检测，`scripts/verify-anims.mjs` 继续校验映射完整、猫/人没有球类动作、金毛丢球→追球 follow-up，以及每个动作/区域至少 2 条随机回话。
+- 单源与检查链（MB-107）：`public/content/library.json` 的角色/对话/外观/用途/合规常量同样由 `gen-content-constants.mjs` 生成到 `client.js` 的 `@generated` 块（声明差异 D1–D4 见 `docs/CONTENT-CONSTANTS-2026-11-20.md`）；`npm run check`（ANIMS + content 双生成块）、`npm run lint`（JSDoc/lint 最小链）与 `npm run typecheck`（checkJs，缺 TypeScript 时诚实 skip）已纳入 `release:check`。
 - 随机回话使用“避开上一句”的选择器：同一区域/同一动作连续点击不会返回同一句；气泡文案、TTS 与 thought 策略沿用 0.8.2。
 
 ## 帧时长与 holdMs 播放（0.8.4）

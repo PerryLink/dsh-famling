@@ -192,7 +192,9 @@ test('client code hit-tests regions at the rendered size, only reacts while idle
 test('the interaction menu renders the embedded current-character actions', () => {
   assert.ok(clientSource.includes('ANIMS[character]?.actions'), 'action panel reads ANIMS[character].actions')
   assert.ok(clientSource.includes('action.followUpEvent'), 'action buttons schedule follow-up events')
-  assert.ok(clientSource.includes('const EVENT_CLIPS = {'), 'hand-written event -> clip table exists')
+  assert.ok(clientSource.includes('const EVENT_CLIPS = {'), 'event -> clip table exists')
+  assert.ok(clientSource.includes('// <dsh-famling:event-clips:begin>'), 'EVENT_CLIPS lives in the generated event-clips block (MB-107)')
+  assert.equal(clientSource.includes('Hand-written event -> clip table'), false, 'EVENT_CLIPS is generated, not hand-written')
 })
 
 test('client code enforces the TTS policy guard, persists the character and keeps the white bubble', () => {

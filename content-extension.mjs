@@ -111,6 +111,7 @@ export const DIALOGUE_MODE_IDS = ['standard', 'brief', 'quiet']
 export const THEME_IDS = ['default', 'paper', 'night']
 /** Built-in character/role bundle ids; origami is reserved until its art pack lands. */
 export const CHARACTER_IDS = ['human', 'cat', 'dog', 'origami']
+/** Role bundle ids exposed by the v3 contract (origami is reserved data). */
 export const ROLE_BUNDLE_IDS = ['human', 'cat', 'dog', 'origami']
 /** Asset-pack container formats reserved by v3; they are never opened here. */
 export const ASSET_FORMATS = ['zip', 'folder']
@@ -127,6 +128,7 @@ export const PROHIBITED_USES = Object.freeze([
   'impersonation',
   'illegal-use',
 ])
+/** Minimal declaration shape every v3 pack must provide (research-only + six tokens). */
 export const USAGE_DECLARATION_TEMPLATE = Object.freeze({
   researchOnly: true,
   prohibitedUses: PROHIBITED_USES,
@@ -143,7 +145,9 @@ export const USAGE_DECLARATION_TEMPLATE = Object.freeze({
  */
 export const CONTENT_USAGE_STATEMENT =
   '本项目及其全部代码、美术、音频、文案、角色素材和衍生物仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、心理治疗/医疗/法律/金融建议、未成年人亲密关系、冒充真人/官方，或任何违反法律法规/平台规则的用途。'
+/** Repository-relative canonical legal anchor for the shared usage statement. */
 export const CONTENT_USAGE_STATEMENT_REF = 'docs/legal/USE-RESTRICTIONS-2026-11-19.md'
+/** SHA-256 of CONTENT_USAGE_STATEMENT (hex, recomputed by the parity tests). */
 export const CONTENT_USAGE_STATEMENT_SHA256 = '0353536cefd702014b12a8365c4a486f19848d049652e9692027216adb80c743'
 
 /**
@@ -156,6 +160,7 @@ export const CONTENT_LICENSE_TEMPLATE = Object.freeze({
   spdx: 'LicenseRef-PolyForm-Noncommercial-1.0.0',
   attribution: 'Famling maintainers; placeholder art under LICENSE-ART (CC BY-NC-SA 4.0)',
 })
+/** First-party AI provenance anchor (deterministic placeholder art, no generative AI). */
 export const CONTENT_AI_PROVENANCE_TEMPLATE = Object.freeze({
   generated: false,
   disclosure: '内置占位像素帧由确定性脚本生成，未使用生成式 AI；最终美术替换后须更新本声明。',
@@ -172,6 +177,7 @@ export const CONTENT_PERMISSIONS = {
   background: 'apply:background',
   font: 'apply:font',
 }
+/** Closed permission-token set accepted for packs/entries (schema-level allowlist). */
 export const CONTENT_ENTRY_PERMISSIONS = [
   'apply:role',
   'select:character',
@@ -426,7 +432,11 @@ function isBoundedText(value, max) {
   return typeof value === 'string' && value.length > 0 && value.length <= max && !BAD_TEXT_RE.test(value)
 }
 
-/** Relative image path: no traversal, no scheme, bounded segments/extension. */
+/**
+ * Relative image path: no traversal, no scheme, bounded segments/extension. 
+ * @param {unknown} value Candidate preview path from a pack.
+ * @returns {boolean} True when safe to store/display as a relative image path.
+ */
 export function isSafeContentPath(value) {
   if (typeof value !== 'string' || value.length === 0 || value.length > CONTENT_LIMITS.maxPathChars) return false
   if (!PATH_RE.test(value) || value.startsWith('/') || value.includes('..') || value.includes('\\') || value.includes(':')) return false
@@ -434,7 +444,11 @@ export function isSafeContentPath(value) {
   return IMAGE_EXTENSIONS.some((extension) => value.toLowerCase().endsWith(extension))
 }
 
-/** Relative asset-pack path: data only, broader than an image preview. */
+/**
+ * Relative asset-pack path: data only, broader than an image preview.
+ * @param {unknown} value Candidate asset path from a pack.
+ * @returns {boolean} True when safe as a data-only relative path.
+ */
 export function isSafeAssetPath(value) {
   if (typeof value !== 'string' || value.length === 0 || value.length > CONTENT_LIMITS.maxAssetPathChars) return false
   if (!PATH_RE.test(value) || value.startsWith('/') || value.includes('..') || value.includes('\\') || value.includes(':')) return false
@@ -448,12 +462,18 @@ export function isSafeAssetPath(value) {
  * an asset file (bounded segments, file extension, no traversal/scheme/absolute
  * path). The file is listed as metadata only and is never opened by this
  * package.
+ * @param {unknown} value Candidate licence/NOTICE file path from a pack.
+ * @returns {boolean} True when the path follows the data-only asset policy.
  */
 export function isSafeLicenseFile(value) {
   return isSafeAssetPath(value)
 }
 
-/** Reserved remote-catalog URL: absolute https only, metadata only, never fetched. */
+/**
+ * Reserved remote-catalog URL: absolute https only, metadata only, never fetched.
+ * @param {unknown} value Candidate catalog URL from a pack.
+ * @returns {boolean} True when it is an absolute credential-free https URL.
+ */
 export function isSafeHttpsUrl(value) {
   if (typeof value !== 'string' || value.length < 9 || value.length > CONTENT_LIMITS.maxCatalogUrlChars || BAD_TEXT_RE.test(value)) return false
   if (!value.startsWith('https://')) return false
@@ -467,6 +487,8 @@ export function isSafeHttpsUrl(value) {
  * Local font stacks only: 1..8 comma-separated unquoted family names made of
  * letters/digits/spaces/dots/underscores/hyphens. No quotes, url(), var(),
  * braces, semicolons or @ rules, so a pack cannot inject CSS declarations.
+ * @param {unknown} value Candidate local font stack from a pack.
+ * @returns {boolean} True when the stack is a bounded local-family list.
  */
 export function isSafeFontStack(value) {
   if (typeof value !== 'string' || value.length === 0 || value.length > 200) return false

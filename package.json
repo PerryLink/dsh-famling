@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node scripts/embed-anims.mjs --check",
+    "check": "node scripts/embed-anims.mjs --check && node scripts/gen-content-constants.mjs --check",
     "verify": "node scripts/verify-anims.mjs",
+    "gen:content": "node scripts/gen-content-constants.mjs",
+    "check:content": "node scripts/gen-content-constants.mjs --check",
+    "lint": "node scripts/check-jsdoc.mjs",
+    "typecheck": "node scripts/typecheck.mjs",
     "embed:anims": "node scripts/embed-anims.mjs",
     "check:anims": "node scripts/embed-anims.mjs --check",
     "verify:anims": "node scripts/verify-anims.mjs",
@@ -14,7 +18,7 @@
     "qa:anims": "node scripts/embed-anims.mjs --qa",
     "check:package": "node scripts/check-package.mjs",
     "verify:package": "node scripts/check-package.mjs --pack",
-    "release:check": "npm test && npm run check && npm run verify && npm run verify:package",
+    "release:check": "npm test && npm run check && npm run verify && npm run verify:package && npm run lint && npm run typecheck",
     "prepack": "node scripts/check-package.mjs --prepack"
   },
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations with a minimal zero-button UI, a right-click / Shift+F10 hierarchical menu, region-aware interactions, chat personas, a role-as-theme content center (roles / customize / packs / market), a unified settings popup with low-disturb controls (quiet hours / reduce-motion / temporary hide), and a reserved v3 third-party content-pack contract with a mandatory research-only usage declaration.",

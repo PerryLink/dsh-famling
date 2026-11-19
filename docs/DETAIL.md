@@ -33,6 +33,7 @@
 - 菜单按钮：开启后角色旁出现小的「⋯」触发器（`aria-label` 为「菜单」）；偏好持久化到 `dsh-famling/menu`（`{ button: boolean }`），菜单展开状态与子页不持久化，每次打开都从一级开始。
 - 气泡：默认白底 #ffffff / 深色 #111111 字 / 灰色实线或虚线边框（内容中心可切 paper / night 主题）；汀岚实心 speech（可用 TTS），猫/狗空心 thought（永不 TTS）；每次点击从对应 says 随机取一句，不遮挡人物。
 - 动画数据与点击区域数据由 `scripts/embed-anims.mjs` 生成，勿手改 `client.js` 生成块；`scripts/verify-anims.mjs` + `scripts/qa/index.html` 可脱离 DSH 校验/预览。
+- 共享内容常量（角色/对话/外观/用途/合规）与 `EVENT_CLIPS`/`MICRO_LINES` 由 `scripts/gen-content-constants.mjs` 从 famling 单源生成（MB-107，勿手改；说明见 `docs/CONTENT-CONSTANTS-2026-11-20.md`）；`npm run check`（动画 + 内容双生成块）、`npm run lint`（JSDoc/lint 最小链）、`npm run typecheck`（checkJs，缺 TypeScript 时诚实 skip）已纳入 `release:check`。
 
 ## 四层缩放（0.10.4，MB-053）
 

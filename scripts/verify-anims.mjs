@@ -259,12 +259,20 @@ function extractConstBlock(source, beginMarker, endMarker) {
 }
 
 /**
+ * A chunk registration captured from the browser module loader stub.
+ * @typedef {{ id?: string, chunk?: string, factory?: (...args: any[]) => any }} ChunkRegistration
+ */
+
+/**
  * Evaluate one generated lazy chunk from disk and return its registration plus
  * factory exports. The chunk is a browser script that only calls
  * window.__ModuleLoader__.load, so a stub window is enough here.
+ * @param {string} filePath Absolute chunk path.
+ * @returns {{ registration: ChunkRegistration, exports: any }} Captured registration and factory exports.
  */
 export function loadChunkModule(filePath) {
   const code = readFileSync(filePath, 'utf8')
+  /** @type {ChunkRegistration | null} */
   let registration = null
   const sandbox = { window: { __ModuleLoader__: { load(value) { registration = value } } } }
   sandbox.globalThis = sandbox
