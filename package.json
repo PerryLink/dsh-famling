@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "private": false,
   "type": "module",
   "scripts": {
@@ -13,7 +13,7 @@
     "measure:bundle": "node scripts/measure-bundle.mjs",
     "qa:anims": "node scripts/embed-anims.mjs --qa"
   },
-  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations with a minimal zero-button UI and a right-click / Shift+F10 hierarchical menu, region-aware interactions, chat personas, a role-as-theme content center (roles / customize / packs / market), a unified settings popup, and a reserved v3 third-party content-pack contract with a mandatory research-only usage declaration.",
+  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations with a minimal zero-button UI, a right-click / Shift+F10 hierarchical menu, region-aware interactions, chat personas, a role-as-theme content center (roles / customize / packs / market), a unified settings popup with low-disturb controls (quiet hours / reduce-motion / temporary hide), and a reserved v3 third-party content-pack contract with a mandatory research-only usage declaration.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": "./index.js",

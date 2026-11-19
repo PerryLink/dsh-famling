@@ -16,7 +16,7 @@ const clientData = loadClientData(clientSource)
 
 // Release pin: bump together with package.json (test/version-truth.test.js keeps
 // every public version surface in sync with package.json).
-const EXPECTED_VERSION = '0.10.5'
+const EXPECTED_VERSION = '0.10.6'
 
 // Frame counts come from the private manifests: dog/human 68 each, cat 72
 // (10-frame stand_wag). Total 208 embedded frames; never assume 12x68/204.
@@ -336,13 +336,21 @@ test('lazy panel chunk exposes the four-tab content center and the unified setti
   assert.ok(contentSource.includes('function createContentCenter('), 'content chunk exposes the content center factory')
   assert.ok(contentSource.includes('function createSettingsPanel('), 'content chunk exposes the unified settings factory')
   assert.ok(contentSource.includes('createContentCenter, createSettingsPanel'), 'both popups are exported from the lazy chunk')
+  for (const factory of ['createInputPanel', 'createConsentDialog', 'createNoticePanel']) {
+    assert.ok(contentSource.includes('function ' + factory + '('), factory + ' lives in the lazy chunk')
+    assert.ok(clientSource.includes('panelChunk.' + factory + '('), 'client.js renders ' + factory + ' through the lazy chunk')
+  }
   assert.ok(clientSource.includes('panelChunk.createContentCenter('), 'client.js renders the content center through the lazy chunk')
   assert.ok(clientSource.includes('panelChunk.createSettingsPanel('), 'client.js renders settings through the lazy chunk')
   for (const label of ['一键应用', '仅修改当前角色的搭配', '恢复角色默认', '资产包', '远程市场接口已预留', 'researchOnly=true']) assert.ok(contentSource.includes(label), 'content chunk keeps: ' + label)
   for (const tab of ["roles: '角色'", "custom: '自定义'", "packs: '内容包'", "market: '市场'"]) assert.ok(contentSource.includes(tab), 'four first-level tabs: ' + tab)
   // Unified settings popup: every adjustable item + folded advanced/debug.
   for (const label of ["settingsTitle: '设置'", "showMenuButton: '显示菜单按钮'", "menuButtonHint:", "advancedGroup: '高级 / 调试'", "motion: '帧动画'", "bubble: '说话气泡'", "memoryGroup: 'Advisers'", "contentEntry: '内容与角色…'"]) assert.ok(contentSource.includes(label), 'settings labels: ' + label)
-  for (const toggle of ["toggle('motion'", "toggle('bubble'", "toggle('menu-button'", "toggle('sound'"]) assert.ok(contentSource.includes(toggle), 'settings toggle: ' + toggle)
+  for (const toggle of ["toggle('quiet'", "toggle('bubble'", "toggle('menu-button'", "toggle('sound'"]) assert.ok(contentSource.includes(toggle), 'settings toggle: ' + toggle)
+  for (const label of ["lowDisturbGroup: '低打扰'", "quietHours: '安静时段'", "motionAuto: '跟随系统'", "motionOn: '允许动画'", "motionOff: '减少动态'", "hideHour: '隐藏 1 小时'", "hideTomorrow: '隐藏到明天'", "prefers-reduced-motion", "type: 'time'"]) assert.ok(contentSource.includes(label), 'low-disturb settings: ' + label)
+  for (const entryGate of ["const HIDDEN_KEY = 'dsh-famling/hidden-until'", 'function isQuietHoursActive(', 'function resolveMotionPreference(', '60000 + Math.random() * 30000']) assert.ok(clientSource.includes(entryGate), 'low-disturb entry logic: ' + entryGate)
+  assert.equal(clientSource.includes("h('textarea'"), false, 'input panel markup moved to the lazy chunk (entry budget)')
+  assert.equal(clientSource.includes("h('input', { key: 'at', type: 'datetime-local'"), false, 'reminder form markup moved to the lazy chunk')
   assert.ok(contentSource.includes("'aria-expanded': Boolean(advancedOpen)"), 'advanced/debug group folds behind a toggle')
   assert.ok(contentSource.includes('setChoice') || contentSource.includes('choice('), 'appearance choices reuse the shared control helper')
   assert.ok(clientSource.includes("advancedOpen: settingsAdvanced"), 'collapsed state is owned by client.js (stable hook order)')
@@ -425,7 +433,7 @@ test('role bundles persist every component in the existing keys and record dsh-f
   assert.ok(clientSource.includes('requestCharacterChunk(character'), 'character sprite chunks stay lazy')
   assert.ok(clientSource.includes('canTts && settings.sound && ttsConsent'), 'TTS guard tied to character policy')
   assert.ok(clientSource.includes("source === 'ambient' && dialogue.bubbleChance < 1"), 'shared bubble probability gates automatic/ambient lines only')
-  assert.ok(clientSource.includes("source === 'ambient' && dialogueMode === 'quiet'"), 'quiet mode suppresses ambient lines (shared dialoguePack semantics)')
+  assert.ok(clientSource.includes("source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours))"), 'quiet mode and quiet hours suppress ambient lines only (shared dialoguePack semantics)')
   assert.ok(clientSource.includes("say(line, 'speech', 'interactive')"), 'explicit taps/actions are not chance-gated (shared "explicit interaction bubbles still show")')
   assert.ok(clientSource.includes("line.slice(0, dialogue.maxChars - 1)"), 'brief mode filters over-long replies')
   assert.ok(clientSource.includes('utterance.voice = voice'), 'the selected browser voice is applied to speech')

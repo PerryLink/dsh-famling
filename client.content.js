@@ -43,10 +43,26 @@ window.__ModuleLoader__.load({
         scaleComponentsHint: '组件缩放比「整体缩放」更下一级：默认继承 UI + 文本；只覆盖需要单独调整的组件，可随时恢复继承。',
         scaleInherit: '继承（跟随 UI + 文本）', scaleActual: '实际 ',
         commonGroup: '常用', appearanceGroup: '外观', roleGroup: '角色与内容', memoryGroup: 'Advisers',
+        lowDisturbGroup: '低打扰',
+        quietHours: '安静时段',
+        quietEnabled: '开启安静时段（暂停自动气泡与自动微动作）',
+        quietHint: '安静时段内不产生自动气泡/微动作；点击、菜单互动与聊天回复仍可用。',
+        quietStart: '开始', quietEnd: '结束',
+        quietNow: '当前在安静时段内', quietOutside: '当前不在安静时段', quietOff: '已关闭',
+        motionPref: '动画偏好', motionAuto: '跟随系统', motionOn: '允许动画', motionOff: '减少动态',
+        motionHint: '默认跟随系统 prefers-reduced-motion；也可显式允许或减少动画。',
+        motionSystemReduce: '系统已请求减少动态', motionSystemAllow: '系统未请求减少动态',
+        hide: '暂时隐藏', hideHour: '隐藏 1 小时', hideTomorrow: '隐藏到明天',
+        hideHint: '隐藏期间不显示角色与气泡；可点「显示」提前恢复，或到时间自动恢复。',
+        consentAsr: '语音输入前需独立确认：浏览器语音识别可能把音频发送给浏览器厂商；仅在你点击麦克风后录音，可随时关闭。',
+        allow: '同意并开启', cancel: '暂不开启',
+        sound: '语音朗读', mic: '语音输入',
+        notice: '使用限制与版本',
+        useRestrictions: '⚠️ 使用限制：本项目及全部代码、美术、音频、文案、角色素材仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、医疗/心理/法律/金融建议或任何违规用途。',
         memory: '读取 Advisers 摘要',
         motion: '帧动画', bubble: '说话气泡', showMenuButton: '显示菜单按钮',
         menuButtonHint: '默认关闭：右键角色或按 Shift+F10 / ContextMenu 打开菜单；开启后角色旁出现「⋯」。',
-        advancedGroup: '高级 / 调试', version: 'dsh-famling 0.10.5 · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
+        advancedGroup: '高级 / 调试', version: 'dsh-famling 0.10.6 · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
         dataGroup: '数据与边界', chat: 'AI 聊天（发送给模型供应商）',
         chatHint: '默认开启：聊天文本经 DSH Host 发送给 DSH 中配置的模型供应商；关闭后不发送任何聊天文本（提醒仍可用）。',
         boundaryHint: '本插件只运行在 DSH 内：模型、Key、会话与供应商数据由 DSH 和你配置的供应商管理；插件不保存聊天记录。',
@@ -102,10 +118,26 @@ window.__ModuleLoader__.load({
         scaleComponentsHint: 'One level below the overall scale: every component inherits UI + text by default; override only what you need and restore inheritance at any time.',
         scaleInherit: 'Inherit (follow UI + text)', scaleActual: 'actual ',
         commonGroup: 'Common', appearanceGroup: 'Appearance', roleGroup: 'Role & content', memoryGroup: 'Advisers',
+        lowDisturbGroup: 'Low disturbance',
+        quietHours: 'Quiet hours',
+        quietEnabled: 'Enable quiet hours (pause automatic bubbles and micro actions)',
+        quietHint: 'During quiet hours no automatic bubbles or micro actions appear; taps, menu actions and chat replies still work.',
+        quietStart: 'Start', quietEnd: 'End',
+        quietNow: 'currently inside quiet hours', quietOutside: 'currently outside quiet hours', quietOff: 'off',
+        motionPref: 'Animation preference', motionAuto: 'Follow system', motionOn: 'Allow animation', motionOff: 'Reduce motion',
+        motionHint: 'Defaults to the system prefers-reduced-motion setting; you can also allow or reduce motion explicitly.',
+        motionSystemReduce: 'the system requests reduced motion', motionSystemAllow: 'the system does not request reduced motion',
+        hide: 'Hide temporarily', hideHour: 'Hide for 1 hour', hideTomorrow: 'Hide until tomorrow',
+        hideHint: 'While hidden the character and bubbles are not shown; click "Show" to restore early or wait for the deadline.',
+        consentAsr: 'Voice input needs separate confirmation: browser speech recognition may send audio to the browser vendor; the microphone starts only after your click and can be switched off.',
+        allow: 'Agree and enable', cancel: 'Not now',
+        sound: 'Voice', mic: 'Voice input',
+        notice: 'Usage & version',
+        useRestrictions: '⚠️ Use restriction: this project and all code, art, audio, text and character assets are for technical research and prototype validation only. Do not use them for emotional companionship, virtual partners, medical/psychological/legal/financial advice, or any unlawful purpose.',
         memory: 'Read Advisers summary',
         motion: 'Frame animation', bubble: 'Speech bubble', showMenuButton: 'Show menu button',
         menuButtonHint: 'Off by default: right-click the pet or press Shift+F10 / ContextMenu; when on, a "⋯" appears next to the pet.',
-        advancedGroup: 'Advanced / debug', version: 'dsh-famling 0.10.5 · research prototype', debug: 'State', storageKeys: 'Local keys',
+        advancedGroup: 'Advanced / debug', version: 'dsh-famling 0.10.6 · research prototype', debug: 'State', storageKeys: 'Local keys',
         dataGroup: 'Data & boundaries', chat: 'AI chat (sends to the model provider)',
         chatHint: 'On by default: chat text goes through the DSH Host to the model provider configured in DSH; when off no chat text is sent (reminders still work).',
         boundaryHint: 'This plugin only runs inside DSH: model, key, session and provider data are managed by DSH and your provider; the plugin stores no chat history.',
@@ -381,6 +413,8 @@ window.__ModuleLoader__.load({
         aiNotice, useRestrictions, onToggleAdvanced, updateSetting,
         localDataCleared, onToggleChat, onClearLocalData,
         setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
+        quietHours, quietActive, onToggleQuiet, onQuietTime,
+        motionMode, motionSystem, motionOn, onMotionMode, onHideFor,
         onToggleSound, onToggleMenuButton, onLoadBrief, onHideBrief, onOpenContent, onRestoreRole,
         scaleSettings, resolvedScales,
         onGlobalScale, onUiTextScale, onImageScale, onComponentScale, onResetScales, scaleCatalog,
@@ -391,7 +425,7 @@ window.__ModuleLoader__.load({
       const role = ROLE_BUNDLES[roleId] || ROLE_BUNDLES.human
       const roleName = (T.characters || {})[role.character] || role.character
       const counts = (brief && brief.counts) || { today: 0, commitments: 0 }
-      const storageKeys = ['dsh-famling/first-run/v1', 'dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/consent/v1'].concat(scaleCatalog ? scaleCatalog.storageKeys : [])
+      const storageKeys = ['dsh-famling/first-run/v1', 'dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/hidden-until', 'dsh-famling/consent/v1'].concat(scaleCatalog ? scaleCatalog.storageKeys : [])
       const box = panelBox || { zoom: 1, width: 310, maxHeight: 680 }
       const scale = scaleCatalog || null
       const percent = (value) => Math.round(value * 100) + '%'
@@ -439,7 +473,6 @@ window.__ModuleLoader__.load({
       ] : []
       const common = section(T, T.commonGroup, 'common', [
         ...scaleRows,
-        toggle('motion', T.motion, null, settings.motion, () => updateSetting('motion')),
         toggle('bubble', T.bubble, null, settings.bubble, () => updateSetting('bubble')),
         toggle('menu-button', T.showMenuButton, T.menuButtonHint, menuButton, onToggleMenuButton),
       ])
@@ -454,6 +487,34 @@ window.__ModuleLoader__.load({
           h('button', { key: 'follow', type: 'button', disabled: follows(scaleSettings.image), 'aria-label': T.scaleImage + ' ' + T.scaleFollow, onClick: () => onImageScale(1), style: { ...buttonBase, padding: '2px 7px', fontSize: 11 } }, T.scaleFollow),
         ]),
       ]) : null
+
+      // Low disturbance (0.10.6, E7/P-04): quiet hours, animation preference and
+      // temporary hide. The runtime semantics live in client.js; this is UI only.
+      const timeInputStyle = { background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 2, font: 'inherit' }
+      const lowDisturb = section(T, T.lowDisturbGroup, 'low-disturb', [
+        toggle('quiet', T.quietEnabled, T.quietHint, quietHours.enabled, onToggleQuiet),
+        h('div', { key: 'quiet-time', style: { display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 5 } }, [
+          h('span', { key: 'label', style: { ...captionStyle(), flex: 'none' } }, T.quietHours),
+          h('input', { key: 'start', type: 'time', value: quietHours.start, 'aria-label': T.quietHours + ' ' + T.quietStart, onChange: (event) => onQuietTime('start', event.target.value), style: timeInputStyle }),
+          h('span', { key: 'dash', 'aria-hidden': true }, '–'),
+          h('input', { key: 'end', type: 'time', value: quietHours.end, 'aria-label': T.quietHours + ' ' + T.quietEnd, onChange: (event) => onQuietTime('end', event.target.value), style: timeInputStyle }),
+        ]),
+        h('p', { key: 'quiet-status', role: 'status', style: { margin: '4px 0 0', ...captionStyle() } }, T.quietHours + '：' + (quietHours.enabled ? (quietActive ? T.quietNow : T.quietOutside) : T.quietOff) + '（' + quietHours.start + '–' + quietHours.end + '）'),
+        h('div', { key: 'motion', style: { marginTop: 7 } }, [
+          h('span', { key: 'label', style: { display: 'block', marginBottom: 3 } }, T.motionPref),
+          h('div', { key: 'choices', style: { display: 'flex', gap: 5, flexWrap: 'wrap' } }, [
+            choice('motion-auto', motionMode === 'auto', T.motionAuto, T.motionPref + ' · ' + T.motionAuto, () => onMotionMode('auto')),
+            choice('motion-on', motionMode === 'on', T.motionOn, T.motionPref + ' · ' + T.motionOn, () => onMotionMode('on')),
+            choice('motion-off', motionMode === 'off', T.motionOff, T.motionPref + ' · ' + T.motionOff, () => onMotionMode('off')),
+          ]),
+          h('p', { key: 'motion-hint', style: { margin: '4px 0 0', ...captionStyle() } }, T.motionHint + ' ' + (motionSystem ? T.motionSystemReduce : T.motionSystemAllow) + '；' + T.motionPref + '：' + (motionOn ? T.motionOn : T.motionOff) + '。'),
+        ]),
+        h('div', { key: 'hide', style: { display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' } }, [
+          h('button', { key: 'hour', type: 'button', onClick: () => onHideFor('hour'), style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.hideHour),
+          h('button', { key: 'tomorrow', type: 'button', onClick: () => onHideFor('tomorrow'), style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.hideTomorrow),
+        ]),
+        h('p', { key: 'hide-hint', style: { margin: '4px 0 0', ...captionStyle() } }, T.hideHint),
+      ])
       // MB-021/022/024: sending destination, crisis resources, the DSH boundary,
       // the chat kill switch and clear-local-data/consent-withdrawal live here.
       // Clearing touches only this plugin's own dsh-famling/* keys; the DSH host,
@@ -546,9 +607,94 @@ window.__ModuleLoader__.load({
           h('button', { key: 'x', type: 'button', onClick: onClose, 'aria-label': T.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
         ]),
         h('p', { key: 'hint', style: { margin: '0 0 6px', ...captionStyle() } }, T.settingsHint),
-        h('p', { key: 'use', role: 'note', style: { margin: '0 0 6px', padding: '7px 8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.45 } }, useRestrictions || ''),
-        common, independent, data, voice, memory, appearance, roleGroup, advanced,
+        h('p', { key: 'use', role: 'note', style: { margin: '0 0 6px', padding: '7px 8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.45 } }, useRestrictions || T.useRestrictions),
+        common, independent, lowDisturb, data, voice, memory, appearance, roleGroup, advanced,
         h('p', { key: 'ai', style: { margin: '8px 0 0', ...captionStyle() } }, aiNotice || ''),
+      ])
+    }
+
+    /**
+     * Chat / reminder input panel. Moved out of client.js in 0.10.6 so the
+     * first-screen entry stays inside its 96 KiB budget: it is only needed after
+     * the user opens the menu, while the state and bridge calls stay in client.js
+     * and arrive as props.
+     */
+    function createInputPanel(props) {
+      const { strings: S, charName, input, onInput, inputRef, settings, listening, taskMode, taskAt, onTaskAt, taskText, onTaskText, onToggleTask, onSend, onCreateTask, onStartVoice, onClose, buttonBase, style } = props
+      const fillPet = (text) => String(text == null ? '' : text).replaceAll('{pet}', charName || '')
+      const fieldStyle = { background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 6, font: 'inherit' }
+      return h('div', { role: 'dialog', 'aria-label': fillPet(S.inputTitle), style }, [
+        h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } }, [
+          h('strong', { key: 't', style: { flex: 1 } }, fillPet(S.inputTitle)),
+          h('button', { key: 'x', type: 'button', onClick: onClose, 'aria-label': S.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
+        ]),
+        h('div', { key: 'row', style: { display: 'flex', gap: 6, alignItems: 'stretch' } }, [
+          h('textarea', {
+            key: 'text', ref: inputRef, value: input, rows: 3, placeholder: fillPet(S.placeholder),
+            onChange: (event) => onInput(event.target.value),
+            onKeyDown: (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); onSend() } },
+            style: { flex: 1, resize: 'vertical', minHeight: 64, background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 7, padding: 8, font: 'inherit' },
+          }),
+          h('div', { key: 'side', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+            h('button', { key: 'mic', type: 'button', title: S.mic, 'aria-label': S.mic, onClick: onStartVoice, style: { ...buttonBase, padding: '8px 7px' } }, listening ? '…' : '🎙'),
+            h('button', { key: 'send', type: 'button', onClick: onSend, disabled: settings.chat === false, style: { ...buttonBase, padding: '8px 7px', opacity: settings.chat === false ? 0.5 : 1 } }, S.send),
+          ]),
+        ]),
+        h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, S.aiNotice),
+        settings.chat === false ? h('p', { key: 'chat-off', style: { margin: 0, fontSize: 11, color: '#a63d35' } }, S.chatOff) : null,
+        h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, [
+          h('button', { key: 'toggle', type: 'button', onClick: onToggleTask, style: { ...buttonBase, padding: '4px 7px' } }, S.task),
+          taskMode ? h('div', { key: 'form', style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 } }, [
+            h('input', { key: 'at', type: 'datetime-local', value: taskAt, onChange: (event) => onTaskAt(event.target.value), 'aria-label': S.taskAt, style: fieldStyle }),
+            h('textarea', { key: 'text', value: taskText, rows: 2, placeholder: S.task, onChange: (event) => onTaskText(event.target.value), style: { ...fieldStyle, resize: 'vertical' } }),
+            h('button', { key: 'create', type: 'button', onClick: onCreateTask, style: { ...buttonBase, padding: '5px 7px' } }, S.createTask),
+          ]) : null,
+        ]),
+      ])
+    }
+
+    /**
+     * TTS / ASR consent dialog: the independent-confirmation gate. Moved to the
+     * lazy chunk in 0.10.6; every trigger path already has the chunk resident.
+     */
+    function createConsentDialog(props) {
+      const { lang, kind, onAllow, onCancel, panelStyle, viewport, zoom, buttonBase } = props
+      const T = STRINGS[lang] || STRINGS.zh
+      const consentZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+      const width = Math.max(140, Math.min(300, Math.floor(((viewport && viewport.width) || 1024) - 24) / consentZoom))
+      const maxHeight = Math.max(120, Math.floor(((viewport && viewport.height) || 768) - 24) / consentZoom)
+      return h('div', {
+        role: 'dialog', 'aria-modal': true, 'aria-label': kind === 'tts' ? T.sound : T.mic,
+        style: {
+          position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(' + consentZoom + ')', transformOrigin: 'center', zIndex: 1400,
+          width, maxWidth: width, maxHeight, overflowY: 'auto', padding: 14,
+          background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
+          color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, #e8e8e8))',
+          border: '1px dashed var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, rgba(255,255,255,.35)))',
+          borderRadius: 'var(--dsw-radius-md, 10px)',
+          boxShadow: '0 12px 36px rgba(0,0,0,.4)', fontSize: 12, lineHeight: 1.55,
+        },
+      }, [
+        h('strong', { key: 't', style: { display: 'block', marginBottom: 8 } }, kind === 'tts' ? T.sound : T.mic),
+        h('p', { key: 'text', style: { margin: '0 0 10px' } }, kind === 'tts' ? T.consentTts : T.consentAsr),
+        h('div', { key: 'actions', style: { display: 'flex', gap: 6, justifyContent: 'flex-end' } }, [
+          h('button', { key: 'cancel', type: 'button', onClick: onCancel, style: { ...buttonBase, padding: '5px 8px' } }, T.cancel),
+          h('button', { key: 'allow', type: 'button', onClick: onAllow, style: { ...buttonBase, padding: '5px 8px' } }, T.allow),
+        ]),
+      ])
+    }
+
+    /** "More -> usage & version" notice; also lazy so the entry carries no legal copy. */
+    function createNoticePanel(props) {
+      const { lang, onClose, buttonBase, style } = props
+      const T = STRINGS[lang] || STRINGS.zh
+      return h('div', { role: 'dialog', 'aria-label': T.notice, style }, [
+        h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } }, [
+          h('strong', { key: 't', style: { flex: 1 } }, T.notice),
+          h('button', { key: 'x', type: 'button', onClick: onClose, 'aria-label': T.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
+        ]),
+        h('p', { key: 'version', style: { margin: '0 0 7px', fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, T.version),
+        h('p', { key: 'use', role: 'note', style: { margin: 0, padding: '8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.5 } }, T.useRestrictions),
       ])
     }
 
@@ -571,6 +717,6 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    return { createContentCenter, createSettingsPanel, createFirstRunNotice }
+    return { createContentCenter, createSettingsPanel, createFirstRunNotice, createInputPanel, createConsentDialog, createNoticePanel }
   },
 })

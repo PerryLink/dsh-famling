@@ -1,11 +1,11 @@
 # Famling · 汀岚
 
-在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；版本/README/LEGAL/locale/package 真值由测试统一校验。
+在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；版本/README/LEGAL/locale/package 真值由测试统一校验。
 
 - 显示 72px 像素桌宠：汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛，台词、动作与聊天人格随形象变化。
 - 动画：每角色 12 clip，帧数按 manifest（dog 68 / cat 72 / human 68，共 208 帧；clip：idle 循环、idle_blink 眨眼、pat_head、ball_throw、ball_chase、paw_face、scratch、stand_wag、chase_tail、walk、run、attack），随机微动作只取本形象的 clip。
-- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.4 实测：入口 **93.2 KiB**（gzip 25.8 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.3%）、首帧约 155.0 KiB、全量约 340.6 KiB；chunk sha256 进入 embed/verify 门禁。
-- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容）：`client.content.js` 是包内懒加载 chunk（47.6 KiB，gzip 13.6 KiB），只在首次安装显示首启安全卡、或用户打开「内容与角色…」「设置…」弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
+- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.6 实测：入口 **94.9 KiB**（97,163 B，gzip 26.8 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.9%）、首帧约 156.6 KiB、全量约 342.2 KiB；chunk sha256 进入 embed/verify 门禁。
+- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（60.6 KiB，gzip 16.8 KiB），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
 - 帧时长（0.8.4）：每帧停留时间读 manifest `holdMs`（缺省 1000/fps），非循环 clip 播完后按 `durationMs`/hold 总和回到 idle；cat 伸懒腰 10 帧 / 3200ms 按 300/300/300/350/400/400/400/350/250/150 逐帧播放。
 - 点击区域（0.8.2）：点击人物头部/身体/尾巴分别触发 pat_head/stand_wag/chase_tail；区域来自与独立 famling 共用的 `regions.json`（96×96 逻辑画布 + idle gating），非 idle/idle_blink 状态或空白区域不动作，不回退随机动作。
 - 随机回话（0.8.3）：每条区域规则与每个互动动作都带 `says` 数组，命中时随机挑一条且连续两次不会重复；气泡文案全量来自共用 `regions.json`。
@@ -26,7 +26,7 @@
 - 右键角色 / Shift+F10 / ContextMenu 打开自绘分级菜单：一级 5 项 **聊两句… / 互动 ▸ / 内容与角色… / 设置… / 更多 ▸**；互动/更多是带「« 返回」的二级页面。菜单 `role="menu"` + `role="menuitem"`、`aria-activedescendant`、roving tabIndex；`position: fixed` 并按视口夹取（8px 边距）；方向键/Home/End/←→/Enter/Escape/Tab 全可用；菜单外点、窗口失焦关闭，关闭后焦点回到角色。
 - 聊两句…：文本框 + 语音输入；聊天请求带当前形象，Host 据此切换人格。面板常驻 AI 声明（含发送去向与危机求助 12356/110/120）；「AI 聊天」关闭后发送按钮禁用且不发请求；Host 侧危机关键词命中时本地短路返回固定资源、不调模型。
 - 互动 ▸：按当前形象渲染物种专属动作（数据来自 `regions.json` actions），点击后跑对应 clip + 随机回话（金毛丢球→追球）；点击人物按头/身/尾区域触发对应动作并从该区域 says 随机回话，空白区域不动作。
-- 设置…：统一设置弹窗——**四层缩放（0.10.4：常用「整体缩放」+ 独立轴「UI + 文本 / 图像」+ 高级折叠「组件缩放」）**、语音朗读（仅汀岚）、帧动画、说话气泡、**显示菜单按钮（默认关闭）**、**数据与边界（0.10.2：AI 聊天开关、发送去向、危机资源、DSH 边界、清除本机设置与同意）**、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口、恢复角色默认；底部「高级 / 调试」折叠组显示版本、当前状态与全部本地存储键。
+- 设置…：统一设置弹窗——**四层缩放（0.10.4：常用「整体缩放」+ 独立轴「UI + 文本 / 图像」+ 高级折叠「组件缩放」）**、**低打扰（0.10.6：安静时段 / 动画偏好 / 暂时隐藏）**、语音朗读（仅汀岚）、说话气泡、**显示菜单按钮（默认关闭）**、**数据与边界（0.10.2：AI 聊天开关、发送去向、危机资源、DSH 边界、清除本机设置与同意）**、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口、恢复角色默认；底部「高级 / 调试」折叠组显示版本、当前状态与全部本地存储键。
 - 首启安全卡（0.10.2）：未确认时显示一次性、非阻断、可关闭卡片（发送去向 + AI 声明 + 12356/110/120 危机资源），确认只写 `dsh-famling/first-run/v1`；卡片 UI 在懒加载 chunk，不占首屏预算。
 - 内容与角色…：角色=主题的内容中心弹窗（四个一级 tabs，见下节）；导入/市场都留在内容包/市场 tab 内，不占一级菜单。
 - 更多 ▸：提醒…（输入面板 + 提醒表单）、使用限制与版本…（弹窗）。
@@ -48,7 +48,25 @@
 - 生效值 = `global × axis` 后 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px）、组件 0.5×–2×。气泡宽度硬上限 240px 且左边界按视口夹取；菜单/面板用「布局尺寸 ÷ zoom + transform scale」在缩放后仍夹在视口内。
 - 持久化 `dsh-famling/scale/model` + `/global` + `/ui-text` + `/image` + `/component/<id>`；默认/跟随值不写轴键，恢复默认只写 `global=1` 与版本标记。旧绝对倍率 `dsh-famling/scale`（数字或 `{pet,text}` JSON）/ `dsh-famling/text-scale` 只在没有版本标记时一次性迁移（global=100%，等效值不变），旧键保留但失效；清除本机设置会删除全部 `dsh-famling/*` 缩放键。
 - 键盘 / ARIA：原生 range（方向键可用）+ `aria-label`/`aria-valuetext`；高级组 `aria-expanded`；组件下拉 `aria-label`；跟随时「跟随整体」`disabled`；设置弹窗 `role="dialog"`。
-- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无 fetch），`npm test` 合计 134 项。
+- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无 fetch），`npm test` 合计 164 项。
+
+## 低打扰：安静时段 / 动画偏好 / 暂时隐藏（0.10.6，E7 剩余 / P-04）
+
+与 famling 桌面壳 `src/pet/low-disturb.ts` + `src/pet/reduce-motion.ts` 的统一语义（C-11：安静 = 关闭自动/环境输出，交互回应仍可用；显式设置 > 系统偏好）：
+
+| 能力 | 默认 | 运行时语义 | 持久化 |
+|---|---|---|---|
+| 安静时段 | 开启，22:00–08:00 | 时段内自动环境气泡与随机微动作 = 0；用户点击/菜单动作/聊天/提醒回复**不受影响**。跨午夜按「开始 ≤ now 或 now < 结束」；`start === end` 或关闭开关 → 不静默。 | `dsh-famling/settings.quietHours = { enabled, start, end }` |
+| 动画偏好 | auto（跟随系统） | `auto` 挂载时读取 `prefers-reduced-motion: reduce`；`on` 强制帧动画/眨眼/微动作；`off` 冻结为首帧。旧 `motion` 布尔迁移：`false → off`、`true/缺失 → auto`。系统偏好运行中变化需重新加载（预算内不挂 change 监听）。 | `dsh-famling/settings.motionMode = auto / on / off` |
+| 自动微动作 | 60–90s | P-04：间隔由 0.10.5 的 11–20s 提高到 ≥60s；安静时段触发时重新计时、不播放。 | 运行时 |
+| 暂时隐藏 | 关闭 | 「更多」或设置内「隐藏 1 小时 / 隐藏到明天」；隐藏时只渲染一个 ≥24×24px 的「显示」恢复控件（`aria-label`），可提前恢复；`hidden-until` 过期/损坏视为未隐藏。 | `dsh-famling/hidden-until`（毫秒） |
+| 静音 | 关闭 | 只停 TTS：气泡字幕保留；正在朗读的 utterance 立即 cancel；猫/狗仍为 thought 且永不 TTS。 | `dsh-famling/settings.sound` |
+
+- 设置弹窗新增「低打扰」分组（`client.content.js` 的 `lowDisturbGroup`）：开关、两个 `input[type=time]`（非法/空值保留原值）、三选一动画偏好（`aria-pressed`）、状态行（当前是否在安静时段）与两个隐藏按钮；「更多」菜单与设置内隐藏入口指向同一实现。
+- 隐藏不是永久退出：`exit`（退出，刷新恢复）仍与隐藏分开；隐藏按截止时间自动恢复，且跨重载保持（`loadHiddenUntil` 只接受未来时间戳）。
+- 首屏预算：输入面板/同意弹窗/使用限制弹窗与低打扰 UI 文案全部在懒加载 `client.content.js`；`client.js` 只保留纯模型与接线。
+- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 164 项。
+
 
 ## 内容中心：角色就是主题（0.10.0）
 
@@ -79,7 +97,8 @@
 - `dsh-famling/role`：当前角色主题（primary）。
 - `dsh-famling/menu`（0.10.1）：`{ button: boolean }`，只记录「显示菜单按钮」开关；菜单展开/子页是临时状态。
 - `dsh-famling/character`：当前形象（human/cat/dog）。
-- `dsh-famling/settings`：sound / motion / bubble / voiceURI / **chat（0.10.2 AI 聊天开关，默认 true）**。
+- `dsh-famling/settings`：sound / **motionMode（0.10.6：auto/on/off，旧 motion 布尔迁移）** / **quietHours（0.10.6：{enabled,start,end}，默认 22:00–08:00 开启）** / bubble / voiceURI / **chat（0.10.2 AI 聊天开关，默认 true）**。
+- `dsh-famling/hidden-until`（0.10.6）：暂时隐藏截止的毫秒时间戳；过期/损坏视为未隐藏，清除本机设置时删除。
 - `dsh-famling/first-run/v1`（0.10.2）：首启安全卡确认标记（`"1"`）；删除后下次启动重新显示一次性卡片。
 - `dsh-famling/consent/v1`：TTS/ASR 独立同意 `{tts, asr}`；设置内「清除本机设置与同意」= 撤回。
 - 以上 `dsh-famling/*` 键均可由设置「数据与边界 → 清除本机设置与同意」一次性删除；该操作不触碰 DSH 宿主/会话/供应商数据。版本参考值见 `package.json`，由 `test/version-truth.test.js` 校验。
@@ -92,7 +111,7 @@
 
 ### 懒加载与预算
 
-入口 `client.js` 93.2 KiB（gzip 25.8 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB，sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.3%，首帧 155.0 KiB = 49.6%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 `client.content.js` 47.6 KiB（gzip 13.6 KiB）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
+入口 `client.js` 94.9 KiB（97,163 B / gzip 26.8 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6 把输入/同意/使用限制弹窗移出入口、未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.9%，首帧 156.6 KiB = 51.0%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 `client.content.js` 60.6 KiB（gzip 16.8 KiB）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
 
 ## 内容扩展接口 CONTENT_EXTENSION_POINTS v3（预留）
 

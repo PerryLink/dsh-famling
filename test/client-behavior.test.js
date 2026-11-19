@@ -180,6 +180,7 @@ function createHarness(options = {}) {
   if (options.background) storage.set('dsh-famling/background', options.background)
   if (options.font) storage.set('dsh-famling/font', JSON.stringify(options.font))
   if (options.menu) storage.set('dsh-famling/menu', JSON.stringify(options.menu))
+  if (options.hiddenUntil) storage.set('dsh-famling/hidden-until', String(options.hiddenUntil))
   // Most tests start after the one-time first-run notice was acknowledged; the
   // first-run tests opt out to exercise the fresh-install path.
   if (!options.firstRun) storage.set('dsh-famling/first-run/v1', '1')
@@ -198,7 +199,22 @@ function createHarness(options = {}) {
   }
   let definition = null
   const chunkDefinitions = new Map()
+  // Deterministic clock: quiet hours/hide deadlines must not depend on the hour
+  // the suite happens to run. Default is a daytime instant (quiet hours off).
+  const RealDate = Date
+  let currentNow = options.now ? new RealDate(options.now).getTime() : new RealDate(2026, 4, 1, 12, 0, 0, 0).getTime()
+  function FakeDate(...args) { return args.length === 0 ? new RealDate(currentNow) : new RealDate(...args) }
+  FakeDate.prototype = RealDate.prototype
+  FakeDate.now = () => currentNow
+  FakeDate.parse = RealDate.parse
+  FakeDate.UTC = RealDate.UTC
   const windowStub = {
+    matchMedia(query) {
+      return {
+        matches: Boolean(options.reduceMotion) && String(query).includes('prefers-reduced-motion'),
+        addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+      }
+    },
     __ModuleLoader__: {
       load(loaded) {
         if (loaded && typeof loaded.chunk === 'string') chunkDefinitions.set(loaded.chunk, loaded)
@@ -222,6 +238,7 @@ function createHarness(options = {}) {
     localStorage,
     document: documentStub,
     navigator: { language: options.language || 'zh-CN' },
+    Date: FakeDate,
     URL,
     SpeechSynthesisUtterance: class SpeechSynthesisUtterance { constructor(text) { this.text = text } },
     fetch: async (url, init) => {
@@ -298,7 +315,7 @@ function createHarness(options = {}) {
   assert.equal(typeof Component, 'function', 'FamlingFooter is registered into the sidebar footer slot')
   const ui = createUi(Component, React)
   ui.render()
-  return { ui, speech, fetchCalls, storage, timers, asyncCalls, module: moduleObject, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn } }
+  return { ui, speech, fetchCalls, storage, timers, asyncCalls, module: moduleObject, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
 }
 
 function idleSrc(kind) {
@@ -492,7 +509,7 @@ test('互动 and 更多 are second-level pages with a back item instead of crowd
   clickMenu(ui, '« 返回')
   assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸', '退出（隐藏，刷新恢复）'], 'back returns to level one')
   clickMenu(ui, '更多')
-  assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '使用限制与版本'], 'more page stays restrained')
+  assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '暂时隐藏 1 小时', '暂时隐藏到明天', '使用限制与版本'], 'more page stays restrained')
   clickMenu(ui, '使用限制与版本')
   const notice = ui.findAll((item) => item.type === 'div' && item.props.role === 'dialog' && item.props['aria-label'] === '使用限制与版本')[0]
   assert.ok(notice, 'usage notice popup opens')
@@ -569,7 +586,7 @@ test('every open starts at level one and the submenu page is never sticky', () =
   const { ui, storage } = createHarness()
   openMenuAt(ui)
   clickMenu(ui, '更多')
-  assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '使用限制与版本'])
+  assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '暂时隐藏 1 小时', '暂时隐藏到明天', '使用限制与版本'])
   pressMenuKey(ui, 'Escape')
   assert.deepEqual(JSON.parse(storage.get('dsh-famling/menu')), { button: false }, 'only the trigger preference persists')
   openMenuAt(ui)
@@ -582,11 +599,11 @@ test('settings popup centralizes every adjustable item and folds advanced/debug'
   const dialog = settingsDialog(ui)
   assert.ok(dialog, 'settings dialog renders from the lazy chunk')
   const full = ui.text(dialog)
-  for (const label of ['常用', '帧动画', '说话气泡', '显示菜单按钮', '数据与边界', 'AI 聊天', '清除本机设置与同意', '声音', '读取 Advisers 摘要', '外观', '对话', '气泡 / 面板主题', '背景', '字体', '字号', '行高', '角色与内容', '内容与角色…', '恢复角色默认', '高级 / 调试']) {
+  for (const label of ['常用', '说话气泡', '显示菜单按钮', '低打扰', '安静时段', '动画偏好', '跟随系统', '允许动画', '减少动态', '隐藏 1 小时', '隐藏到明天', '数据与边界', 'AI 聊天', '清除本机设置与同意', '声音', '读取 Advisers 摘要', '外观', '对话', '气泡 / 面板主题', '背景', '字体', '字号', '行高', '角色与内容', '内容与角色…', '恢复角色默认', '高级 / 调试']) {
     assert.ok(full.includes(label), 'settings includes: ' + label)
   }
   assert.ok(full.includes('研究'), 'usage restriction stays visible')
-  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 1 + 1 + 1 + 1 + 1, 'sound + motion + bubble + menu button + AI chat')
+  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 1 + 1 + 1 + 1 + 1, 'sound + bubble + menu button + AI chat + quiet hours')
   assert.ok(ui.findAll((node) => node.type === 'select')[0], 'voice list lives in settings')
   const advanced = ui.findAll((node) => node.type === 'button' && ui.text(node).includes('高级 / 调试'))[0]
   assert.equal(advanced.props['aria-expanded'], false, 'advanced group is folded by default')
@@ -607,9 +624,9 @@ test('settings toggles persist and the content entry opens the content center', 
   ui.change(bubble, false)
   ui.render()
   assert.equal(JSON.parse(storage.get('dsh-famling/settings')).bubble, false, 'bubble persists through the settings popup')
-  ui.change(checkboxByLabel(ui, '帧动画'), true)
+  ui.click(ui.findButtonExact('允许动画'))
   ui.render()
-  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).motion, true, 'motion persists through the settings popup')
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).motionMode, 'on', 'animation preference persists through the settings popup')
   const themeButton = ui.findButtonByAria('气泡 / 面板主题 · 纸张')
   assert.ok(themeButton, 'theme presets live in settings too')
   ui.click(themeButton)
@@ -645,6 +662,183 @@ test('English menu localizes level one and the species action submenu', () => {
   const englishSettings = ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === 'Settings')[0]
   assert.ok(englishSettings, 'English settings dialog opens')
   assert.ok(ui.text(englishSettings).includes('Show menu button'), 'English menu button switch')
+})
+
+/* ==================== E7 剩余 / P-04: low disturbance ==================== */
+test('mute only silences the voice: captions stay and a running utterance is cancelled', () => {
+  const harness = createHarness({ settings: { sound: true }, consent: { tts: true } })
+  openInteractions(harness.ui)
+  harness.ui.click(harness.ui.findButtonExact('摸头'))
+  harness.ui.render()
+  assert.equal(harness.speech.speak.length, 1, 'an explicit action speaks while unmuted')
+  assert.ok(harness.ui.findBubble(), 'the caption bubble is shown')
+  openSettings(harness.ui)
+  harness.ui.change(checkboxByLabel(harness.ui, '声音'), false)
+  harness.ui.render()
+  assert.equal(storedSettings(harness).sound, false, 'mute persists')
+  assert.ok(harness.speech.cancel >= 1, 'a running utterance is cancelled immediately on mute')
+  closeActiveDialog(harness.ui)
+  const spoken = harness.speech.speak.length
+  harness.ui.clickPetAt(50, 35)
+  harness.ui.render()
+  assert.ok(harness.ui.findBubble(), 'captions remain visible while muted')
+  assert.equal(harness.speech.speak.length, spoken, 'no new TTS utterance while muted')
+})
+
+function localTime(hours, minutes) { return new Date(2026, 4, 1, hours, minutes, 0, 0) }
+function storedSettings(harness) { return JSON.parse(harness.storage.get('dsh-famling/settings')) }
+function microTimer(harness) { return [...harness.timers.timeouts].reverse().find((timer) => timer.ms >= 60000 && timer.ms <= 90000) }
+function idleFrameDelay(harness) {
+  const idle = embedded.ANIMS.human.clips.idle
+  return Math.max(30, Math.round(1000 / (idle.fps || 6)))
+}
+function hasFrameTimer(harness) { return harness.timers.timeouts.some((timer) => timer.ms === idleFrameDelay(harness)) }
+
+test('quiet hours default 22:00-08:00 and the settings popup shows the pinned state', () => {
+  const quiet = createHarness({ now: localTime(23, 0) })
+  openSettings(quiet.ui)
+  const quietText = quiet.ui.text(settingsDialog(quiet.ui))
+  assert.ok(quietText.includes('低打扰'), 'low-disturb group is in the unified settings popup')
+  assert.ok(quietText.includes('安静时段'), 'quiet-hours control')
+  assert.ok(quietText.includes('当前在安静时段内'), 'status reflects the 23:00 clock')
+  assert.equal(storedSettings(quiet).quietHours.enabled, true, 'quiet hours default on')
+  assert.equal(storedSettings(quiet).quietHours.start, '22:00')
+  assert.equal(storedSettings(quiet).quietHours.end, '08:00')
+  closeActiveDialog(quiet.ui)
+  const day = createHarness({ now: localTime(12, 0) })
+  openSettings(day.ui)
+  assert.ok(day.ui.text(settingsDialog(day.ui)).includes('当前不在安静时段'), 'daytime status is explicit')
+})
+
+test('quiet hours toggle and time inputs persist; malformed times keep the previous value', () => {
+  const harness = createHarness({ now: localTime(12, 0) })
+  openSettings(harness.ui)
+  const toggle = checkboxByLabel(harness.ui, '开启安静时段')
+  assert.equal(toggle.props.checked, true, 'default on')
+  harness.ui.change(toggle, false)
+  harness.ui.render()
+  assert.equal(storedSettings(harness).quietHours.enabled, false, 'disable persists')
+  assert.ok(harness.ui.text(settingsDialog(harness.ui)).includes('已关闭'), 'off status is explicit')
+  harness.ui.change(toggle, true)
+  harness.ui.render()
+  const timeInput = (label) => harness.ui.findAll((node) => node.type === 'input' && node.props.type === 'time' && String(node.props['aria-label'] || '').includes(label))[0]
+  harness.ui.change(timeInput('开始'), '21:30')
+  harness.ui.render()
+  harness.ui.change(timeInput('结束'), '07:15')
+  harness.ui.render()
+  assert.deepEqual(storedSettings(harness).quietHours, { enabled: true, start: '21:30', end: '07:15' }, 'custom window persists')
+  harness.ui.change(timeInput('开始'), '')
+  harness.ui.render()
+  assert.equal(storedSettings(harness).quietHours.start, '21:30', 'an empty/invalid time does not reset the window')
+  assert.equal(timeInput('开始').props.value, '21:30', 'the controlled input keeps the stored value')
+})
+
+test('quiet hours stop automatic micro actions but explicit taps still answer', () => {
+  const quiet = createHarness({ now: localTime(23, 0), settings: { motion: true } })
+  const idle = petImage(quiet.ui).props.src
+  const timer = microTimer(quiet)
+  assert.ok(timer, 'a micro-action timer is scheduled')
+  timer.fn()
+  quiet.ui.render()
+  assert.equal(petImage(quiet.ui).props.src, idle, 'no automatic micro action during quiet hours')
+  assert.ok(microTimer(quiet) && microTimer(quiet) !== timer, 'the timer re-checks and retries after the window')
+  quiet.ui.clickPetAt(50, 35)
+  quiet.ui.render()
+  assert.ok(quiet.ui.findBubble(), 'a user tap still answers during quiet hours')
+  const day = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  const dayIdle = petImage(day.ui).props.src
+  const dayTimer = microTimer(day)
+  assert.ok(dayTimer)
+  dayTimer.fn()
+  day.ui.render()
+  assert.notEqual(petImage(day.ui).props.src, dayIdle, 'micro actions play outside quiet hours')
+})
+
+test('motion preference follows prefers-reduced-motion by default and explicit on/off wins', () => {
+  const reducedAuto = createHarness({ reduceMotion: true, settings: { motionMode: 'auto' } })
+  assert.equal(hasFrameTimer(reducedAuto), false, 'auto + reduce -> frame animation off')
+  const plainAuto = createHarness({ reduceMotion: false, settings: { motionMode: 'auto' } })
+  assert.ok(hasFrameTimer(plainAuto), 'auto + no reduce -> frame animation on')
+  const forcedOn = createHarness({ reduceMotion: true, settings: { motionMode: 'on' } })
+  assert.ok(hasFrameTimer(forcedOn), 'explicit on overrides the system preference')
+  const forcedOff = createHarness({ reduceMotion: false, settings: { motionMode: 'off' } })
+  assert.equal(hasFrameTimer(forcedOff), false, 'explicit off overrides the system preference')
+  assert.equal(storedSettings(forcedOff).motionMode, 'off', 'explicit preference persists')
+  // Legacy boolean migration: motion:false -> off, motion:true -> auto.
+  assert.equal(storedSettings(createHarness()).motionMode, 'off', 'legacy motion:false migrates to off')
+  const legacyOn = createHarness({ reduceMotion: false, settings: { motion: true } })
+  assert.equal(storedSettings(legacyOn).motionMode, 'auto', 'legacy motion:true migrates to auto')
+  assert.ok(hasFrameTimer(legacyOn), 'migrated auto respects the system (no reduce here)')
+})
+
+test('settings exposes the animation preference with the system state and persists a choice', () => {
+  const harness = createHarness({ reduceMotion: true, settings: { motionMode: 'auto' } })
+  openSettings(harness.ui)
+  const text = harness.ui.text(settingsDialog(harness.ui))
+  assert.ok(text.includes('动画偏好'), 'animation preference row')
+  assert.ok(text.includes('系统已请求减少动态'), 'system preference is disclosed')
+  assert.ok(text.includes('减少动态'), 'the effective state is visible')
+  const offChoice = harness.ui.findButtonByAria('动画偏好 · 减少动态')
+  assert.equal(offChoice.props['aria-pressed'], false, 'auto is not the same as explicit off')
+  harness.ui.click(harness.ui.findButtonExact('允许动画'))
+  harness.ui.render()
+  assert.equal(storedSettings(harness).motionMode, 'on', 'explicit allow persists')
+  assert.ok(hasFrameTimer(harness), 'the animation starts after choosing allow')
+})
+
+test('temporary hide persists a deadline, shows one restore control and restores early', () => {
+  const now = localTime(12, 0)
+  const harness = createHarness({ now })
+  openMenuAt(harness.ui)
+  clickMenu(harness.ui, '更多')
+  clickMenu(harness.ui, '暂时隐藏 1 小时')
+  assert.equal(harness.ui.findPetButton(), undefined, 'the pet is hidden')
+  const restore = harness.ui.findButtonByAria('显示')
+  assert.ok(restore, 'one visible/keyboard restore control replaces the pet')
+  assert.equal(Number(harness.storage.get('dsh-famling/hidden-until')), now.getTime() + 3600000, 'hidden deadline persisted')
+  harness.ui.click(restore)
+  harness.ui.render()
+  assert.ok(harness.ui.findPetButton(), 'restore brings the pet back')
+  assert.equal(harness.storage.has('dsh-famling/hidden-until'), false, 'early restore clears the deadline')
+})
+
+test('hide until tomorrow targets the next quiet-hours end and auto-restores at the deadline', () => {
+  const now = localTime(12, 0)
+  const harness = createHarness({ now })
+  openMenuAt(harness.ui)
+  clickMenu(harness.ui, '更多')
+  clickMenu(harness.ui, '暂时隐藏到明天')
+  const deadline = new Date(Number(harness.storage.get('dsh-famling/hidden-until')))
+  assert.equal(deadline.getDate(), 2, 'tomorrow')
+  assert.equal(deadline.getHours(), 8, 'quiet-hours end 08:00')
+  const timer = harness.timers.timeouts.find((item) => item.ms === deadline.getTime() - now.getTime())
+  assert.ok(timer, 'auto-restore timer is scheduled for the deadline')
+  timer.fn()
+  harness.ui.render()
+  assert.ok(harness.ui.findPetButton(), 'the pet comes back at the deadline')
+  assert.equal(harness.storage.has('dsh-famling/hidden-until'), false, 'expired deadline is cleared')
+})
+
+test('a stored future hidden deadline is restored on the next mount', () => {
+  const now = localTime(12, 0)
+  const harness = createHarness({ now, hiddenUntil: now.getTime() + 120000 })
+  assert.equal(harness.ui.findPetButton(), undefined, 'reload keeps the pet hidden')
+  assert.ok(harness.ui.findButtonByAria('显示'), 'restore control is available after reload')
+  const expired = createHarness({ now, hiddenUntil: now.getTime() - 1000 })
+  assert.ok(expired.ui.findPetButton(), 'an expired stored deadline does not hide the pet')
+})
+
+test('settings can start a temporary hide and the same restore control recovers it', () => {
+  const harness = createHarness({ now: localTime(12, 0) })
+  openSettings(harness.ui)
+  harness.ui.click(harness.ui.findButtonExact('隐藏 1 小时'))
+  harness.ui.render()
+  assert.equal(harness.ui.findPetButton(), undefined, 'hiding from settings works')
+  const restore = harness.ui.findButtonByAria('显示')
+  assert.ok(restore)
+  harness.ui.click(restore)
+  harness.ui.render()
+  assert.ok(harness.ui.findPetButton(), 'restored')
 })
 
 /* ==================== existing animation / interaction behavior ==================== */

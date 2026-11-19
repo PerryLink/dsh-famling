@@ -135,10 +135,10 @@ const FROZEN_STORAGE_KEYS = [
   'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/first-run/v1',
   'dsh-famling/consent/v1', 'dsh-famling/dialogue', 'dsh-famling/role',
   'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font',
-  'dsh-famling/menu', 'dsh-famling/scale', 'dsh-famling/text-scale',
+  'dsh-famling/menu', 'dsh-famling/hidden-until', 'dsh-famling/scale', 'dsh-famling/text-scale',
   'dsh-famling/market/catalog', 'dsh-famling.market',
 ]
-const FROZEN_TERMS = { tos: '2026-11-17.6', tts: '2026-11-17.4', asr: '2026-11-17.3', roleplay: '2026-11-17.4' }
+const FROZEN_TERMS = { tos: '2026-11-20.1', tts: '2026-11-17.4', asr: '2026-11-17.3', roleplay: '2026-11-17.4' }
 const FROZEN_FRAME_TOTALS = { dog: 68, cat: 72, human: 68 }
 const FROZEN_CLIP_IDS = [
   'idle', 'idle_blink', 'walk', 'run', 'pat_head', 'ball_throw',
@@ -224,7 +224,7 @@ test('dialogue modes keep the shared values; only automatic/ambient lines are ga
   assert.deepEqual([...content.DIALOGUE_MODE_IDS], FROZEN_DIALOGUE_IDS)
   for (const mode of FROZEN_DIALOGUE_IDS) assert.deepEqual({ ...content.DIALOGUE_MODES[mode] }, FROZEN_DIALOGUE[mode])
   assert.ok(clientSource.includes("source === 'ambient' && dialogue.bubbleChance < 1"), 'probability gates ambient lines only')
-  assert.ok(clientSource.includes("source === 'ambient' && dialogueMode === 'quiet'"), 'quiet suppresses ambient lines (shared semantics)')
+  assert.ok(clientSource.includes("source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours))"), 'quiet mode/quiet hours suppress ambient lines only (shared semantics)')
   assert.ok(clientSource.includes("say(line, 'speech', 'interactive')"), 'explicit taps/actions still show (shared semantics)')
   assert.ok(clientSource.includes("say(result.reply, 'thought', 'direct')"), 'host replies are direct/explicit')
   assert.ok(clientSource.includes('line.slice(0, dialogue.maxChars - 1)'), 'every dialogue line is clamped to the shared maxChars')
