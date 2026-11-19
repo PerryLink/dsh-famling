@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
       'minor-intimacy', 'impersonation', 'illegal-use',
     ]
     const BUILTIN_PACK = { id: 'dsh-famling.builtin', entries: 4, source: 'bundled' }
-    const PLUGIN_VERSION = '0.10.7'
+    const PLUGIN_VERSION = '0.10.8'
 
     const STRINGS = {
       zh: {

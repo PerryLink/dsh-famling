@@ -17,7 +17,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
-## 当前实现（0.10.7）
+## 当前实现（0.10.8）
 
 - 0.10.7 Host 能力协商（MB-034 / E3-T2）：插件主机半不再把 `llm`/`schedule` 当必需注入（`inject = ['connection']`），最小 Host 上仍能激活；客户端挂载后向同源 bridge 发一次 **`hello`（wire 2）**，Host 返回插件版本、bridge wire 版本、**content-extension v3** 契约、宿主版本及来源、可选服务能力矩阵与逐项 `probes`。缺 `llm` 时聊天、缺 `schedule` 时提醒在 **UI 与发送路径双端降级**（本地明示、不调用模型、不伪造回复）；老 Host 不响应 hello 时回退「兼容模式」并保留旧行为；版本/契约不一致只提示、不崩溃。设置 →「高级 / 调试」显示握手状态、宿主版本、桥接/内容契约版本、能力矩阵与「重新检测 Host 能力」（`probe`）。`content-extension.mjs` 保持 **v3 单版本契约**（新增 `CONTENT_EXTENSION_VERSION` / `CONTENT_EXTENSION_COMPATIBILITY` / `isContentExtensionCompatible`，hello 的 `contract.contentExtension` 直接取该模块）。测试见 `test/host-bridge.test.js` 与 `test/client-behavior.test.js`。
 - 0.10.6 低打扰（E7 剩余 / P-04）：设置弹窗新增「**低打扰**」分组——**安静时段**（默认 22:00–08:00 开启，可改起止时间或整体关闭；时段内自动气泡与随机微动作 = 0，点击、菜单互动与聊天回复仍照常回应；`start === end` 视为关闭，避免手滑造成 24h 静默）、**动画偏好**（跟随系统 `prefers-reduced-motion` / 允许动画 / 减少动态；旧 `motion` 布尔值一次性迁移）、**暂时隐藏**（右键「更多」或设置内隐藏 1 小时 / 到明天；状态持久化到 `dsh-famling/hidden-until`，只留一个 ≥24px 的「显示」恢复控件，到点自动恢复）。自动微动作间隔由 11–20s 提高到 **≥60s**；静音只停语音（气泡字幕保留，正在朗读立即停止）。输入面板 / 同意弹窗 / 使用限制弹窗与新增低打扰 UI 均在懒加载 `client.content.js`，首屏预算保持 96 KiB 以内。测试见 `test/client-lowdisturb.test.js` 与 `test/client-behavior.test.js`。
