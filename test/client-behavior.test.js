@@ -1073,16 +1073,21 @@ test('standard dialogue mode caps replies at the shared 240 chars', async () => 
   assert.ok(text.endsWith('…'))
 })
 
-test('quiet dialogue mode lowers ambient bubbles while direct replies still show', async () => {
-  const hidden = createHarness({ character: 'cat', dialogue: 'quiet', random: () => 0.99 })
-  hidden.ui.clickPetAt(50, 35)
-  hidden.ui.render()
-  assert.equal(hidden.ui.findBubble(), undefined, 'quiet suppresses ambient bubbles when the roll is above the chance')
-  assert.equal(petImage(hidden.ui).props.src, clipSrc('cat', 'pat_head'), 'the animation still plays without a bubble')
-  const shown = createHarness({ character: 'cat', dialogue: 'quiet', random: () => 0.01 })
-  shown.ui.clickPetAt(50, 35)
-  shown.ui.render()
-  assert.ok(shown.ui.findBubble(), 'quiet still shows ambient bubbles when the roll is below the chance')
+test('quiet dialogue mode suppresses only ambient lines; explicit interactions and direct replies still show', async () => {
+  // Shared famling dialoguePack semantics: bubbleChance applies to AUTOMATIC
+  // bubbles only; explicit interaction bubbles may still show (quiet = no
+  // automatic ambient bubbles, brief/quiet still clamp every line).
+  const tapped = createHarness({ character: 'cat', dialogue: 'quiet', random: () => 0.99 })
+  tapped.ui.clickPetAt(50, 35)
+  tapped.ui.render()
+  assert.ok(tapped.ui.findBubble(), 'explicit region taps keep their bubble in quiet mode regardless of the ambient roll')
+  assert.ok(regionSays('cat', 'head').includes(tapped.ui.text(tapped.ui.findBubble())), 'the tap bubble comes from the region says')
+  const standard = createHarness({ character: 'human', dialogue: 'standard', random: () => 0.99 })
+  openInteractions(standard.ui)
+  const label = standard.ui.findButtonExact('摸头')
+  standard.ui.click(label)
+  standard.ui.render()
+  assert.ok(standard.ui.findBubble(), 'explicit menu actions are not chance-gated in standard mode')
   const direct = createHarness({ character: 'human', dialogue: 'quiet', random: () => 0.99, reply: '嗯，我在。' })
   openInputPanel(direct.ui)
   const textarea = direct.ui.findAll((node) => node.type === 'textarea')[0]

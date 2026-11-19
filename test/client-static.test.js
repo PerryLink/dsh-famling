@@ -16,7 +16,7 @@ const clientData = loadClientData(clientSource)
 
 // Release pin: bump together with package.json (test/version-truth.test.js keeps
 // every public version surface in sync with package.json).
-const EXPECTED_VERSION = '0.10.4'
+const EXPECTED_VERSION = '0.10.5'
 
 // Frame counts come from the private manifests: dog/human 68 each, cat 72
 // (10-frame stand_wag). Total 208 embedded frames; never assume 12x68/204.
@@ -424,7 +424,9 @@ test('role bundles persist every component in the existing keys and record dsh-f
   assert.ok(clientSource.includes('loadRoleId()'), 'role id is loaded on first render')
   assert.ok(clientSource.includes('requestCharacterChunk(character'), 'character sprite chunks stay lazy')
   assert.ok(clientSource.includes('canTts && settings.sound && ttsConsent'), 'TTS guard tied to character policy')
-  assert.ok(clientSource.includes("source !== 'direct' && dialogue.bubbleChance < 1"), 'quiet mode lowers ambient bubble probability')
+  assert.ok(clientSource.includes("source === 'ambient' && dialogue.bubbleChance < 1"), 'shared bubble probability gates automatic/ambient lines only')
+  assert.ok(clientSource.includes("source === 'ambient' && dialogueMode === 'quiet'"), 'quiet mode suppresses ambient lines (shared dialoguePack semantics)')
+  assert.ok(clientSource.includes("say(line, 'speech', 'interactive')"), 'explicit taps/actions are not chance-gated (shared "explicit interaction bubbles still show")')
   assert.ok(clientSource.includes("line.slice(0, dialogue.maxChars - 1)"), 'brief mode filters over-long replies')
   assert.ok(clientSource.includes('utterance.voice = voice'), 'the selected browser voice is applied to speech')
   assert.ok(clientSource.includes('FONT_SIZES = [11, 12, 14]') && clientSource.includes('FONT_LINE_HEIGHTS = [1.4, 1.5, 1.8]'), 'font size/line height presets are bounded')

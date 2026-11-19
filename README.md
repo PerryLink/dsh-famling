@@ -17,7 +17,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
-## 当前实现（0.10.4）
+## 当前实现（0.10.5）
 
 - 0.10.4 四层缩放（MB-053）：设置内新增**整体缩放**（第一层，50%–200%，角色图像 + UI/文本 + 气泡 + 菜单/面板一起缩放）、**UI + 文本 / 图像** 独立轴（第二层，100% = 跟随整体，可单独解耦或一键「跟随整体」）、**组件缩放**（第三层，折叠在「高级 / 调试」内，气泡 / 右键菜单 / 面板 / 内容中心 / 设置弹窗默认全部继承 UI + 文本，可覆盖 75%–150% 或恢复继承）。只作用于本插件 widget 的内联样式与私有 CSS 变量，**不改 DSH 全局主题/宿主缩放**；持久化 `dsh-famling/scale/*`（model/global/ui-text/image/component/*），旧绝对倍率 `dsh-famling/scale` / `dsh-famling/text-scale` 一次性迁移（版本标记后失效但保留备份）；气泡 ≤ 240px 且不溢出视口，菜单/面板按缩放后尺寸夹取，默认值不写键；原生 range 滑块 + `aria-valuetext`/`aria-expanded` 键盘可达。详见「四层缩放（0.10.4）」与 `test/client-scale.test.js`。
 - 0.10.3 发布准备：相对 0.10.2 **聊天/UI 行为无变化**；提升版本真值（`package.json` 为源，同步 `client.js`/`client.content.js`/README/LEGAL-NOTICE/locale，`node test/version-truth.test.js --write` 幂等重生成），并修正 `engines.dsh` 允许 0.2.2 预发布宿主（`|| >=0.2.2-0 <0.3.0`，否则 0.2.2-rc.x 会被引擎范围拒绝）；本版本是插件安全地板的对外发布版本。
@@ -117,7 +117,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 | `human` | 汀岚 | speech，可浏览器 TTS（仍受独立同意门禁） | `standard` | `default` / `transparent` / `system` |
 | `cat` | 塞尔凯克卷毛猫 | thought，无 TTS | `standard` | `night` / `dark` / `serif` |
 | `dog` | 金毛 | thought，无 TTS | `standard` | `paper` / `paper` / `system` |
-| `origami` | 预留 | thought，无 TTS | `standard` | `night`（共享 `high-contrast` 显式映射）/ `transparent` / `mono`（数据预留，不可应用） |
+| `origami` | 预留 | speech（共享 tide 语音策略；数据预留，不可应用） | `standard` | `night`（共享 `high-contrast` 显式映射）/ `transparent` / `mono`（数据预留，不可应用） |
 
 以上六个组件与 famling `public/content/library.json` 的 `rolePresets` 对齐（human: standard/default/transparent/system；cat: standard/night/dark/serif；dog: standard/paper/paper/system）；origami 共享包使用 `high-contrast` 主题，本插件没有该主题，因此显式映射为 `night` 且 `available:false`，不会静默错配。对话模式同样与共享 `dialoguePacks` 对齐：`standard` = 240 字 / 70% 环境气泡、`brief` = 80 字 / 40%、`quiet` = 50 字 / 5%；改这些值必须同时同步 famling 与插件两处。
 

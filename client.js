@@ -295,12 +295,30 @@ window.__ModuleLoader__.load({
       dog: { character: 'dog', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'standard', theme: 'paper', background: 'paper', font: { family: 'system', size: 12, lineHeight: 1.5 }, available: true },
       origami: { character: 'origami', voicePolicy: { canTts: true, mode: 'speech', sound: false }, dialogue: 'standard', theme: 'night', background: 'transparent', font: { family: 'mono', size: 12, lineHeight: 1.5 }, available: false },
     }
-    // Pack declaration status shown in the content-pack tab; external packs are
-    // validated by content-extension.mjs v3 against the same six prohibitions.
-    const USAGE_DECLARATION = { researchOnly: true, prohibitedUses: [
-      'emotional-companionship', 'virtual-partner', 'professional-advice',
-      'minor-intimacy', 'impersonation', 'illegal-use',
-    ] }
+    // Shared-content anchor frozen from famling public/content/library.json
+    // (schema famling.content/0.2). Plugin and app ship independently, so both
+    // parity tests fail if either end drifts; see docs/plan/SHARED-CONTENT-SEMANTICS-2026-11-19.md.
+    const SHARED_CONTENT_SEMANTICS = {
+      schema: 'famling.content/0.2', version: '0.2.0', updatedAt: '2026-11-19', defaultRole: 'human',
+      characterIdMap: { human: 'humanoid', cat: 'cat', dog: 'dog', origami: 'origami' },
+      usageStatement: '本项目及其全部代码、美术、音频、文案、角色素材和衍生物仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、心理治疗/医疗/法律/金融建议、未成年人亲密关系、冒充真人/官方，或任何违反法律法规/平台规则的用途。',
+      usageStatementSha256: '0353536cefd702014b12a8365c4a486f19848d049652e9692027216adb80c743',
+      usageStatementRef: 'docs/legal/USE-RESTRICTIONS-2026-11-19.md',
+      license: { spdx: 'LicenseRef-PolyForm-Noncommercial-1.0.0', attribution: 'Famling maintainers; placeholder art under LICENSE-ART (CC BY-NC-SA 4.0)' },
+      aiProvenance: { generated: false, disclosure: '内置占位像素帧由确定性脚本生成，未使用生成式 AI；最终美术替换后须更新本声明。', tools: ['deterministic-python-renderer'] },
+    }
+    // Pack declaration: canonical statement + SHA-256 + six tokens shared with
+    // famling; the same six tokens are the v3 pack contract (content-extension.mjs).
+    const USAGE_DECLARATION = {
+      researchOnly: true,
+      statement: SHARED_CONTENT_SEMANTICS.usageStatement,
+      statementRef: SHARED_CONTENT_SEMANTICS.usageStatementRef,
+      statementSha256: SHARED_CONTENT_SEMANTICS.usageStatementSha256,
+      prohibitedUses: [
+        'emotional-companionship', 'virtual-partner', 'professional-advice',
+        'minor-intimacy', 'impersonation', 'illegal-use',
+      ],
+    }
     // Remote market is reserved: catalog fields exist for a future Host
     // integration, but no URL is configured here and the client never fetches one.
     const MARKET_CONFIG = { status: 'reserved', configured: false, catalogUrl: null, catalogUrlKey: 'dsh-famling/market/catalog', configKey: 'dsh-famling.market' }
@@ -513,7 +531,7 @@ window.__ModuleLoader__.load({
         contentLoading: '正在加载内容中心…', contentFailed: '内容中心加载失败，角色与外观设置仍可继续使用。',
         interact: '互动', settings: '设置',
         menu: '菜单', menuButton: '显示菜单按钮',
-        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.4 · 研究原型',
+        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.5 · 研究原型',
         inputTitle: '和{pet}说话', placeholder: '对{pet}说点什么…',
         mic: '语音输入', send: '发送',
         settingsTitle: '设置', sound: '语音朗读',
@@ -539,7 +557,7 @@ window.__ModuleLoader__.load({
         contentLoading: 'Loading content center…', contentFailed: 'The content center failed to load; character and appearance settings still work.',
         interact: 'Play', settings: 'Settings',
         menu: 'Menu', menuButton: 'Show menu button',
-        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.4 · research prototype',
+        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.5 · research prototype',
         inputTitle: 'Talk to {pet}', placeholder: 'Say something to {pet}…',
         mic: 'Voice input', send: 'Send',
         actionLabels: { pat: 'Pat', fetch: 'Throw / fetch', retrieve: 'Fetch', tail: 'Chase tail', run: 'Run', stretch: 'Stretch', wash: 'Wash face', feed: 'Hand paper', wave: 'Wave', tidy: 'Fix bow', talk: 'Chat' },
@@ -887,12 +905,14 @@ window.__ModuleLoader__.load({
         document.addEventListener('visibilitychange', onVisibility)
         return () => { window.removeEventListener('blur', hide); document.removeEventListener('visibilitychange', onVisibility) }
       }, [])
-      // Bubble/TTS entry point. "direct" lines (user replies/system errors) always
-      // show; ambient lines honor the dialogue mode (brief trims over-long text,
-      // quiet lowers the bubble probability). Cat/dog stay silent thought bubbles.
+      // Bubble/TTS entry point. Only "ambient" (automatic/proactive) lines are
+      // subject to the shared bubble probability and quiet-mode suppression;
+      // explicit interactions (taps, menu actions) and direct replies always
+      // show and are only length-clamped. Cat/dog stay silent thought bubbles.
       function say(text, kind = 'speech', source = 'ambient') {
         const dialogue = DIALOGUE_MODES[dialogueMode] || DIALOGUE_MODES.standard
-        if (source !== 'direct' && dialogue.bubbleChance < 1 && Math.random() > dialogue.bubbleChance) return
+        if (source === 'ambient' && dialogue.bubbleChance < 1 && Math.random() > dialogue.bubbleChance) return
+        if (source === 'ambient' && dialogueMode === 'quiet') return
         const canTts = characterCanTts(characterRef.current)
         const nextKind = canTts ? (kind === 'thought' ? 'thought' : 'speech') : 'thought'
         let line = typeof text === 'string' ? text : String(text == null ? '' : text)
@@ -1029,7 +1049,7 @@ window.__ModuleLoader__.load({
         playEventClip(action.event)
         if (settings.bubble) {
           const line = pickSaidLine(action.says, 'action:' + character + ':' + action.id, lastLines.current)
-          if (line) say(line, 'speech')
+          if (line) say(line, 'speech', 'interactive')
         }
         if (typeof action.followUpEvent === 'string') {
           const delay = Number.isFinite(action.followUpMs) ? Math.max(0, action.followUpMs) : 0
@@ -1074,7 +1094,7 @@ window.__ModuleLoader__.load({
         setBlink(false)
         if (settings.bubble) {
           const line = pickSaidLine(reaction.says, 'region:' + character + ':' + region.id, lastLines.current)
-          if (line) say(line, 'speech')
+          if (line) say(line, 'speech', 'interactive')
         }
       }
       function setActiveCharacter(next) {
@@ -1188,7 +1208,7 @@ window.__ModuleLoader__.load({
           if (result.brief && result.brief.displayPolicy === 'private') {
             briefHideTimer.current = setTimeout(() => { setBrief(null) }, 30000)
           }
-          if (result.reply) say(result.reply, 'thought')
+          if (result.reply) say(result.reply, 'thought', 'direct')
         } catch { setBrief(null); setBriefError(L.bridgeFailed) }
         finally { if (timer) clearTimeout(timer) }
       }
