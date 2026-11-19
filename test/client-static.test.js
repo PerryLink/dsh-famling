@@ -273,9 +273,9 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.10.1, publishes the lazy chunks and the v3 content contract', async () => {
+test('package version is 0.10.2, publishes the lazy chunks and the v3 content contract', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.10.1')
+  assert.equal(pkg.version, '0.10.2')
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'package exports the content extension contract')
   assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])

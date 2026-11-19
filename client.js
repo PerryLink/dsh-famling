@@ -355,7 +355,7 @@ window.__ModuleLoader__.load({
         contentLoading: '正在加载内容中心…', contentFailed: '内容中心加载失败，角色与外观设置仍可继续使用。',
         interact: '互动', settings: '设置',
         menu: '菜单', menuButton: '显示菜单按钮',
-        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.1 · 研究原型',
+        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.2 · 研究原型',
         inputTitle: '和{pet}说话', placeholder: '对{pet}说点什么…',
         mic: '语音输入', send: '发送',
         settingsTitle: '设置', sound: '语音朗读',
@@ -381,7 +381,7 @@ window.__ModuleLoader__.load({
         contentLoading: 'Loading content center…', contentFailed: 'The content center failed to load; character and appearance settings still work.',
         interact: 'Play', settings: 'Settings',
         menu: 'Menu', menuButton: 'Show menu button',
-        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.1 · research prototype',
+        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.2 · research prototype',
         inputTitle: 'Talk to {pet}', placeholder: 'Say something to {pet}…',
         mic: 'Voice input', send: 'Send',
         actionLabels: { pat: 'Pat', fetch: 'Throw / fetch', retrieve: 'Fetch', tail: 'Chase tail', run: 'Run', stretch: 'Stretch', wash: 'Wash face', feed: 'Hand paper', wave: 'Wave', tidy: 'Fix bow', talk: 'Chat' },
@@ -475,6 +475,7 @@ window.__ModuleLoader__.load({
       const [fontChoice, setFontChoice] = useState(loadFontChoice)
       const [menuButton, setMenuButton] = useState(() => loadMenuState().button)
       const [menuPage, setMenuPage] = useState('root')
+      const [exited, setExited] = useState(false)
       const [menuOpen, setMenuOpen] = useState(false)
       const [menuAnchor, setMenuAnchor] = useState({ x: 8, y: 8 })
       const [menuActive, setMenuActive] = useState(0)
@@ -770,6 +771,7 @@ window.__ModuleLoader__.load({
           { id: 'content', label: L.contentEntry, run: () => { closeMenu(false); showPanel('content') } },
           { id: 'settings', label: L.settingsEntry, run: () => { closeMenu(false); showPanel('settings') } },
           { id: 'more', label: L.moreEntry, submenu: 'more' },
+          { id: 'quit', label: L.quitEntry, run: () => { closeMenu(false); setExited(true) } },
         ]
       }
       function activateMenuItem(item) {
@@ -1189,6 +1191,7 @@ window.__ModuleLoader__.load({
           borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)', overflowWrap: 'anywhere',
         },
       }, bubble) : null
+      if (exited) return null
       return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, onContextMenu: openMenu, style: { position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 4, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', background: 'var(--dsh-famling-widget-bg, transparent)', color: 'var(--dsh-famling-widget-fg, inherit)', fontFamily: 'var(--dsh-famling-font-family, inherit)', borderRadius: 10, ...themeVars, ...backgroundVars, ...fontVars } }, [
         h('button', { key: 'pet', ref: petRef, type: 'button', onClick: onPetClick, onContextMenu: openMenu, onKeyDown: onPetKeyDown, 'aria-label': charName, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: fillPet(L.title), style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
           h('img', { src, width: SIZE, height: SIZE, alt: charName, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),

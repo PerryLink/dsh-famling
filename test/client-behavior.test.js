@@ -357,7 +357,7 @@ function finishClip(ui, timers, kind, clipId) {
 }
 
 
-/* ---------- minimal UI / right-click menu helpers (0.10.1) ---------- */
+/* ---------- minimal UI / right-click menu helpers (0.10.2) ---------- */
 function menuNode(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'menu')[0] }
 function menuItemNodes(ui) { return ui.findAll((node) => node.type === 'button' && node.props.role === 'menuitem') }
 function menuLabels(ui) { return menuItemNodes(ui).map((node) => ui.text(node)) }
@@ -430,12 +430,12 @@ test('default render is Tinglan with the idle frame and zero buttons outside the
   assert.equal(speech.speak.length, 0, 'nothing is spoken before an interaction')
 })
 
-test('right click opens exactly five level-one entries in the restrained order', () => {
+test('right click opens six level-one entries in the restrained order', () => {
   const { ui } = createHarness()
   const node = openMenuAt(ui)
   assert.equal(node.props.role, 'menu')
   assert.equal(node.props['aria-label'], '菜单')
-  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸'], 'five level-one items only')
+  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸', '退出（隐藏，刷新恢复）'], 'six level-one items')
   assert.equal(menuItemNodes(ui)[0].props.tabIndex, 0, 'first item owns the roving tabIndex')
   assert.equal(menuItemNodes(ui)[1].props['aria-haspopup'], 'menu', '互动 declares a submenu')
   assert.equal(menuItemNodes(ui)[1].props['aria-expanded'], false)
@@ -466,11 +466,11 @@ test('arrow keys, Home/End and Enter drive the menu with aria-activedescendant',
   assert.equal(menuNode(ui).props['aria-activedescendant'], 'dsh-famling-menu-item-1')
   assert.equal(activeLabel(ui), '互动 ▸')
   pressMenuKey(ui, 'End')
-  assert.equal(activeLabel(ui), '更多 ▸')
+  assert.equal(activeLabel(ui), '退出（隐藏，刷新恢复）')
   pressMenuKey(ui, 'ArrowDown')
   assert.equal(activeLabel(ui), '聊两句…', 'ArrowDown wraps around')
   pressMenuKey(ui, 'ArrowUp')
-  assert.equal(activeLabel(ui), '更多 ▸', 'ArrowUp wraps around')
+  assert.equal(activeLabel(ui), '退出（隐藏，刷新恢复）', 'ArrowUp wraps around')
   pressMenuKey(ui, 'Home')
   assert.equal(activeLabel(ui), '聊两句…')
   pressMenuKey(ui, 'Enter')
@@ -485,14 +485,14 @@ test('互动 and 更多 are second-level pages with a back item instead of crowd
   assert.equal(actionLabels[0], '« 返回', 'submenu has a back item')
   for (const label of ['摸头', '伸懒腰', '洗脸', '追尾巴', '跑一跑']) assert.ok(actionLabels.includes(label), 'cat action in the submenu: ' + label)
   clickMenu(ui, '« 返回')
-  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸'], 'back returns to level one')
+  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸', '退出（隐藏，刷新恢复）'], 'back returns to level one')
   clickMenu(ui, '更多')
   assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '使用限制与版本'], 'more page stays restrained')
   clickMenu(ui, '使用限制与版本')
   const notice = ui.findAll((item) => item.type === 'div' && item.props.role === 'dialog' && item.props['aria-label'] === '使用限制与版本')[0]
   assert.ok(notice, 'usage notice popup opens')
   assert.ok(ui.text(notice).includes('研究'), 'notice carries the research-only restriction')
-  assert.ok(ui.text(notice).includes('0.10.1'), 'notice shows the plugin version')
+  assert.ok(ui.text(notice).includes('0.10.2'), 'notice shows the plugin version')
   closeActiveDialog(ui)
   openMenuAt(ui)
   clickMenu(ui, '更多')
@@ -515,9 +515,9 @@ test('the fixed menu is clamped into the viewport with an 8px margin', () => {
   openMenuAt(ui, 1390, 890)
   const style = menuNode(ui).props.style
   assert.equal(style.position, 'fixed')
-  // five root items -> height 8 + 5*30 = 158, width 200, margin 8
+  // six root items -> height 8 + 6*30 = 188, width 200, margin 8
   assert.equal(style.left, 1400 - 200 - 8, 'right edge is clamped')
-  assert.equal(style.top, 900 - 158 - 8, 'bottom edge is clamped')
+  assert.equal(style.top, 900 - 188 - 8, 'bottom edge is clamped')
   pressMenuKey(ui, 'Escape')
   openMenuAt(ui, 4, 3)
   const topLeft = menuNode(ui).props.style
@@ -568,7 +568,7 @@ test('every open starts at level one and the submenu page is never sticky', () =
   pressMenuKey(ui, 'Escape')
   assert.deepEqual(JSON.parse(storage.get('dsh-famling/menu')), { button: false }, 'only the trigger preference persists')
   openMenuAt(ui)
-  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸'], 'reopening always shows level one')
+  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸', '退出（隐藏，刷新恢复）'], 'reopening always shows level one')
 })
 
 test('settings popup centralizes every adjustable item and folds advanced/debug', () => {
@@ -591,7 +591,7 @@ test('settings popup centralizes every adjustable item and folds advanced/debug'
   const expanded = ui.text(settingsDialog(ui))
   assert.ok(expanded.includes('本地存储键'), 'advanced/debug group expands')
   assert.ok(expanded.includes('dsh-famling/menu'), 'debug lists the storage keys')
-  assert.ok(expanded.includes('0.10.1'), 'advanced shows the version')
+  assert.ok(expanded.includes('0.10.2'), 'advanced shows the version')
 })
 
 test('settings toggles persist and the content entry opens the content center', () => {
@@ -632,7 +632,7 @@ test('enabling voice from settings shows the consent dialog and only then saves 
 test('English menu localizes level one and the species action submenu', () => {
   const { ui } = createHarness({ language: 'en-US' })
   openMenuAt(ui)
-  assert.deepEqual(menuLabels(ui), ['Chat…', 'Play ▸', 'Content & characters…', 'Settings…', 'More ▸'])
+  assert.deepEqual(menuLabels(ui), ['Chat…', 'Play ▸', 'Content & characters…', 'Settings…', 'More ▸', 'Quit (hide; refresh to restore)'])
   clickMenu(ui, 'Play')
   for (const label of ['Pat', 'Hand paper', 'Wave', 'Fix bow', 'Chat']) assert.ok(menuLabels(ui).includes(label), 'en action label: ' + label)
   openMenuAt(ui)
@@ -1000,7 +1000,7 @@ test('a missing lazy chunk degrades to the transparent placeholder and the menu 
   assert.match(petImage(ui).props.src, /^data:image\/png;base64,iVBORw0KGgo/, 'placeholder pixel keeps the slot')
   assert.equal(ui.findAll((node) => node.type === 'button').length, 1, 'no stray buttons without the chunk')
   openMenuAt(ui)
-  assert.equal(menuItemNodes(ui).length, 5, 'right-click menu still opens')
+  assert.equal(menuItemNodes(ui).length, 6, 'right-click menu still opens')
   assert.equal(ui.findBubble(), undefined, 'no fabricated content while the chunk is missing')
 })
 
@@ -1245,7 +1245,7 @@ test('a missing content/settings chunk degrades locally without breaking the wid
   assert.ok(ui.text(ui.tree).includes('设置面板加载失败'), 'a local failure message is shown for settings')
   closeActiveDialog(ui)
   openMenuAt(ui)
-  assert.equal(menuItemNodes(ui).length, 5, 'the right-click menu keeps working without the chunk')
+  assert.equal(menuItemNodes(ui).length, 6, 'the right-click menu keeps working without the chunk')
   ui.clickPetAt(51, 27)
   ui.render()
   assert.ok(petImage(ui).props.src.startsWith('data:image/png;base64,'), 'region interaction stays local')
