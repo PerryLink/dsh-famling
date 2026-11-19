@@ -1,11 +1,12 @@
-/* dsh-famling content center (package-local lazy chunk)
+/* dsh-famling panels (package-local lazy chunk): content center + settings
  *
  * Loaded by client.js through the DSH module table's require.async only when
- * the content panel is opened. It is pure UI over the role/theme/background/
- * font catalog passed in by client.js: no network requests, no file access, no
- * eval/new Function, no innerHTML and no pack/asset loading. The four tabs are
- * roles / customize / packs / market. A role IS the theme bundle: applying a
- * role writes character + voice policy + dialogue + theme + background + font.
+ * the content center or the unified settings popup is opened. It is pure UI
+ * over the catalog/props passed in by client.js: no network requests, no file
+ * access, no eval/new Function, no innerHTML and no pack/asset loading. The
+ * content center has four tabs (roles / customize / packs / market); a role IS
+ * the theme bundle. The settings popup centralizes every adjustable item and
+ * folds the advanced/debug group.
  *
  * The chunk registers the same package module id and a "chunk" file name the
  * DSH client module loader accepts; client.js keeps the first-screen entry
@@ -27,6 +28,13 @@ window.__ModuleLoader__.load({
     const STRINGS = {
       zh: {
         title: '内容中心', close: '关闭',
+        settingsTitle: '设置', settingsHint: '常用设置在前；高级与调试折叠在下面。',
+        commonGroup: '常用', appearanceGroup: '外观', roleGroup: '角色与内容', memoryGroup: 'Advisers',
+        memory: '读取 Advisers 摘要',
+        motion: '帧动画', bubble: '说话气泡', showMenuButton: '显示菜单按钮',
+        menuButtonHint: '默认关闭：右键角色或按 Shift+F10 / ContextMenu 打开菜单；开启后角色旁出现「⋯」。',
+        advancedGroup: '高级 / 调试', version: 'dsh-famling 0.10.1 · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
+        contentEntry: '内容与角色…', hideBrief: '隐藏',
         tabs: { roles: '角色', custom: '自定义', packs: '内容包', market: '市场' },
         rolesHint: '角色就是主题：一键应用会同时切换声音 / 对话 / 外观（气泡 / 面板风格 / 字体）。',
         current: '当前', applyRole: '一键应用', currentRole: '当前角色',
@@ -61,6 +69,13 @@ window.__ModuleLoader__.load({
       },
       en: {
         title: 'Content Center', close: 'Close',
+        settingsTitle: 'Settings', settingsHint: 'Common settings first; advanced/debug fold below.',
+        commonGroup: 'Common', appearanceGroup: 'Appearance', roleGroup: 'Role & content', memoryGroup: 'Advisers',
+        memory: 'Read Advisers summary',
+        motion: 'Frame animation', bubble: 'Speech bubble', showMenuButton: 'Show menu button',
+        menuButtonHint: 'Off by default: right-click the pet or press Shift+F10 / ContextMenu; when on, a "⋯" appears next to the pet.',
+        advancedGroup: 'Advanced / debug', version: 'dsh-famling 0.10.1 · research prototype', debug: 'State', storageKeys: 'Local keys',
+        contentEntry: 'Content & characters…', hideBrief: 'Hide',
         tabs: { roles: 'Roles', custom: 'Customize', packs: 'Packs', market: 'Market' },
         rolesHint: 'A role IS the theme: one click applies voice / dialogue / appearance (bubbles / panel style / fonts) together.',
         current: 'Current', applyRole: 'Apply role', currentRole: 'Current role',
@@ -316,6 +331,105 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    return { createContentCenter }
+    /** Unified settings popup: every adjustable item in one dialog, with the
+     *  advanced/debug group folded behind a toggle (state owned by client.js,
+     *  because hooks cannot be added conditionally inside this factory). */
+    function createSettingsPanel(props) {
+      const {
+        lang, character, roleId, canTts, ttsConsent, voices, settings, setSettings, menuButton,
+        dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, advancedOpen,
+        aiNotice, useRestrictions, onToggleAdvanced, updateSetting,
+        setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
+        onToggleSound, onToggleMenuButton, onLoadBrief, onHideBrief, onOpenContent, onRestoreRole,
+        onClose, panelStyle, buttonBase, catalog,
+      } = props
+      const T = STRINGS[lang] || STRINGS.zh
+      const { DIALOGUE_MODE_IDS, THEME_IDS, BACKGROUND_IDS, FONT_IDS, FONT_SIZES, FONT_LINE_HEIGHTS, ROLE_BUNDLES } = catalog
+      const role = ROLE_BUNDLES[roleId] || ROLE_BUNDLES.human
+      const roleName = (T.characters || {})[role.character] || role.character
+      const counts = (brief && brief.counts) || { today: 0, commitments: 0 }
+      const storageKeys = ['dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/consent/v1']
+      const toggle = (key, label, note, checked, onChange) => h('label', {
+        key, style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0', cursor: 'pointer' },
+      }, [
+        h('input', { key: 'input', type: 'checkbox', checked: Boolean(checked), onChange }),
+        h('span', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
+          h('span', { key: 'label', style: { display: 'block' } }, label),
+          note ? h('span', { key: 'note', style: { display: 'block', ...captionStyle() } }, note) : null,
+        ]),
+      ])
+      const choice = (key, active, label, ariaLabel, onClick) => h('button', {
+        key, type: 'button', 'aria-label': ariaLabel, 'aria-pressed': active, onClick,
+        style: { ...buttonBase, padding: '2px 7px', fontSize: 11, fontWeight: active ? 600 : 400 },
+      }, label)
+      const row = (key, label, children) => h('div', {
+        key, style: { display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 4 },
+      }, [h('span', { key: 'label', style: { ...captionStyle(), flex: 'none', minWidth: 46 } }, label), ...children])
+      const common = section(T, T.commonGroup, 'common', [
+        toggle('motion', T.motion, null, settings.motion, () => updateSetting('motion')),
+        toggle('bubble', T.bubble, null, settings.bubble, () => updateSetting('bubble')),
+        toggle('menu-button', T.showMenuButton, T.menuButtonHint, menuButton, onToggleMenuButton),
+      ])
+      const voice = section(T, T.voiceGroup, 'voice', [
+        canTts ? toggle('sound', T.voice, null, settings.sound, onToggleSound)
+          : h('p', { key: 'silent', style: { margin: '0 0 4px', ...captionStyle() } }, T.voiceSilent),
+        canTts && !ttsConsent ? h('p', { key: 'consent', style: { margin: '0 0 4px', ...captionStyle() } }, T.consentTts) : null,
+        canTts && voices.length > 0 ? h('select', {
+          key: 'voices', value: settings.voiceURI || '', 'aria-label': T.voiceList,
+          onChange: (event) => setSettings((value) => ({ ...value, voiceURI: event.target.value })),
+          style: { width: '100%', marginTop: 4, background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 5, font: 'inherit' },
+        }, [h('option', { key: 'auto', value: '' }, T.voiceSystem), ...voices.map((item) => h('option', { key: item.voiceURI, value: item.voiceURI }, (item.name || item.voiceURI) + (item.lang ? ' · ' + item.lang : '')))]) : null,
+      ])
+      const memory = section(T, T.memoryGroup, 'memory', [
+        h('button', { key: 'load', type: 'button', onClick: onLoadBrief, style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.memory),
+        brief ? h('div', { key: 'brief', style: { marginTop: 5, fontSize: 11, lineHeight: 1.5 } }, [
+          h('button', { key: 'hide', type: 'button', onClick: onHideBrief, 'aria-label': T.hideBrief, style: { float: 'right', border: 0, background: 'transparent', color: 'var(--dsw-alias-label-caption, #9aa0a6)', cursor: 'pointer', fontSize: 12 } }, T.hideBrief),
+          h('div', { key: 'counts' }, T.today + ': ' + counts.today + ' · ' + T.commitments + ': ' + counts.commitments),
+          ...(brief.today || []).slice(0, 2).map((item, index) => h('div', { key: 't' + index, style: { color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, '· ' + item.title)),
+        ]) : null,
+        briefError ? h('div', { key: 'err', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, briefError) : null,
+      ])
+      const appearance = section(T, T.appearanceGroup, 'appearance', [
+        row('dialogue', T.dialogue, DIALOGUE_MODE_IDS.map((id) => choice('dialogue-' + id, dialogueMode === id, T.dialogueModes[id].name, T.dialogue + ' · ' + T.dialogueModes[id].name, () => setDialogueMode(id)))),
+        row('theme', T.themeGroup, THEME_IDS.map((id) => choice('theme-' + id, themeId === id, T.themes[id].name, T.themeGroup + ' · ' + T.themes[id].name, () => setThemeId(id)))),
+        row('background', T.backgroundGroup, BACKGROUND_IDS.map((id) => choice('background-' + id, backgroundId === id, T.backgrounds[id], T.backgroundGroup + ' · ' + T.backgrounds[id], () => setBackgroundId(id)))),
+        row('font', T.fontGroup, FONT_IDS.map((id) => choice('font-' + id, fontChoice.family === id, T.fonts[id], T.fontGroup + ' · ' + T.fonts[id], () => setFontChoice((value) => ({ ...value, family: id }))))),
+        row('size', T.fontSize, FONT_SIZES.map((size) => choice('size-' + size, fontChoice.size === size, size + 'px', T.fontSize + ' ' + size + 'px', () => setFontChoice((value) => ({ ...value, size }))))),
+        row('line', T.lineHeight, FONT_LINE_HEIGHTS.map((lineHeight) => choice('line-' + lineHeight, fontChoice.lineHeight === lineHeight, String(lineHeight), T.lineHeight + ' ' + lineHeight, () => setFontChoice((value) => ({ ...value, lineHeight }))))),
+      ])
+      const roleGroup = section(T, T.roleGroup, 'role', [
+        h('p', { key: 'current', style: { margin: '0 0 5px', ...captionStyle() } }, T.currentRole + ': ' + roleName),
+        h('div', { key: 'actions', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
+          h('button', { key: 'content', type: 'button', onClick: onOpenContent, style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.contentEntry),
+          h('button', { key: 'restore', type: 'button', onClick: onRestoreRole, style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.restoreRole),
+        ]),
+      ])
+      const advanced = h('div', { key: 'advanced', style: { marginTop: 8, paddingTop: 7, borderTop: '1px dashed var(--dsh-famling-panel-border, rgba(255,255,255,.22))' } }, [
+        h('button', {
+          key: 'toggle', type: 'button', 'aria-expanded': Boolean(advancedOpen), onClick: onToggleAdvanced,
+          style: { ...buttonBase, padding: '3px 8px', fontSize: 11 },
+        }, (advancedOpen ? '▾ ' : '▸ ') + T.advancedGroup),
+        advancedOpen ? h('div', { key: 'body', style: { marginTop: 6 } }, [
+          h('div', { key: 'version', style: { ...captionStyle() } }, T.version),
+          h('div', { key: 'debug', style: { ...captionStyle(), marginTop: 3 } }, T.debug + ': ' + character + ' / ' + roleId + ' / ' + dialogueMode + ' / ' + themeId + ' / ' + backgroundId + ' / ' + fontChoice.family + ' ' + fontChoice.size + 'px'),
+          h('div', { key: 'keys', style: { ...captionStyle(), marginTop: 3, overflowWrap: 'anywhere' } }, T.storageKeys + ': ' + storageKeys.join(', ')),
+        ]) : null,
+      ])
+      return h('div', {
+        role: 'dialog', 'aria-label': T.settingsTitle,
+        style: { ...panelStyle, width: 310, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(80vh, 680px)', overflowY: 'auto' },
+      }, [
+        h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
+          h('strong', { key: 't', style: { flex: 1 } }, T.settingsTitle),
+          h('button', { key: 'x', type: 'button', onClick: onClose, 'aria-label': T.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
+        ]),
+        h('p', { key: 'hint', style: { margin: '0 0 6px', ...captionStyle() } }, T.settingsHint),
+        h('p', { key: 'use', role: 'note', style: { margin: '0 0 6px', padding: '7px 8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.45 } }, useRestrictions || ''),
+        common, voice, memory, appearance, roleGroup, advanced,
+        h('p', { key: 'ai', style: { margin: '8px 0 0', ...captionStyle() } }, aiNotice || ''),
+      ])
+    }
+
+    return { createContentCenter, createSettingsPanel }
   },
 })

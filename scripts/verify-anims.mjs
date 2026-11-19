@@ -60,13 +60,14 @@ export const ACTION_END = '// <dsh-famling:actions:end>'
 export const CLIENT_PATH = join(PLUGIN_ROOT, 'client.js')
 /**
  * First-screen budget for client.js itself (sprite payloads are lazy chunks).
- * 0.10.0 keeps the 72 KiB cap even though the role-as-theme content center grew:
- * its UI is a lazy package-local chunk (client.content.js), loaded only when the
- * panel opens, while client.js keeps the role bundle data, setters and the
- * background/font CSS-variable wiring. Sprite payloads stay lazy too, so the
- * entry is still far below the pre-split audit baseline (checked in tests).
+ * 0.10.1 raises the cap 72 -> 78 KiB for the minimal zero-button UI plus the
+ * right-click / Shift+F10 hierarchical menu (menu data, keyboard handling and
+ * viewport clamping must be available before the lazy chunk loads). The content
+ * center and the unified settings popup stay in client.content.js, and sprite
+ * payloads stay in per-character chunks, so the entry is still well below the
+ * pre-split audit baseline (checked in tests).
  */
-export const FIRST_SCREEN_BUDGET_BYTES = 72 * 1024
+export const FIRST_SCREEN_BUDGET_BYTES = 78 * 1024
 /** Package-local lazy chunk file names, accepted by the DSH client module table. */
 export const CLIENT_CHUNK_RE = /^client\.anims\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 /** Absolute external URLs in a load path would break the offline/no-network contract. */

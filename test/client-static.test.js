@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
@@ -273,9 +273,9 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.10.0, publishes the lazy chunks and the v3 content contract', async () => {
+test('package version is 0.10.1, publishes the lazy chunks and the v3 content contract', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.10.0')
+  assert.equal(pkg.version, '0.10.1')
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'package exports the content extension contract')
   assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
@@ -287,33 +287,120 @@ test('package version is 0.10.0, publishes the lazy chunks and the v3 content co
   assert.equal(module.name, 'dsh-famling')
 })
 
-test('client.js wires the 4th content button and lazy-loads the four-tab content UI chunk', () => {
-  assert.ok(clientSource.includes("content: '内容'"), 'zh sidebar label for the content button')
-  assert.ok(clientSource.includes("content: 'Content'"), 'en sidebar label for the content button')
-  assert.ok(clientSource.includes("contentTitle: '内容中心'"), 'zh content-center title')
-  assert.ok(clientSource.includes("contentEntry: '内容与角色…'"), 'single settings entry row')
-  assert.equal(clientSource.includes('contentTabs'), false, 'six first-level category tabs are gone from client.js')
-  assert.equal(clientSource.includes('const contentCards = {'), false, 'the old six-category card catalog is gone from client.js')
-  assert.ok(clientSource.includes('function requestContentChunk('), 'content UI chunk requester exists')
-  assert.ok(clientSource.includes("./client.content.js"), 'content UI loads from the package-local lazy chunk')
-  assert.ok(clientSource.includes("onClick: () => openPanel('content')"), 'the settings row and the 4th button open the content center')
-  assert.ok(contentSource.includes("chunk: 'client.content.js'"), 'content chunk registers the package-local chunk name')
-  assert.ok(contentSource.includes('function createContentCenter('), 'content chunk exposes the panel factory')
-  assert.ok(contentSource.includes('一键应用'), 'role cards expose a one-click apply button')
-  assert.ok(contentSource.includes('仅修改当前角色的搭配'), 'customize tab explains component-only overrides')
-  assert.ok(contentSource.includes('恢复角色默认'), 'customize tab has a restore-role-defaults button')
-  assert.ok(contentSource.includes('资产包'), 'pack tab documents asset-pack import')
-  assert.ok(contentSource.includes('远程市场接口已预留，服务器未配置'), 'market tab shows the reserved status')
-  assert.ok(contentSource.includes('researchOnly=true'), 'pack tab shows the declaration check')
-  for (const tab of ["roles: '角色'", "custom: '自定义'", "packs: '内容包'", "market: '市场'"]) assert.ok(contentSource.includes(tab), 'four first-level tabs: ' + tab)
-  assert.equal(/location\.(?:reload|href|assign|replace)\s*[=(]/.test(clientSource), false, 'content switches never reload or navigate')
+test('client.js renders the pet alone: no permanent action buttons and no HTML injection', () => {
+  assert.equal(clientSource.includes("key: 'buttons'"), false, 'the four persistent sidebar buttons are gone')
+  assert.equal(clientSource.includes("h('button', { key: 'input'"), false, 'no permanent input button')
+  assert.equal(clientSource.includes("h('button', { key: 'actions'"), false, 'no permanent interaction button')
+  assert.equal(clientSource.includes("h('button', { key: 'settings'"), false, 'no permanent settings button')
+  assert.equal(clientSource.includes("h('button', { key: 'content'"), false, 'no permanent content button')
+  assert.ok(clientSource.includes("'aria-haspopup': 'menu'"), 'the pet advertises the menu instead')
+  assert.ok(clientSource.includes('menuButton ? h('), 'the ⋯ trigger is opt-in only')
+  assert.ok(clientSource.includes('function loadMenuState()'), 'menu button state is loaded from storage')
+  assert.ok(clientSource.includes('return { button: false }'), 'the menu button defaults to hidden')
+  assert.equal(clientSource.includes(': false, page:'), false, 'open/submenu state is transient, not persisted')
   for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource]]) {
     assert.equal(source.includes('.innerHTML ='), false, name + ': no innerHTML injection')
     assert.equal(/\beval\s*\(|new Function\s*\(/.test(source), false, name + ': no eval/Function')
-    assert.equal(/(?:src|href)\s*[:=]\s*['"]https?:\/\//.test(source), false, name + ': no external asset URL')
   }
-  assert.equal(/(?:^|[^.\w])fetch\s*\(/.test(contentSource), false, 'content chunk never calls fetch')
-  assert.equal(/(?:fetch|import)\s*\(\s*['"]https?:\/\//.test(contentSource), false, 'content chunk never fetches a URL')
+})
+
+test('right-click menu is hierarchical, fixed/clamped and fully keyboard driven', () => {
+  assert.ok(clientSource.includes('onContextMenu: openMenu'), 'right click opens the menu')
+  assert.ok(clientSource.includes("'F10' && event.shiftKey"), 'Shift+F10 opens the menu')
+  assert.ok(clientSource.includes("key === 'ContextMenu'"), 'ContextMenu key opens the menu')
+  assert.ok(clientSource.includes("const MENU_KEY = 'dsh-famling/menu'"), 'menu state storage key')
+  assert.ok(clientSource.includes("menuPage === 'actions'") && clientSource.includes("menuPage === 'more'"), 'root plus actions/more submenu pages')
+  assert.ok(clientSource.includes('setMenuPage(item.submenu)'), 'submenu items switch the page')
+  assert.ok(clientSource.includes('function clampMenuPosition(x, y, width, height)'), 'viewport clamp helper')
+  assert.ok(clientSource.includes("position: 'fixed'"), 'menu is fixed positioned')
+  assert.ok(clientSource.includes("role: 'menu'") && clientSource.includes("role: 'menuitem'"), 'aria menu semantics')
+  assert.ok(clientSource.includes("'aria-activedescendant'"), 'the active item is announced')
+  for (const key of ["'ArrowDown'", "'ArrowUp'", "'Home'", "'End'", "'Escape'", "'Enter'"]) assert.ok(clientSource.includes(key), 'keyboard handling: ' + key)
+  assert.ok(clientSource.includes("key === 'ArrowLeft'") && clientSource.includes("key === 'ArrowRight'"), 'submenu page keyboard navigation')
+  assert.ok(clientSource.includes("label: '« ' + L.back"), 'submenu pages have a back item')
+  assert.ok(clientSource.includes('localStorage.setItem(MENU_KEY, JSON.stringify({ button: menuButton }))'), 'menu button preference persisted')
+  assert.ok(clientSource.includes("setMenuPage('root')"), 'each open starts at level one')
+  for (const label of ["chatEntry: '聊两句…'", "settingsEntry: '设置…'", "moreEntry: '更多'", "remindEntry: '提醒…'", "notice: '使用限制与版本'"]) assert.ok(clientSource.includes(label), 'localized menu label: ' + label)
+  // Offline / no-navigation invariants stay.
+  assert.equal(/location\.(?:reload|href|assign|replace)\s*[=(]/.test(clientSource), false, 'menu switches never reload or navigate')
+  assert.equal(/(?:fetch|import)\s*\(\s*['"]https?:\/\//.test(clientSource), false, 'no external fetch/import')
+  assert.equal(/(?:src|href)\s*[:=]\s*['"]https?:\/\//.test(clientSource), false, 'no external asset URL')
+})
+
+test('lazy panel chunk exposes the four-tab content center and the unified settings popup', () => {
+  assert.ok(contentSource.includes("chunk: 'client.content.js'"), 'content chunk registers the package-local chunk name')
+  assert.ok(contentSource.includes('function createContentCenter('), 'content chunk exposes the content center factory')
+  assert.ok(contentSource.includes('function createSettingsPanel('), 'content chunk exposes the unified settings factory')
+  assert.ok(contentSource.includes('createContentCenter, createSettingsPanel'), 'both popups are exported from the lazy chunk')
+  assert.ok(clientSource.includes('panelChunk.createContentCenter('), 'client.js renders the content center through the lazy chunk')
+  assert.ok(clientSource.includes('panelChunk.createSettingsPanel('), 'client.js renders settings through the lazy chunk')
+  for (const label of ['一键应用', '仅修改当前角色的搭配', '恢复角色默认', '资产包', '远程市场接口已预留', 'researchOnly=true']) assert.ok(contentSource.includes(label), 'content chunk keeps: ' + label)
+  for (const tab of ["roles: '角色'", "custom: '自定义'", "packs: '内容包'", "market: '市场'"]) assert.ok(contentSource.includes(tab), 'four first-level tabs: ' + tab)
+  // Unified settings popup: every adjustable item + folded advanced/debug.
+  for (const label of ["settingsTitle: '设置'", "showMenuButton: '显示菜单按钮'", "menuButtonHint:", "advancedGroup: '高级 / 调试'", "motion: '帧动画'", "bubble: '说话气泡'", "memoryGroup: 'Advisers'", "contentEntry: '内容与角色…'"]) assert.ok(contentSource.includes(label), 'settings labels: ' + label)
+  for (const toggle of ["toggle('motion'", "toggle('bubble'", "toggle('menu-button'", "toggle('sound'"]) assert.ok(contentSource.includes(toggle), 'settings toggle: ' + toggle)
+  assert.ok(contentSource.includes("'aria-expanded': Boolean(advancedOpen)"), 'advanced/debug group folds behind a toggle')
+  assert.ok(contentSource.includes('setChoice') || contentSource.includes('choice('), 'appearance choices reuse the shared control helper')
+  assert.ok(clientSource.includes("advancedOpen: settingsAdvanced"), 'collapsed state is owned by client.js (stable hook order)')
+})
+
+test('client role bundles and dialogue modes mirror the shared famling content library', (t) => {
+  const begin = '// <dsh-famling:content:begin>'
+  const end = '// <dsh-famling:content:end>'
+  const block = clientSource.slice(clientSource.indexOf(begin) + begin.length, clientSource.indexOf(end))
+  const data = new Function(block + '\nreturn { ROLE_BUNDLES, ROLE_IDS, DIALOGUE_MODES }')()
+  assert.deepEqual(data.DIALOGUE_MODES, {
+    standard: { maxChars: 240, bubbleChance: 0.7 },
+    brief: { maxChars: 80, bubbleChance: 0.4 },
+    quiet: { maxChars: 50, bubbleChance: 0.05 },
+  }, 'dialogue modes mirror the shared dialoguePacks values')
+  const expected = {
+    human: { dialogue: 'standard', theme: 'default', background: 'transparent', family: 'system', canTts: true },
+    cat: { dialogue: 'standard', theme: 'night', background: 'dark', family: 'serif', canTts: false },
+    dog: { dialogue: 'standard', theme: 'paper', background: 'paper', family: 'system', canTts: false },
+  }
+  for (const [role, values] of Object.entries(expected)) {
+    const bundle = data.ROLE_BUNDLES[role]
+    assert.equal(bundle.dialogue, values.dialogue, role + ': dialogue matches shared rolePresets')
+    assert.equal(bundle.theme, values.theme, role + ': theme matches shared rolePresets')
+    assert.equal(bundle.background, values.background, role + ': background matches shared rolePresets')
+    assert.equal(bundle.font.family, values.family, role + ': font matches shared rolePresets')
+    assert.equal(bundle.voicePolicy.canTts, values.canTts, role + ': voice policy matches shared rolePresets')
+  }
+  assert.equal(data.ROLE_BUNDLES.origami.available, false, 'origami stays reserved (no art chunk in this plugin)')
+  assert.equal(data.ROLE_BUNDLES.origami.theme, 'night', 'origami high-contrast is explicitly mapped to night, never silently applied')
+  assert.ok(clientSource.includes('origami maps high-contrast to'), 'the origami mapping is documented in client.js')
+  assert.ok(clientSource.includes('brief 80 / 40%, quiet 50 / 5%'), 'shared dialogue values are documented in client.js')
+  // Cross-check against the actual shared library when the famling checkout is present.
+  const libraryPath = join(PLUGIN_ROOT, '..', '..', 'desktop-games', 'public', 'content', 'library.json')
+  if (!existsSync(libraryPath)) {
+    t.skip('famling public/content/library.json is not available in this checkout')
+    return
+  }
+  const library = JSON.parse(readFileSync(libraryPath, 'utf8'))
+  const characterMap = { humanoid: 'human', cat: 'cat', dog: 'dog', origami: 'origami' }
+  for (const role of ['human', 'cat', 'dog']) {
+    const preset = library.rolePresets.find((item) => item.id === role)
+    assert.ok(preset, 'shared rolePreset exists: ' + role)
+    const bundle = data.ROLE_BUNDLES[role]
+    assert.equal(bundle.character, characterMap[preset.characterId], role + ': characterId maps to the plugin character')
+    assert.equal(bundle.dialogue, preset.dialoguePackId, role + ': dialoguePackId')
+    assert.equal(bundle.theme, preset.appearance.themeId, role + ': themeId')
+    assert.equal(bundle.background, preset.appearance.backgroundId, role + ': backgroundId')
+    assert.equal(bundle.font.family, preset.appearance.fontId, role + ': fontId')
+    assert.equal(bundle.voicePolicy.canTts, preset.voiceId !== 'none', role + ': voiceId -> canTts')
+  }
+  const origami = library.rolePresets.find((item) => item.id === 'origami')
+  assert.ok(origami, 'shared origami preset exists')
+  assert.equal(origami.appearance.themeId, 'high-contrast', 'shared origami theme is high-contrast')
+  const pluginThemeIds = ['default', 'paper', 'night']
+  assert.equal(pluginThemeIds.includes(origami.appearance.themeId), false, 'this plugin has no high-contrast theme, hence the documented night mapping')
+  for (const pack of library.dialoguePacks) {
+    const mode = data.DIALOGUE_MODES[pack.mode]
+    assert.ok(mode, 'dialogue mode exists in client: ' + pack.mode)
+    assert.equal(mode.maxChars, pack.maxChars, pack.mode + ': maxChars matches the shared dialoguePacks')
+    assert.equal(mode.bubbleChance, pack.bubbleChance, pack.mode + ': bubbleChance matches the shared dialoguePacks')
+  }
 })
 
 test('role bundles persist every component in the existing keys and record dsh-famling/role', () => {

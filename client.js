@@ -74,11 +74,12 @@ window.__ModuleLoader__.load({
     const BACKGROUND_KEY = 'dsh-famling/background'
     const FONT_KEY = 'dsh-famling/font'
     const DIALOGUE_MODE_IDS = ['standard', 'brief', 'quiet']
-    // brief filters over-long replies; quiet keeps only ~35% of ambient bubbles.
+    // Mirrors famling dialoguePacks (shared famling.content/0.2): standard
+    // 240 chars / 70% bubbles, brief 80 / 40%, quiet 50 / 5%; keep in sync.
     const DIALOGUE_MODES = {
-      standard: { maxChars: 0, bubbleChance: 1 },
-      brief: { maxChars: 90, bubbleChance: 1 },
-      quiet: { maxChars: 0, bubbleChance: 0.35 },
+      standard: { maxChars: 240, bubbleChance: 0.7 },
+      brief: { maxChars: 80, bubbleChance: 0.4 },
+      quiet: { maxChars: 50, bubbleChance: 0.05 },
     }
     const THEME_IDS = ['default', 'paper', 'night']
     // Local bubble/panel themes applied as CSS custom properties on the widget
@@ -124,13 +125,17 @@ window.__ModuleLoader__.load({
     const FONT_SIZES = [11, 12, 14]
     const FONT_LINE_HEIGHTS = [1.4, 1.5, 1.8]
     const DEFAULT_FONT = { family: 'system', size: 12, lineHeight: 1.5 }
-    // One role bundle per character; origami is reserved until its art chunk exists.
+    // Mirrors famling rolePresets (shared famling.content/0.2); keep in sync:
+    // human standard/default/transparent/system, cat standard/night/dark/serif,
+    // dog standard/paper/paper/system, origami standard/high-contrast/mono.
+    // No high-contrast theme or origami art here: origami maps high-contrast to
+    // night and stays available:false, so it is never silently mismatched.
     const ROLE_IDS = ['human', 'cat', 'dog']
     const ROLE_BUNDLES = {
       human: { character: 'human', voicePolicy: { canTts: true, mode: 'speech', sound: true }, dialogue: 'standard', theme: 'default', background: 'transparent', font: { family: 'system', size: 12, lineHeight: 1.5 }, available: true },
-      cat: { character: 'cat', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'brief', theme: 'paper', background: 'paper', font: { family: 'serif', size: 12, lineHeight: 1.5 }, available: true },
-      dog: { character: 'dog', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'standard', theme: 'night', background: 'dark', font: { family: 'mono', size: 12, lineHeight: 1.5 }, available: true },
-      origami: { character: 'origami', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'quiet', theme: 'paper', background: 'transparent', font: { family: 'serif', size: 12, lineHeight: 1.5 }, available: false },
+      cat: { character: 'cat', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'standard', theme: 'night', background: 'dark', font: { family: 'serif', size: 12, lineHeight: 1.5 }, available: true },
+      dog: { character: 'dog', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'standard', theme: 'paper', background: 'paper', font: { family: 'system', size: 12, lineHeight: 1.5 }, available: true },
+      origami: { character: 'origami', voicePolicy: { canTts: true, mode: 'speech', sound: false }, dialogue: 'standard', theme: 'night', background: 'transparent', font: { family: 'mono', size: 12, lineHeight: 1.5 }, available: false },
     }
     // Pack declaration status shown in the content-pack tab; external packs are
     // validated by content-extension.mjs v3 against the same six prohibitions.
@@ -346,13 +351,16 @@ window.__ModuleLoader__.load({
         lang: 'zh',
         pet: '汀岚', title: 'Famling · {pet}', close: '关闭',
         character: '形象', characters: { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛' },
-        content: '内容', contentTitle: '内容中心', contentEntry: '内容与角色…',
+        contentTitle: '内容中心', contentEntry: '内容与角色…',
         contentLoading: '正在加载内容中心…', contentFailed: '内容中心加载失败，角色与外观设置仍可继续使用。',
-        input: '输入', interact: '互动', settings: '设置',
+        interact: '互动', settings: '设置',
+        menu: '菜单', menuButton: '显示菜单按钮',
+        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.1 · 研究原型',
         inputTitle: '和{pet}说话', placeholder: '对{pet}说点什么…',
-        mic: '语音输入', send: '发送', speaking: '正在听…',
-        actions: '选择互动',
-        settingsTitle: '设置', sound: '语音朗读', motion: '帧动画', bubble: '说话气泡', memory: '读取 Advisers 摘要', today: '今天', commitments: '承诺',
+        mic: '语音输入', send: '发送',
+        settingsTitle: '设置', sound: '语音朗读',
+        aiNotice: 'AI 声明：角色与语音为 AI 生成/合成，不是真人；本插件不提供自由 LLM 角色扮演或情感陪伴。',
+        settingsLoading: '正在加载设置…', settingsFailed: '设置面板加载失败；右键菜单与角色互动仍可继续使用。',
         useRestrictions: '⚠️ 使用限制：本项目及全部代码、美术、音频、文案、角色素材仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、医疗/心理/法律/金融建议或任何违规用途。',
         ttsHumanOnly: '语音朗读仅汀岚形象可用；塞尔凯克卷毛猫（卷毛灰白）/金毛只显示“心里话”气泡，浏览器 TTS 不会被调用（切换时也会停止朗读）。',
         consentTts: '开启语音朗读前需独立确认：使用浏览器系统语音，不是 DeepSeek stella/tide；回复文本会被朗读，可随时关闭。',
@@ -364,19 +372,22 @@ window.__ModuleLoader__.load({
         patLine: '被摸到了。', paperLine: '纸团飞出去了。', chasePaperLine: '纸团滚走了，捡回来。', waveLine: '挥了挥手。', stretchLine: '伸了个懒腰。', coverFaceLine: '抬手理了理头发。', lookBackLine: '回头看了一眼。',
         catPatLine: '（被摸到了，呼噜呼噜…）', catPaperLine: '（那个纸团…想扑。）', catChaseLine: '（球！抓住它。）', catWashLine: '（洗洗脸。）', catStandLine: '（站起来看看。）', catTailLine: '（尾巴…转。）', catScratchLine: '（挠挠耳朵。）',
         dogPatLine: '（好舒服，还要！）', dogPaperLine: '（球！丢远点！）', dogChaseLine: '（我去捡回来！）', dogWagLine: '（摇尾巴…开心。）', dogTailLine: '（尾巴在动？追！）', dogScratchLine: '（挠挠痒。）', dogLickLine: '（舔舔爪子。）',
-        thought: '（心里话）',
       },
       en: {
         lang: 'en',
         pet: 'Tinglan', title: 'Famling · {pet}', close: 'Close',
         character: 'Character', characters: { human: 'Tinglan', cat: 'Selkirk Rex', dog: 'Golden Retriever' },
-        content: 'Content', contentTitle: 'Content Center', contentEntry: 'Content & characters…',
+        contentTitle: 'Content Center', contentEntry: 'Content & characters…',
         contentLoading: 'Loading content center…', contentFailed: 'The content center failed to load; character and appearance settings still work.',
-        input: 'Input', interact: 'Play', settings: 'Settings',
+        interact: 'Play', settings: 'Settings',
+        menu: 'Menu', menuButton: 'Show menu button',
+        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.1 · research prototype',
         inputTitle: 'Talk to {pet}', placeholder: 'Say something to {pet}…',
-        mic: 'Voice input', send: 'Send', speaking: 'Listening…',
-        actions: 'Choose an action', actionLabels: { pat: 'Pat', fetch: 'Throw / fetch', retrieve: 'Fetch', tail: 'Chase tail', run: 'Run', stretch: 'Stretch', wash: 'Wash face', feed: 'Hand paper', wave: 'Wave', tidy: 'Fix bow', talk: 'Chat' },
-        settingsTitle: 'Settings', sound: 'Voice', motion: 'Frame animation', bubble: 'Speech bubble', memory: 'Read Advisers summary', today: 'Today', commitments: 'Commitments',
+        mic: 'Voice input', send: 'Send',
+        actionLabels: { pat: 'Pat', fetch: 'Throw / fetch', retrieve: 'Fetch', tail: 'Chase tail', run: 'Run', stretch: 'Stretch', wash: 'Wash face', feed: 'Hand paper', wave: 'Wave', tidy: 'Fix bow', talk: 'Chat' },
+        settingsTitle: 'Settings', sound: 'Voice',
+        aiNotice: 'AI notice: character and voice are AI-generated, not a human; this plugin offers no free-form roleplay or emotional companionship.',
+        settingsLoading: 'Loading settings…', settingsFailed: 'The settings panel failed to load; the right-click menu and interactions still work.',
         useRestrictions: '⚠️ Use restriction: this project and all code, art, audio, text and character assets are for technical research and prototype validation only. Do not use them for emotional companionship, virtual partners, medical/psychological/legal/financial advice, or any unlawful purpose.',
         ttsHumanOnly: 'Voice playback is only available for Tinglan; the Selkirk Rex cat (curly grey-white) and Golden Retriever use hollow thought bubbles and never call browser TTS (any running speech is cancelled on switch).',
         consentTts: 'Voice playback needs separate confirmation: it uses the browser system voice, not DeepSeek stella/tide; replies may be read aloud and can be switched off.',
@@ -388,7 +399,6 @@ window.__ModuleLoader__.load({
         patLine: 'Pat received.', paperLine: 'Paper ball away!', chasePaperLine: 'The paper ball rolled off; picked it up.', waveLine: 'Waved hello.', stretchLine: 'Stretched a little.', coverFaceLine: 'Tidied her hair.', lookBackLine: 'Glanced back.',
         catPatLine: '(Patted. Purr…)', catPaperLine: '(That paper ball… pounce?)', catChaseLine: '(Ball! Got it.)', catWashLine: '(Washing my face.)', catStandLine: '(Standing up to look.)', catTailLine: '(Tail… spinning.)', catScratchLine: '(Scratching an ear.)',
         dogPatLine: '(So good! Again!)', dogPaperLine: '(Ball! Throw it far!)', dogChaseLine: '(I will fetch it!)', dogWagLine: '(Tail wagging… happy.)', dogTailLine: '(Tail moved? Chase!)', dogScratchLine: '(Scratching an itch.)', dogLickLine: '(Licking a paw.)',
-        thought: '(inner thought)',
       },
     }
     const buttonBase = {
@@ -408,6 +418,29 @@ window.__ModuleLoader__.load({
     const CONSENT_KEY = 'dsh-famling/consent/v1'
     function loadConsent() {
       try { return { tts: false, asr: false, ...JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') } } catch { return { tts: false, asr: false } }
+    }
+    // Sidebar menu: the pet is the only permanent UI; right click / Shift+F10 /
+    // ContextMenu opens it at level one every time. Only the opt-in trigger
+    // preference persists (dsh-famling/menu); open/page state is transient.
+    const MENU_KEY = 'dsh-famling/menu'
+    const MENU_WIDTH = 200
+    const MENU_ITEM_HEIGHT = 30
+    const MENU_PADDING = 8
+    function loadMenuState() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(MENU_KEY) || 'null')
+        if (stored && typeof stored === 'object') return { button: stored.button === true }
+      } catch {}
+      return { button: false }
+    }
+    /** Keep a fixed menu inside the viewport (8px margin on every side). */
+    function clampMenuPosition(x, y, width, height) {
+      const viewportWidth = typeof window !== 'undefined' && Number.isFinite(window.innerWidth) ? window.innerWidth : 1024
+      const viewportHeight = typeof window !== 'undefined' && Number.isFinite(window.innerHeight) ? window.innerHeight : 768
+      const margin = 8
+      const left = Math.max(margin, Math.min(Number.isFinite(x) ? x : margin, viewportWidth - width - margin))
+      const top = Math.max(margin, Math.min(Number.isFinite(y) ? y : margin, viewportHeight - height - margin))
+      return { left, top }
     }
     function FamlingFooter() {
       const L = labels()
@@ -440,6 +473,14 @@ window.__ModuleLoader__.load({
       const [voices, setVoices] = useState(availableVoices)
       const [backgroundId, setBackgroundId] = useState(loadBackgroundId)
       const [fontChoice, setFontChoice] = useState(loadFontChoice)
+      const [menuButton, setMenuButton] = useState(() => loadMenuState().button)
+      const [menuPage, setMenuPage] = useState('root')
+      const [menuOpen, setMenuOpen] = useState(false)
+      const [menuAnchor, setMenuAnchor] = useState({ x: 8, y: 8 })
+      const [menuActive, setMenuActive] = useState(0)
+      const [settingsAdvanced, setSettingsAdvanced] = useState(false)
+      const menuRef = useRef(null)
+      const petRef = useRef(null)
       const pendingConsent = useRef(null)
       const [brief, setBrief] = useState(null)
       const [briefError, setBriefError] = useState('')
@@ -481,6 +522,9 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         try { localStorage.setItem(FONT_KEY, JSON.stringify(fontChoice)) } catch {}
       }, [fontChoice])
+      useEffect(() => {
+        try { localStorage.setItem(MENU_KEY, JSON.stringify({ button: menuButton })) } catch {}
+      }, [menuButton])
       useEffect(() => {
         if (mode !== 'content' || contentTab !== 'custom') return undefined
         const load = () => setVoices(availableVoices())
@@ -588,7 +632,7 @@ window.__ModuleLoader__.load({
       // The content-center UI is a package-local lazy chunk: load it only when
       // the panel opens, so the first-screen entry stays within its budget.
       useEffect(() => {
-        if (mode !== 'content' || contentState !== 'idle') return undefined
+        if ((mode !== 'content' && mode !== 'settings') || contentState !== 'idle') return undefined
         let alive = true
         requestContentChunk((module) => { if (alive) setContentState(module ? 'ready' : 'failed') })
         return () => { alive = false }
@@ -602,6 +646,26 @@ window.__ModuleLoader__.load({
         closeRef.current?.focus()
         return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onPointer) }
       }, [mode])
+      // Menu: roving focus on the active menuitem; outside click / Escape /
+      // window blur closes it (no stuck menu during screen sharing).
+      useEffect(() => {
+        if (!menuOpen) return undefined
+        const node = menuRef.current
+        const target = node && typeof node.querySelectorAll === 'function' ? node.querySelectorAll('[role="menuitem"]')[menuActive] : null
+        if (target && typeof target.focus === 'function') target.focus()
+        const close = () => setMenuOpen(false)
+        const onPointer = (event) => { if (!node || typeof node.contains !== 'function' || !node.contains(event.target)) close() }
+        const onKey = (event) => { if (event.key === 'Escape') close() }
+        const onBlur = () => close()
+        document.addEventListener('pointerdown', onPointer)
+        document.addEventListener('keydown', onKey)
+        if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('blur', onBlur)
+        return () => {
+          document.removeEventListener('pointerdown', onPointer)
+          document.removeEventListener('keydown', onKey)
+          if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') window.removeEventListener('blur', onBlur)
+        }
+      }, [menuOpen, menuActive, menuPage])
       useEffect(() => () => { if (bubbleTimer.current) clearTimeout(bubbleTimer.current); if (followUpTimer.current) clearTimeout(followUpTimer.current); if (briefHideTimer.current) clearTimeout(briefHideTimer.current); recognitionRef.current?.abort?.() }, [])
       useEffect(() => {
         // Private Advisers briefs may contain client/colleague names: hide on
@@ -642,9 +706,92 @@ window.__ModuleLoader__.load({
         if (!rect) return { left: 12, bottom: 90 }
         return { left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 328)), bottom: Math.max(8, window.innerHeight - rect.bottom) }
       }
-      function openPanel(next) {
+      function showPanel(next) {
         panelAnchor.current = anchor()
-        setMode((value) => value === next ? null : next)
+        setMode(next)
+      }
+      function focusPet() {
+        const node = petRef.current
+        if (node && typeof node.focus === 'function') node.focus()
+      }
+      /** Anchor a menu to an element (keyboard open / opt-in trigger). */
+      function elementAnchor(ref) {
+        const rect = ref && ref.current && typeof ref.current.getBoundingClientRect === 'function' ? ref.current.getBoundingClientRect() : null
+        return rect ? { x: rect.left, y: rect.bottom + 4 } : { x: 12, y: Math.max(8, (typeof window !== 'undefined' ? window.innerHeight : 768) - 320) }
+      }
+      function showMenuAt(point) {
+        setMode(null)
+        setMenuPage('root')
+        setMenuAnchor(point)
+        setMenuActive(0)
+        setMenuOpen(true)
+      }
+      /** Right click / ContextMenu event: open at the pointer (clamped later). */
+      function openMenu(event) {
+        const native = event && event.nativeEvent ? event.nativeEvent : event
+        if (event && typeof event.preventDefault === 'function') event.preventDefault()
+        const x = native && Number.isFinite(native.clientX) ? native.clientX : null
+        const y = native && Number.isFinite(native.clientY) ? native.clientY : null
+        showMenuAt(x === null || y === null ? elementAnchor(petRef) : { x, y })
+      }
+      function openMenuFrom(ref) { showMenuAt(elementAnchor(ref)) }
+      function closeMenu(refocus) {
+        setMenuOpen(false)
+        if (refocus !== false) focusPet()
+      }
+      /** Shift+F10 and the ContextMenu/Apps keyboard key open the same menu. */
+      function onPetKeyDown(event) {
+        const key = event && event.key
+        const keyboardMenu = key === 'ContextMenu' || key === 'Apps' || (key === 'F10' && event.shiftKey === true)
+        if (!keyboardMenu) return
+        if (typeof event.preventDefault === 'function') event.preventDefault()
+        openMenuFrom(petRef)
+      }
+      /** One data list per menu page keeps the hierarchy small and uniform. */
+      function menuItems() {
+        const back = { id: 'back', label: '« ' + L.back, run: () => { setMenuPage('root'); setMenuActive(0) } }
+        if (menuPage === 'actions') {
+          const actions = Array.isArray(ANIMS[character]?.actions) ? ANIMS[character].actions : []
+          return [back, ...actions.map((action) => ({
+            id: 'action-' + action.id,
+            label: (L.actionLabels && L.actionLabels[action.id]) || action.label,
+            run: () => { closeMenu(true); runAction(action) },
+          }))]
+        }
+        if (menuPage === 'more') {
+          return [back,
+            { id: 'remind', label: L.remindEntry, run: () => { closeMenu(false); setTaskMode(true); showPanel('input') } },
+            { id: 'notice', label: L.notice, run: () => { closeMenu(false); showPanel('notice') } },
+          ]
+        }
+        return [
+          { id: 'chat', label: L.chatEntry, run: () => { closeMenu(false); setTaskMode(false); showPanel('input') } },
+          { id: 'actions', label: L.interact, submenu: 'actions' },
+          { id: 'content', label: L.contentEntry, run: () => { closeMenu(false); showPanel('content') } },
+          { id: 'settings', label: L.settingsEntry, run: () => { closeMenu(false); showPanel('settings') } },
+          { id: 'more', label: L.moreEntry, submenu: 'more' },
+        ]
+      }
+      function activateMenuItem(item) {
+        if (!item) return
+        if (item.submenu) { setMenuPage(item.submenu); setMenuActive(0); return }
+        if (typeof item.run === 'function') item.run()
+      }
+      function onMenuKeyDown(event) {
+        const items = menuItems()
+        const count = items.length
+        const key = event && event.key
+        const prevent = () => { if (event && typeof event.preventDefault === 'function') event.preventDefault() }
+        if (count === 0 || typeof key !== 'string') return
+        if (key === 'ArrowDown' || key === 'Down') { prevent(); setMenuActive((value) => (value + 1) % count); return }
+        if (key === 'ArrowUp' || key === 'Up') { prevent(); setMenuActive((value) => (value - 1 + count) % count); return }
+        if (key === 'Home') { prevent(); setMenuActive(0); return }
+        if (key === 'End') { prevent(); setMenuActive(count - 1); return }
+        if (key === 'ArrowRight' || key === 'Right') { const item = items[menuActive]; if (item && item.submenu) { prevent(); activateMenuItem(item) } return }
+        if (key === 'ArrowLeft' || key === 'Left') { if (menuPage !== 'root') { prevent(); setMenuPage('root'); setMenuActive(0) } return }
+        if (key === 'Enter' || key === ' ') { prevent(); activateMenuItem(items[menuActive]); return }
+        if (key === 'Escape') { prevent(); closeMenu(true); return }
+        if (key === 'Tab') closeMenu(false)
       }
       function clearFollowUp() {
         if (followUpTimer.current) {
@@ -915,7 +1062,7 @@ window.__ModuleLoader__.load({
             h('button', { key: 'send', type: 'button', onClick: () => void sendInput(), style: { ...buttonBase, padding: '8px 7px' } }, L.send),
           ]),
         ]),
-        h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, 'AI 声明：角色与语音为 AI 生成/合成，不是真人；本插件不提供自由 LLM 角色扮演或情感陪伴。 / AI notice: character and voice are AI-generated, not a human; no free-form roleplay.'),
+        h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.aiNotice),
         h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, [
           h('button', { key: 'toggle', type: 'button', onClick: () => setTaskMode((value) => !value), style: { ...buttonBase, padding: '4px 7px' } }, L.task),
           taskMode ? h('div', { key: 'form', style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 } }, [
@@ -925,46 +1072,64 @@ window.__ModuleLoader__.load({
           ]) : null,
         ]),
       ]) : null
-      // The interaction menu is the current character's embedded actions table:
-      // labels/says are data (regions.json), only the en label mapping is local.
-      const speciesActions = Array.isArray(ANIMS[character]?.actions) ? ANIMS[character].actions : []
-      const actionLabel = (action) => (L.actionLabels && L.actionLabels[action.id]) || action.label
-      const actionPanel = mode === 'actions' ? h('div', { role: 'dialog', 'aria-label': L.actions, style: { ...panelStyle, width: 'fit-content' } }, [
-        h('strong', { key: 't', style: { display: 'block', marginBottom: 7 } }, L.actions),
-        h('div', { key: 'actions', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, speciesActions.map((action) =>
-          h('button', { key: action.id, type: 'button', onClick: () => runAction(action), style: { ...buttonBase, padding: '6px 9px' } }, actionLabel(action)))),
-        h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, marginTop: 8, padding: '4px 7px' } }, '×'),
-      ]) : null
-      const settingsPanel = mode === 'settings' ? h('div', { role: 'dialog', 'aria-label': L.settingsTitle, style: { ...panelStyle, width: 280 } }, [
-        h('p', { key: 'use-restrictions', role: 'note', style: { margin: '0 0 7px', padding: '7px 8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.45, color: 'var(--dsw-alias-label-primary, #e8e8e8)' } }, L.useRestrictions),
-        h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', marginBottom: 8 } }, [
-          h('strong', { key: 't', style: { flex: 1 } }, L.settingsTitle),
+      // Menu node: data-driven pages rendered as aria menuitems; positioned
+      // fixed and clamped to the viewport (right-click, keyboard or trigger).
+      const currentMenuItems = menuItems()
+      const menuHeight = MENU_PADDING + currentMenuItems.length * MENU_ITEM_HEIGHT
+      const menuPosition = clampMenuPosition(menuAnchor.x, menuAnchor.y, MENU_WIDTH, menuHeight)
+      const menuNode = menuOpen ? h('div', {
+        key: 'menu', ref: menuRef, id: 'dsh-famling-menu', role: 'menu', 'aria-label': L.menu,
+        'aria-activedescendant': 'dsh-famling-menu-item-' + menuActive,
+        onKeyDown: onMenuKeyDown,
+        onContextMenu: (event) => { if (event && typeof event.preventDefault === 'function') event.preventDefault(); if (event && typeof event.stopPropagation === 'function') event.stopPropagation() },
+        style: {
+          position: 'fixed', left: menuPosition.left, top: menuPosition.top, zIndex: 1300, padding: 4, minWidth: MENU_WIDTH,
+          maxWidth: 'calc(100vw - 16px)', pointerEvents: 'auto',
+          background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
+          color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, #e8e8e8))',
+          border: '1px solid var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, rgba(255,255,255,.16)))',
+          borderRadius: 'var(--dsw-radius-md, 10px)',
+          boxShadow: '0 0 0 3px var(--dsh-famling-widget-bg, transparent), 0 10px 30px rgba(0,0,0,.35)',
+          fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)',
+          fontFamily: 'var(--dsh-famling-font-family, inherit)',
+        },
+      }, currentMenuItems.map((item, index) => h('button', {
+        key: item.id, id: 'dsh-famling-menu-item-' + index, role: 'menuitem', type: 'button', tabIndex: index === menuActive ? 0 : -1,
+        'aria-haspopup': item.submenu ? 'menu' : undefined,
+        'aria-expanded': item.submenu ? menuPage === item.submenu : undefined,
+        onMouseEnter: () => setMenuActive(index),
+        onClick: () => activateMenuItem(item),
+        style: {
+          ...buttonBase, display: 'block', width: '100%', textAlign: 'left', padding: '6px 9px', fontSize: 'inherit',
+          marginBottom: index + 1 === currentMenuItems.length ? 0 : 3, border: '1px solid transparent', borderRadius: 5, whiteSpace: 'nowrap',
+          background: index === menuActive ? 'var(--dsh-famling-accent, #7aa2ff)' : 'transparent',
+          color: index === menuActive ? '#ffffff' : 'inherit',
+        },
+      }, [h('span', { key: 'label' }, item.label), item.submenu ? h('span', { key: 'arrow', 'aria-hidden': true }, ' ▸') : null]))) : null
+      // More -> usage notice: short legal text, closed by the standard dialog keys.
+      const noticePanel = mode === 'notice' ? h('div', { role: 'dialog', 'aria-label': L.notice, style: { ...panelStyle, width: 300 } }, [
+        h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } }, [
+          h('strong', { key: 't', style: { flex: 1 } }, L.notice),
           h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
         ]),
-        h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, 'AI 声明：角色与语音为 AI 生成/合成，不是真人；本插件不提供自由 LLM 角色扮演或情感陪伴。 / AI notice: character and voice are AI-generated, not a human; no free-form roleplay.'),
-        h('div', { key: 'content', style: { marginBottom: 7 } }, [
-          h('button', { key: 'open', type: 'button', onClick: () => openPanel('content'), style: { ...buttonBase, width: '100%', padding: '6px 8px', textAlign: 'left' } }, L.contentEntry),
-        ]),
-        ...['motion','bubble'].map((key) => h('label', { key, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer' } }, [
-          h('input', { type: 'checkbox', checked: settings[key], onChange: () => updateSetting(key) }),
-          h('span', null, L[key]),
-        ])),
-        h('div', { key: 'memory', style: { borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', marginTop: 6, paddingTop: 7 } }, [
-          h('button', { key: 'refresh', type: 'button', onClick: () => void loadBrief(), style: { ...buttonBase, padding: '4px 7px', marginBottom: 5 } }, L.memory),
-          brief ? h('div', { key: 'brief', style: { fontSize: 11, lineHeight: 1.5 } }, [
-            h('button', { key: 'hide', type: 'button', onClick: () => setBrief(null), 'aria-label': '隐藏 Advisers 摘要', style: { float: 'right', border: 0, background: 'transparent', color: 'var(--dsw-alias-label-caption, #9aa0a6)', cursor: 'pointer', fontSize: 12 } }, '隐藏'),
-            h('div', { key: 'counts' }, `${L.today}: ${brief.counts.today} · ${L.commitments}: ${brief.counts.commitments}`),
-            ...(brief.today || []).slice(0, 2).map((item, index) => h('div', { key: 't' + index, style: { color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, '· ' + item.title)),
-          ]) : null,
-          briefError ? h('div', { key: 'err', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, briefError) : null,
-        ]),
+        h('p', { key: 'version', style: { margin: '0 0 7px', fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.version),
+        h('p', { key: 'use', role: 'note', style: { margin: 0, padding: '8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.5 } }, L.useRestrictions),
       ]) : null
-      // Content center: the single UI entry for the four tabs (roles / customize /
-      // packs / market). Role application, persistence and all setters live here;
-      // the visual panel itself is the lazy client.content.js chunk.
+      // Lazy panel chunk: the content center and the unified settings popup
+      // share client.content.js; both degrade to a local message when it fails.
+      const panelChunk = contentChunk.module
+      function panelFallback(title, message) {
+        return h('div', { role: 'dialog', 'aria-label': title, style: { ...panelStyle, width: 300 } }, [
+          h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
+            h('strong', { key: 't', style: { flex: 1 } }, title),
+            h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
+          ]),
+          h('p', { key: 'state', style: { margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, message),
+        ])
+      }
       const contentPanel = mode === 'content'
-        ? contentState === 'ready' && contentChunk.module
-          ? contentChunk.module.createContentCenter({
+        ? panelChunk && typeof panelChunk.createContentCenter === 'function'
+          ? panelChunk.createContentCenter({
               lang: L.lang,
               tab: contentTab, setTab: setContentTab,
               character, roleId, canTts, ttsConsent, voices, settings,
@@ -975,13 +1140,24 @@ window.__ModuleLoader__.load({
               onClose: () => setMode(null),
               panelStyle, buttonBase, catalog: CONTENT_CATALOG,
             })
-          : h('div', { role: 'dialog', 'aria-label': L.contentTitle, style: { ...panelStyle, width: 300 } }, [
-              h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
-                h('strong', { key: 't', style: { flex: 1 } }, L.contentTitle),
-                h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
-              ]),
-              h('p', { key: 'state', style: { margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, contentState === 'failed' ? L.contentFailed : L.contentLoading),
-            ])
+          : panelFallback(L.contentTitle, contentState === 'failed' ? L.contentFailed : L.contentLoading)
+        : null
+      const settingsPanel = mode === 'settings'
+        ? panelChunk && typeof panelChunk.createSettingsPanel === 'function'
+          ? panelChunk.createSettingsPanel({
+              lang: L.lang, aiNotice: L.aiNotice, useRestrictions: L.useRestrictions,
+              character, roleId, canTts, ttsConsent, voices, settings, setSettings,
+              menuButton, dialogueMode, themeId, backgroundId, fontChoice, brief, briefError,
+              advancedOpen: settingsAdvanced, onToggleAdvanced: () => setSettingsAdvanced((value) => !value),
+              updateSetting, setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
+              onToggleSound: () => updateSetting('sound'),
+              onToggleMenuButton: () => setMenuButton((value) => !value),
+              onLoadBrief: () => void loadBrief(), onHideBrief: () => setBrief(null),
+              onOpenContent: () => { panelAnchor.current = anchor(); setMode('content') },
+              onRestoreRole: restoreRole, onClose: () => setMode(null),
+              panelStyle, buttonBase, catalog: CONTENT_CATALOG,
+            })
+          : panelFallback(L.settingsTitle, contentState === 'failed' ? L.settingsFailed : L.settingsLoading)
         : null
       const consentNode = consentKind ? h('div', {
         role: 'dialog', 'aria-modal': true, 'aria-label': consentKind === 'tts' ? L.sound : L.mic,
@@ -1013,16 +1189,11 @@ window.__ModuleLoader__.load({
           borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)', overflowWrap: 'anywhere',
         },
       }, bubble) : null
-      return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, style: { position: 'relative', display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', background: 'var(--dsh-famling-widget-bg, transparent)', color: 'var(--dsh-famling-widget-fg, inherit)', fontFamily: 'var(--dsh-famling-font-family, inherit)', borderRadius: 10, ...themeVars, ...backgroundVars, ...fontVars } }, [
-        h('button', { key: 'pet', type: 'button', onClick: onPetClick, 'aria-label': charName, title: fillPet(L.title), style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
+      return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, onContextMenu: openMenu, style: { position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 4, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', background: 'var(--dsh-famling-widget-bg, transparent)', color: 'var(--dsh-famling-widget-fg, inherit)', fontFamily: 'var(--dsh-famling-font-family, inherit)', borderRadius: 10, ...themeVars, ...backgroundVars, ...fontVars } }, [
+        h('button', { key: 'pet', ref: petRef, type: 'button', onClick: onPetClick, onContextMenu: openMenu, onKeyDown: onPetKeyDown, 'aria-label': charName, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: fillPet(L.title), style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
           h('img', { src, width: SIZE, height: SIZE, alt: charName, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),
-        h('div', { key: 'buttons', style: { display: 'flex', flexDirection: 'column', gap: 3, flex: 'none', pointerEvents: 'auto' } }, [
-          h('button', { key: 'input', type: 'button', onClick: () => openPanel('input'), 'aria-expanded': mode === 'input', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.input),
-          h('button', { key: 'actions', type: 'button', onClick: () => openPanel('actions'), 'aria-expanded': mode === 'actions', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.interact),
-          h('button', { key: 'settings', type: 'button', onClick: () => openPanel('settings'), 'aria-expanded': mode === 'settings', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.settings),
-          h('button', { key: 'content', type: 'button', onClick: () => openPanel('content'), 'aria-expanded': mode === 'content', style: { ...buttonBase, padding: '4px 7px', fontSize: 11 } }, L.content),
-        ]),
-        inputPanel, actionPanel, settingsPanel, contentPanel, bubbleNode,
+        menuButton ? h('button', { key: 'menu-trigger', type: 'button', onClick: () => openMenuFrom(petRef), 'aria-label': L.menu, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: L.menuButton, style: { ...buttonBase, flex: 'none', padding: '1px 6px', fontSize: 11, lineHeight: 1.4, pointerEvents: 'auto' } }, '⋯') : null,
+        menuNode, inputPanel, noticePanel, contentPanel, settingsPanel, consentNode, bubbleNode,
       ])
     }
     return {

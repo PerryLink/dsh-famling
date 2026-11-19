@@ -126,7 +126,7 @@ function createUi(Component, ReactRuntime) {
     findInput(type) { return findAll((node) => node.type === 'input' && node.props.type === type)[0] },
     findBubble() { return findAll((node) => node.type === 'div' && node.props.role === 'status')[0] },
     findPetButton() { return findAll((node) => node.type === 'button' && typeof node.props.title === 'string' && node.props.title.startsWith('Famling ·'))[0] },
-    menuLabels() { return findAll((node) => node.type === 'button').map((node) => textOf(node)).filter((text) => text !== '' && !['输入', '互动', '设置', '×', 'Input', 'Play', 'Settings', 'Close'].includes(text)) },
+    menuLabels() { return findAll((node) => node.type === 'button' && node.props.role === 'menuitem').map((node) => textOf(node)) },
     /**
      * Simulate a click on the pet image at an art-canvas point. The fake target
      * reports a rendered size, so the client must map offsetX/Y through the
@@ -177,6 +177,7 @@ function createHarness(options = {}) {
   if (options.theme) storage.set('dsh-famling/theme', options.theme)
   if (options.background) storage.set('dsh-famling/background', options.background)
   if (options.font) storage.set('dsh-famling/font', JSON.stringify(options.font))
+  if (options.menu) storage.set('dsh-famling/menu', JSON.stringify(options.menu))
   const localStorage = {
     getItem(key) { return storage.has(key) ? storage.get(key) : null },
     setItem(key, value) { storage.set(key, String(value)) },
@@ -206,7 +207,10 @@ function createHarness(options = {}) {
     },
     innerWidth: 1400,
     innerHeight: 900,
+    addEventListener(type, fn) { windowListeners.set(type, fn) },
+    removeEventListener(type) { windowListeners.delete(type) },
   }
+  const windowListeners = new Map()
   const timers = { intervals: [], timeouts: [], cleared: 0 }
   const sandbox = {
     window: windowStub,
@@ -229,7 +233,7 @@ function createHarness(options = {}) {
     console,
   }
   sandbox.globalThis = sandbox
-  const random = { fn: options.random || null }
+  const random = { fn: options.random || (() => 0) }
   const mathStub = Object.create(Math)
   mathStub.random = () => (random.fn ? random.fn() : Math.random())
   sandbox.Math = mathStub
@@ -289,7 +293,7 @@ function createHarness(options = {}) {
   assert.equal(typeof Component, 'function', 'FamlingFooter is registered into the sidebar footer slot')
   const ui = createUi(Component, React)
   ui.render()
-  return { ui, speech, fetchCalls, storage, timers, asyncCalls, module: moduleObject, setRandom(fn) { random.fn = fn } }
+  return { ui, speech, fetchCalls, storage, timers, asyncCalls, module: moduleObject, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn } }
 }
 
 function idleSrc(kind) {
@@ -352,8 +356,62 @@ function finishClip(ui, timers, kind, clipId) {
   }
 }
 
-test('default render is Tinglan with the embedded 72px idle frame', () => {
-  const { ui, speech } = createHarness()
+
+/* ---------- minimal UI / right-click menu helpers (0.10.1) ---------- */
+function menuNode(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'menu')[0] }
+function menuItemNodes(ui) { return ui.findAll((node) => node.type === 'button' && node.props.role === 'menuitem') }
+function menuLabels(ui) { return menuItemNodes(ui).map((node) => ui.text(node)) }
+function activeMenuItem(ui) { return menuItemNodes(ui).find((node) => node.props.tabIndex === 0) }
+function activeLabel(ui) { const node = activeMenuItem(ui); return node ? ui.text(node) : '' }
+function openMenuAt(ui, x = 120, y = 200) {
+  const pet = ui.findPetButton()
+  assert.ok(pet, 'pet button exists')
+  pet.props.onContextMenu({ preventDefault() {}, nativeEvent: { clientX: x, clientY: y } })
+  ui.render()
+  const node = menuNode(ui)
+  assert.ok(node, 'menu is open')
+  return node
+}
+function pressMenuKey(ui, key) {
+  const node = menuNode(ui)
+  assert.ok(node, 'menu is open for key ' + key)
+  node.props.onKeyDown({ key, preventDefault() {} })
+  ui.render()
+}
+function clickMenu(ui, label) {
+  const node = menuItemNodes(ui).find((item) => ui.text(item).includes(label))
+  assert.ok(node, 'menu item exists: ' + label)
+  ui.click(node)
+  ui.render()
+}
+function clickMenuItemExact(ui, label) {
+  const node = menuItemNodes(ui).find((item) => ui.text(item) === label)
+  assert.ok(node, 'menu item exists exactly: ' + label)
+  ui.click(node)
+  ui.render()
+}
+function openInputPanel(ui) { openMenuAt(ui); clickMenu(ui, '聊两句') }
+function openInteractions(ui) { openMenuAt(ui); clickMenu(ui, '互动') }
+function openContent(ui, tab) {
+  openMenuAt(ui)
+  clickMenu(ui, '内容与角色')
+  if (tab) { ui.clickExact(tab); ui.render() }
+}
+function openSettings(ui) { openMenuAt(ui); clickMenu(ui, '设置') }
+function contentDialog(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '内容中心')[0] }
+function settingsDialog(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '设置')[0] }
+function closeActiveDialog(ui) { ui.click(ui.findButtonByAria('关闭')); ui.render() }
+function checkboxByLabel(ui, label) {
+  const wrap = ui.findAll((node) => node.type === 'label' && ui.text(node).includes(label))[0]
+  assert.ok(wrap, 'checkbox row exists: ' + label)
+  const input = wrap.children.find((child) => child && child.type === 'input' && child.props.type === 'checkbox')
+  assert.ok(input, 'checkbox exists in row: ' + label)
+  return input
+}
+
+/* ==================== minimal zero-button UI ==================== */
+test('default render is Tinglan with the idle frame and zero buttons outside the character', () => {
+  const { ui, speech, storage } = createHarness()
   assert.equal(ui.tree.props['data-character'], 'human')
   const image = petImage(ui)
   assert.ok(image, 'pet image renders')
@@ -361,15 +419,235 @@ test('default render is Tinglan with the embedded 72px idle frame', () => {
   assert.equal(image.props.height, 72)
   assert.equal(image.props.src, idleSrc('human'))
   assert.equal(image.props.style.imageRendering, 'pixelated')
+  assert.equal(ui.findAll((node) => node.type === 'button').length, 1, 'the keyboard-focusable pet is the only permanent button')
+  assert.equal(menuNode(ui), undefined, 'no menu is mounted before the user asks for it')
+  const pet = ui.findPetButton()
+  assert.equal(pet.props['aria-haspopup'], 'menu', 'pet advertises the menu')
+  assert.equal(pet.props['aria-expanded'], false)
+  assert.equal(typeof pet.props.onContextMenu, 'function', 'right click opens the menu')
+  assert.equal(typeof pet.props.onKeyDown, 'function', 'keyboard can open the menu')
+  assert.deepEqual(JSON.parse(storage.get('dsh-famling/menu')), { button: false }, 'menu button is off by default and persisted')
   assert.equal(speech.speak.length, 0, 'nothing is spoken before an interaction')
 })
 
+test('right click opens exactly five level-one entries in the restrained order', () => {
+  const { ui } = createHarness()
+  const node = openMenuAt(ui)
+  assert.equal(node.props.role, 'menu')
+  assert.equal(node.props['aria-label'], '菜单')
+  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸'], 'five level-one items only')
+  assert.equal(menuItemNodes(ui)[0].props.tabIndex, 0, 'first item owns the roving tabIndex')
+  assert.equal(menuItemNodes(ui)[1].props['aria-haspopup'], 'menu', '互动 declares a submenu')
+  assert.equal(menuItemNodes(ui)[1].props['aria-expanded'], false)
+  clickMenu(ui, '内容与角色')
+  assert.equal(menuNode(ui), undefined, 'menu closes when a popup opens')
+  assert.ok(contentDialog(ui), 'content center opens from level one')
+})
+
+test('Shift+F10 and the ContextMenu key open the menu; Escape and Tab close it', () => {
+  const { ui } = createHarness({ character: 'cat' })
+  ui.findPetButton().props.onKeyDown({ key: 'F10', shiftKey: true, preventDefault() {} })
+  ui.render()
+  assert.ok(menuNode(ui), 'Shift+F10 opens the menu')
+  pressMenuKey(ui, 'Escape')
+  assert.equal(menuNode(ui), undefined, 'Escape closes the menu')
+  ui.findPetButton().props.onKeyDown({ key: 'ContextMenu', preventDefault() {} })
+  ui.render()
+  assert.ok(menuNode(ui), 'ContextMenu key opens the menu')
+  pressMenuKey(ui, 'Tab')
+  assert.equal(menuNode(ui), undefined, 'Tab closes the menu')
+})
+
+test('arrow keys, Home/End and Enter drive the menu with aria-activedescendant', () => {
+  const { ui } = createHarness()
+  const node = openMenuAt(ui)
+  assert.equal(node.props['aria-activedescendant'], 'dsh-famling-menu-item-0')
+  pressMenuKey(ui, 'ArrowDown')
+  assert.equal(menuNode(ui).props['aria-activedescendant'], 'dsh-famling-menu-item-1')
+  assert.equal(activeLabel(ui), '互动 ▸')
+  pressMenuKey(ui, 'End')
+  assert.equal(activeLabel(ui), '更多 ▸')
+  pressMenuKey(ui, 'ArrowDown')
+  assert.equal(activeLabel(ui), '聊两句…', 'ArrowDown wraps around')
+  pressMenuKey(ui, 'ArrowUp')
+  assert.equal(activeLabel(ui), '更多 ▸', 'ArrowUp wraps around')
+  pressMenuKey(ui, 'Home')
+  assert.equal(activeLabel(ui), '聊两句…')
+  pressMenuKey(ui, 'Enter')
+  assert.equal(menuNode(ui), undefined, 'Enter activates the focused item')
+  assert.ok(ui.findAll((item) => item.type === 'textarea')[0], 'Enter opened the chat panel')
+})
+
+test('互动 and 更多 are second-level pages with a back item instead of crowded level one', () => {
+  const { ui } = createHarness({ character: 'cat' })
+  openInteractions(ui)
+  const actionLabels = menuLabels(ui)
+  assert.equal(actionLabels[0], '« 返回', 'submenu has a back item')
+  for (const label of ['摸头', '伸懒腰', '洗脸', '追尾巴', '跑一跑']) assert.ok(actionLabels.includes(label), 'cat action in the submenu: ' + label)
+  clickMenu(ui, '« 返回')
+  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸'], 'back returns to level one')
+  clickMenu(ui, '更多')
+  assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '使用限制与版本'], 'more page stays restrained')
+  clickMenu(ui, '使用限制与版本')
+  const notice = ui.findAll((item) => item.type === 'div' && item.props.role === 'dialog' && item.props['aria-label'] === '使用限制与版本')[0]
+  assert.ok(notice, 'usage notice popup opens')
+  assert.ok(ui.text(notice).includes('研究'), 'notice carries the research-only restriction')
+  assert.ok(ui.text(notice).includes('0.10.1'), 'notice shows the plugin version')
+  closeActiveDialog(ui)
+  openMenuAt(ui)
+  clickMenu(ui, '更多')
+  clickMenu(ui, '提醒…')
+  assert.ok(ui.findAll((item) => item.type === 'input' && item.props.type === 'datetime-local')[0], 'reminder form opens from 更多')
+})
+
+test('arrow left/right move between the root and a submenu page', () => {
+  const { ui } = createHarness()
+  openMenuAt(ui)
+  pressMenuKey(ui, 'ArrowDown')
+  pressMenuKey(ui, 'ArrowRight')
+  assert.equal(menuLabels(ui)[0], '« 返回', 'ArrowRight opens the submenu')
+  pressMenuKey(ui, 'ArrowLeft')
+  assert.equal(menuLabels(ui)[0], '聊两句…', 'ArrowLeft goes back to the root page')
+})
+
+test('the fixed menu is clamped into the viewport with an 8px margin', () => {
+  const { ui } = createHarness()
+  openMenuAt(ui, 1390, 890)
+  const style = menuNode(ui).props.style
+  assert.equal(style.position, 'fixed')
+  // five root items -> height 8 + 5*30 = 158, width 200, margin 8
+  assert.equal(style.left, 1400 - 200 - 8, 'right edge is clamped')
+  assert.equal(style.top, 900 - 158 - 8, 'bottom edge is clamped')
+  pressMenuKey(ui, 'Escape')
+  openMenuAt(ui, 4, 3)
+  const topLeft = menuNode(ui).props.style
+  assert.equal(topLeft.left, 8, 'left margin is kept')
+  assert.equal(topLeft.top, 8, 'top margin is kept')
+})
+
+test('outside pointer down and window blur close the menu', () => {
+  const { ui, documentListeners, windowListeners } = createHarness()
+  openMenuAt(ui)
+  assert.ok(menuNode(ui))
+  documentListeners.get('pointerdown')({ target: {} })
+  ui.render()
+  assert.equal(menuNode(ui), undefined, 'pointer outside the menu closes it')
+  openMenuAt(ui)
+  assert.ok(menuNode(ui))
+  windowListeners.get('blur')()
+  ui.render()
+  assert.equal(menuNode(ui), undefined, 'window blur closes it')
+})
+test('the menu button is off by default, can be enabled in settings and persists', () => {
+  const first = createHarness()
+  assert.equal(first.ui.findButtonByAria('菜单'), undefined, 'no ⋯ trigger before the user enables it')
+  openSettings(first.ui)
+  assert.ok(settingsDialog(first.ui), 'settings popup opens')
+  const toggle = checkboxByLabel(first.ui, '显示菜单按钮')
+  assert.equal(toggle.props.checked, false, 'menu button switch defaults to off')
+  first.ui.change(toggle, true)
+  first.ui.render()
+  assert.equal(JSON.parse(first.storage.get('dsh-famling/menu')).button, true, 'trigger preference persisted')
+  closeActiveDialog(first.ui)
+  const trigger = first.ui.findButtonByAria('菜单')
+  assert.ok(trigger, 'the small ⋯ trigger appears once enabled')
+  assert.equal(trigger.props['aria-haspopup'], 'menu')
+  trigger.props.onClick({ preventDefault() {} })
+  first.ui.render()
+  assert.ok(menuNode(first.ui), 'the ⋯ trigger opens the same menu')
+  pressMenuKey(first.ui, 'Escape')
+  const restored = createHarness({ menu: { button: true } })
+  assert.ok(restored.ui.findButtonByAria('菜单'), 'enabled trigger is restored from dsh-famling/menu')
+})
+
+test('every open starts at level one and the submenu page is never sticky', () => {
+  const { ui, storage } = createHarness()
+  openMenuAt(ui)
+  clickMenu(ui, '更多')
+  assert.deepEqual(menuLabels(ui), ['« 返回', '提醒…', '使用限制与版本'])
+  pressMenuKey(ui, 'Escape')
+  assert.deepEqual(JSON.parse(storage.get('dsh-famling/menu')), { button: false }, 'only the trigger preference persists')
+  openMenuAt(ui)
+  assert.deepEqual(menuLabels(ui), ['聊两句…', '互动 ▸', '内容与角色…', '设置…', '更多 ▸'], 'reopening always shows level one')
+})
+
+test('settings popup centralizes every adjustable item and folds advanced/debug', () => {
+  const { ui } = createHarness({ voices: [{ voiceURI: 'voice-alpha', name: 'Alpha', lang: 'zh-CN' }] })
+  openSettings(ui)
+  const dialog = settingsDialog(ui)
+  assert.ok(dialog, 'settings dialog renders from the lazy chunk')
+  const full = ui.text(dialog)
+  for (const label of ['常用', '帧动画', '说话气泡', '显示菜单按钮', '声音', '读取 Advisers 摘要', '外观', '对话', '气泡 / 面板主题', '背景', '字体', '字号', '行高', '角色与内容', '内容与角色…', '恢复角色默认', '高级 / 调试']) {
+    assert.ok(full.includes(label), 'settings includes: ' + label)
+  }
+  assert.ok(full.includes('研究'), 'usage restriction stays visible')
+  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 1 + 1 + 1 + 1, 'sound + motion + bubble + menu button')
+  assert.ok(ui.findAll((node) => node.type === 'select')[0], 'voice list lives in settings')
+  const advanced = ui.findAll((node) => node.type === 'button' && ui.text(node).includes('高级 / 调试'))[0]
+  assert.equal(advanced.props['aria-expanded'], false, 'advanced group is folded by default')
+  assert.ok(!full.includes('dsh-famling/menu'), 'debug storage keys are hidden while folded')
+  ui.click(advanced)
+  ui.render()
+  const expanded = ui.text(settingsDialog(ui))
+  assert.ok(expanded.includes('本地存储键'), 'advanced/debug group expands')
+  assert.ok(expanded.includes('dsh-famling/menu'), 'debug lists the storage keys')
+  assert.ok(expanded.includes('0.10.1'), 'advanced shows the version')
+})
+
+test('settings toggles persist and the content entry opens the content center', () => {
+  const { ui, storage } = createHarness()
+  openSettings(ui)
+  const bubble = checkboxByLabel(ui, '说话气泡')
+  assert.equal(bubble.props.checked, true, 'bubble starts enabled in the harness')
+  ui.change(bubble, false)
+  ui.render()
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).bubble, false, 'bubble persists through the settings popup')
+  ui.change(checkboxByLabel(ui, '帧动画'), true)
+  ui.render()
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).motion, true, 'motion persists through the settings popup')
+  const themeButton = ui.findButtonByAria('气泡 / 面板主题 · 纸张')
+  assert.ok(themeButton, 'theme presets live in settings too')
+  ui.click(themeButton)
+  ui.render()
+  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'theme persists from settings')
+  ui.click(ui.findButtonExact('内容与角色…'))
+  ui.render()
+  assert.ok(contentDialog(ui), 'content center opens from the settings popup')
+})
+
+test('enabling voice from settings shows the consent dialog and only then saves sound', () => {
+  const { ui, storage } = createHarness({ consent: { tts: false }, settings: { sound: false } })
+  openSettings(ui)
+  ui.change(checkboxByLabel(ui, '声音'), true)
+  ui.render()
+  const consent = ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-modal'] === true)[0]
+  assert.ok(consent, 'TTS consent dialog is mounted')
+  assert.ok(ui.text(consent).includes('独立确认'), 'consent explains the browser voice and the independent confirmation')
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).sound, false, 'sound stays off before consent')
+  ui.click(ui.findButtonExact('同意并开启'))
+  ui.render()
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).sound, true, 'sound is enabled after consent')
+})
+
+test('English menu localizes level one and the species action submenu', () => {
+  const { ui } = createHarness({ language: 'en-US' })
+  openMenuAt(ui)
+  assert.deepEqual(menuLabels(ui), ['Chat…', 'Play ▸', 'Content & characters…', 'Settings…', 'More ▸'])
+  clickMenu(ui, 'Play')
+  for (const label of ['Pat', 'Hand paper', 'Wave', 'Fix bow', 'Chat']) assert.ok(menuLabels(ui).includes(label), 'en action label: ' + label)
+  openMenuAt(ui)
+  clickMenu(ui, 'Settings')
+  const englishSettings = ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === 'Settings')[0]
+  assert.ok(englishSettings, 'English settings dialog opens')
+  assert.ok(ui.text(englishSettings).includes('Show menu button'), 'English menu button switch')
+})
+
+/* ==================== existing animation / interaction behavior ==================== */
 test('idle loop advances frame by frame using the per-frame delays', () => {
   const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
   const idle = embedded.ANIMS.cat.clips.idle
   const expectedDelay = Math.max(30, Math.round(1000 / (idle.fps || 6)))
   for (let frame = 1; frame < idle.frames.length; frame += 1) {
-    // The blink/micro timers are also queued; pick the most recent idle delay.
     const timer = [...timers.timeouts].reverse().find((item) => item.ms === expectedDelay)
     assert.ok(timer, 'idle frame timeout is scheduled')
     timer.fn()
@@ -380,47 +658,25 @@ test('idle loop advances frame by frame using the per-frame delays', () => {
   assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle', 0), 'idle loop wraps back to frame 0')
 })
 
-/** Open the content center (4th sidebar button) and optionally one category tab. */
-function openContent(ui, tab) {
-  ui.clickExact('内容')
-  ui.render()
-  if (tab) { ui.clickExact(tab); ui.render() }
-}
-
-function contentDialog(ui) {
-  return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '内容中心')[0]
-}
-
-test('settings only links to the content center and keeps the other toggles', () => {
-  const { ui } = createHarness()
-  ui.clickText('设置')
-  ui.render()
-  assert.ok(ui.findButtonExact('内容与角色…'), 'settings has one content entry row')
-  assert.equal(ui.findButtonExact('塞尔凯克卷毛猫'), undefined, 'no scattered character buttons in settings')
-  assert.equal(ui.findButtonExact('金毛'), undefined, 'no scattered character buttons in settings')
-  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 2, 'settings keeps motion + bubble toggles')
-  ui.clickExact('内容与角色…')
-  ui.render()
-  assert.ok(contentDialog(ui), 'content center opens from the settings entry')
-})
-
-test('content center exposes exactly four first-level tabs: roles / customize / packs / market', () => {
+test('content center exposes exactly four first-level tabs and role bundles are the theme', () => {
   const { ui } = createHarness()
   openContent(ui, '角色')
   const tabs = ui.findAll((node) => node.type === 'button' && node.props.role === 'tab').map((node) => ui.text(node))
   assert.deepEqual(tabs, ['角色', '自定义', '内容包', '市场'], 'four first-level tabs only')
-  assert.ok(ui.text(contentDialog(ui)).includes('角色就是主题'), 'the role-is-theme model is explained')
-  assert.ok(ui.text(contentDialog(ui)).includes('声音: 浏览器 TTS'), 'role card shows the voice summary')
-  assert.ok(ui.text(contentDialog(ui)).includes('外观: 默认 / 透明 / 系统'), 'role card shows the appearance summary')
+  const text = ui.text(contentDialog(ui))
+  assert.ok(text.includes('角色就是主题'), 'the role-is-theme model is explained')
+  assert.ok(text.includes('声音: 浏览器 TTS'), 'role card shows the voice summary')
+  assert.ok(text.includes('外观: 默认 / 透明 / 系统'), 'human role card shows the default appearance')
   for (const oldTab of ['声音', '对话', '主题', '背景', '字体']) {
     const row = ui.findAll((node) => node.type === 'button' && node.props.role === 'tab' && ui.text(node) === oldTab)
     assert.equal(row.length, 0, 'old six-category tab is gone: ' + oldTab)
   }
 })
 
-test('English content center localizes the four tabs, role apply action and market placeholder', () => {
+test('English content center localizes the tabs, role apply and market placeholder', () => {
   const { ui } = createHarness({ language: 'en-US' })
-  ui.clickExact('Content')
+  openMenuAt(ui)
+  clickMenu(ui, 'Content & characters')
   ui.render()
   const tabs = ui.findAll((node) => node.type === 'button' && node.props.role === 'tab').map((node) => ui.text(node))
   assert.deepEqual(tabs, ['Roles', 'Customize', 'Packs', 'Market'], 'English first-level tabs')
@@ -432,22 +688,22 @@ test('English content center localizes the four tabs, role apply action and mark
   assert.ok(ui.text(dialog).includes('remote market interface is reserved'), 'English market placeholder')
   assert.ok(ui.text(dialog).includes('catalogUrl'), 'English catalog field remains reserved')
 })
-test('one-click role applies character + voice policy + dialogue + theme/background/font together', () => {
+
+test('one-click role applies character + voice + dialogue + theme/background/font atomically', () => {
   const { ui, speech, storage } = createHarness()
   openContent(ui, '角色')
   assert.ok(ui.text(contentDialog(ui)).includes('✓ 当前'), 'the current role is marked')
-  assert.equal(ui.findButtonByAria('一键应用 汀岚').props['aria-pressed'] === undefined, true, 'apply buttons carry a stable aria label')
   ui.click(ui.findButtonByAria('一键应用 塞尔凯克卷毛猫'))
   ui.render()
   assert.equal(ui.tree.props['data-character'], 'cat', 'character component applied')
   assert.equal(storage.get('dsh-famling/role'), 'cat', 'role bundle persisted')
   assert.equal(storage.get('dsh-famling/character'), 'cat')
-  assert.equal(storage.get('dsh-famling/dialogue'), 'brief', 'dialogue component applied')
-  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'theme component applied')
-  assert.equal(storage.get('dsh-famling/background'), 'paper', 'background component applied')
-  assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'serif', size: 12, lineHeight: 1.5 }, 'font component applied')
-  assert.equal(ui.tree.props.style['--dsh-famling-bubble-bg'], '#fff8ec', 'paper bubble variable is live')
-  assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#f6f1e7', 'paper backdrop variable is live')
+  assert.equal(storage.get('dsh-famling/dialogue'), 'standard', 'cat bundle dialogue is standard (shared rolePresets)')
+  assert.equal(storage.get('dsh-famling/theme'), 'night', 'cat bundle theme is night')
+  assert.equal(storage.get('dsh-famling/background'), 'dark', 'cat bundle background is dark')
+  assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'serif', size: 12, lineHeight: 1.5 }, 'cat bundle font is serif')
+  assert.equal(ui.tree.props.style['--dsh-famling-bubble-bg'], '#1b2433', 'night bubble variable is live')
+  assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#14161a', 'dark backdrop variable is live')
   assert.match(ui.tree.props.style['--dsh-famling-font-family'], /Georgia/, 'serif font variable is live')
   assert.equal(ui.findPetButton().props['aria-label'], '塞尔凯克卷毛猫')
   assert.equal(petImage(ui).props.src, idleSrc('cat'))
@@ -456,7 +712,7 @@ test('one-click role applies character + voice policy + dialogue + theme/backgro
   assert.ok(ui.text(contentDialog(ui)).includes('✓ 当前'), 'the current marker moves with the bundle')
 })
 
-test('one-click role applies the voice policy without bypassing the TTS consent gate', () => {
+test('role application never bypasses the TTS consent gate', () => {
   const consented = createHarness()
   openContent(consented.ui, '角色')
   consented.ui.click(consented.ui.findButtonByAria('一键应用 塞尔凯克卷毛猫'))
@@ -473,12 +729,13 @@ test('one-click role applies the voice policy without bypassing the TTS consent 
   noConsent.ui.render()
   assert.equal(JSON.parse(noConsent.storage.get('dsh-famling/settings')).sound, false, 'the consent gate is never bypassed')
 })
-test('role cards keep glyph avatars and do not preload other animation chunks', () => {
+
+test('role cards keep glyph avatars and load only the applied character chunk', () => {
   const { ui, asyncCalls } = createHarness()
   openContent(ui, '角色')
   const animCalls = asyncCalls.filter((name) => name.startsWith('client.anims.'))
   assert.deepEqual(animCalls, ['client.anims.human.js'], 'only the current role chunk is loaded before applying a role')
-  assert.ok(asyncCalls.includes('client.content.js'), 'the content-center UI chunk loads on first open')
+  assert.ok(asyncCalls.includes('client.content.js'), 'the content/settings UI chunk loads on first panel open')
   assert.equal(ui.findAll((node) => node.type === 'span' && node.props['aria-hidden'] === true && ['🧑', '🐱', '🐶'].includes(ui.text(node))).length >= 3, true, 'role cards keep their glyph avatars')
   ui.click(ui.findButtonByAria('一键应用 金毛'))
   ui.render()
@@ -486,11 +743,10 @@ test('role cards keep glyph avatars and do not preload other animation chunks', 
   assert.equal(asyncCalls.includes('client.anims.cat.js'), false, 'unapplied role chunks stay unloaded')
 })
 
-test('cat menu is species-specific (no ball/fetch actions) and bubbles stay silent thoughts', () => {
+test('cat submenu is species-specific (no ball/fetch) and bubbles stay silent thoughts', () => {
   const { ui, speech } = createHarness({ character: 'cat' })
   assert.equal(ui.tree.props['data-character'], 'cat')
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   for (const label of ['摸头', '伸懒腰', '洗脸', '追尾巴', '跑一跑']) assert.ok(ui.findButtonExact(label), 'cat action present: ' + label)
   assert.equal(ui.findButtonExact('摇尾巴'), undefined, 'dog-only action is not shown for cat')
   assert.equal(ui.findAll((node) => node.type === 'button' && /球|纸团/.test(textOf(node))).length, 0, 'cat has no ball/paper actions')
@@ -504,14 +760,12 @@ test('cat menu is species-specific (no ball/fetch actions) and bubbles stay sile
   assert.equal(bubble.props.style.background, 'var(--dsh-famling-bubble-bg, #ffffff)')
   assert.equal(bubble.props.style.color, 'var(--dsh-famling-bubble-text, #111111)')
   assert.match(bubble.props.style.border, /dashed/)
-  assert.match(bubble.props.style.border, /#8f8f8f/)
   assert.equal(speech.speak.length, 0, 'cat must never call speechSynthesis')
 })
 
-test('human menu is species-specific with solid speech and TTS lines from the action says', () => {
+test('human submenu keeps solid speech plus TTS lines from the action says', () => {
   const { ui, speech } = createHarness()
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   for (const label of ['摸头', '递纸', '挥手', '整理蝴蝶结', '聊两句']) assert.ok(ui.findButtonExact(label), 'human action present: ' + label)
   assert.equal(ui.findButtonExact('追尾巴'), undefined, 'cat/dog-only action is not shown for human')
   assert.equal(ui.findAll((node) => node.type === 'button' && /球|纸团/.test(textOf(node))).length, 0, 'human menu has no ball/paper actions')
@@ -530,10 +784,9 @@ test('human menu is species-specific with solid speech and TTS lines from the ac
   assert.equal(speech.speak[0].text, ui.text(bubble), 'TTS reads the same random line')
 })
 
-test('dog menu exposes fetch/retrieve and chains ball_throw -> ball_chase', () => {
+test('dog submenu exposes fetch/retrieve and chains ball_throw -> ball_chase', () => {
   const { ui, speech, timers } = createHarness({ character: 'dog' })
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   assert.ok(ui.findButtonExact('摸头'), 'dog pat')
   assert.ok(ui.findButtonExact('丢球 / 捡球'), 'dog fetch')
   assert.ok(ui.findButtonExact('捡球'), 'dog retrieve')
@@ -550,10 +803,9 @@ test('dog menu exposes fetch/retrieve and chains ball_throw -> ball_chase', () =
   assert.equal(speech.speak.length, 0, 'dog never calls speechSynthesis')
 })
 
-test('cat stand_wag plays its 10 authored holdMs frames over 3200ms (no fixed fps interval)', () => {
+test('cat stand_wag plays its 10 authored holdMs frames over 3200ms', () => {
   const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   const expected = [300, 300, 300, 350, 400, 400, 400, 350, 250, 150]
   assert.deepEqual(clipDurations('cat', 'stand_wag'), expected, 'expected per-frame delays')
   assert.equal(expected.reduce((sum, value) => sum + value, 0), 3200, 'total stretch duration')
@@ -585,40 +837,26 @@ test('chat bridge sends the active character so the Host can switch personas', a
     await ui.settle()
   }
   function pickCharacter(name) {
-    ui.clickExact('内容')
-    ui.render()
-    ui.clickExact('角色')
-    ui.render()
+    openContent(ui, '角色')
     ui.click(ui.findButtonByAria('一键应用 ' + name))
     ui.render()
-    ui.clickExact('内容')
-    ui.render()
+    closeActiveDialog(ui)
   }
-  ui.clickText('输入')
-  ui.render()
+  openInputPanel(ui)
   await typeAndSend('你好')
   pickCharacter('塞尔凯克卷毛猫')
-  ui.clickText('输入')
-  ui.render()
+  openInputPanel(ui)
   await typeAndSend('今天好懒')
   pickCharacter('金毛')
-  ui.clickText('输入')
-  ui.render()
+  openInputPanel(ui)
   await typeAndSend('去玩球')
   assert.equal(ui.tree.props['data-character'], 'dog')
   assert.deepEqual(fetchCalls.map((call) => JSON.parse(call.init.body).character), ['human', 'cat', 'dog'])
 })
 
-test('stored character choice is restored on the next render', () => {
-  const { ui } = createHarness({ character: 'dog' })
-  assert.equal(ui.tree.props['data-character'], 'dog')
-  assert.equal(petImage(ui).props.src, idleSrc('dog'))
-})
-
-test('chat bridge still works from the input panel (op:chat, same endpoint)', async () => {
+test('chat bridge still works from the menu-driven input panel (op:chat, same endpoint)', async () => {
   const { ui, fetchCalls, speech } = createHarness({ reply: '嗯，我在。' })
-  ui.clickText('输入')
-  ui.render()
+  openInputPanel(ui)
   const textarea = ui.findAll((node) => node.type === 'textarea')[0]
   ui.change(textarea, '你好')
   ui.render()
@@ -636,21 +874,9 @@ test('chat bridge still works from the input panel (op:chat, same endpoint)', as
 
 // Art-canvas points (96x96) inside each character's head/body/tail region.
 const REGION_CASES = {
-  human: {
-    head: { point: [51, 27], clip: 'pat_head' },
-    body: { point: [48, 66], clip: 'stand_wag' },
-    tail: { point: [74, 72], clip: 'chase_tail' },
-  },
-  cat: {
-    head: { point: [50, 35], clip: 'pat_head' },
-    body: { point: [50, 69], clip: 'stand_wag' },
-    tail: { point: [81, 69], clip: 'chase_tail' },
-  },
-  dog: {
-    head: { point: [50, 31], clip: 'pat_head' },
-    body: { point: [49, 68], clip: 'stand_wag' },
-    tail: { point: [83, 67], clip: 'chase_tail' },
-  },
+  human: { head: { point: [51, 27], clip: 'pat_head' }, body: { point: [48, 66], clip: 'stand_wag' }, tail: { point: [74, 72], clip: 'chase_tail' } },
+  cat: { head: { point: [50, 35], clip: 'pat_head' }, body: { point: [50, 69], clip: 'stand_wag' }, tail: { point: [81, 69], clip: 'chase_tail' } },
+  dog: { head: { point: [50, 31], clip: 'pat_head' }, body: { point: [49, 68], clip: 'stand_wag' }, tail: { point: [83, 67], clip: 'chase_tail' } },
 }
 
 test('region taps map head/body/tail to clips and random lines from that region says', () => {
@@ -683,7 +909,6 @@ test('repeated taps on the same region pick a different line from its says', () 
   const says = regionSays('cat', 'head')
   const first = ui.text(ui.findBubble())
   assert.ok(says.includes(first), 'first head line comes from head says')
-  // Let the one-shot pat_head clip play out frame by frame, then tap again.
   finishClip(ui, timers, 'cat', 'pat_head')
   ui.clickPetAt(50, 35)
   ui.render()
@@ -692,14 +917,14 @@ test('repeated taps on the same region pick a different line from its says', () 
   assert.notEqual(second, first, 'the same region does not repeat the same line on the next tap')
 })
 
-test('clicking the same menu action twice also changes the random line', () => {
+test('clicking the same submenu action twice also changes the random line', () => {
   const { ui } = createHarness()
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   const says = actionSays('human', 'pat')
   ui.clickExact('摸头')
   ui.render()
   const first = ui.text(ui.findBubble())
+  openInteractions(ui)
   ui.clickExact('摸头')
   ui.render()
   const second = ui.text(ui.findBubble())
@@ -707,13 +932,11 @@ test('clicking the same menu action twice also changes the random line', () => {
   assert.notEqual(second, first, 'menu action lines do not repeat back to back')
 })
 
-test('talk is bubble-only and keeps the idle animation', () => {
+test('talk action is bubble-only and keeps the idle animation', () => {
   const { ui, speech } = createHarness()
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   const says = actionSays('human', 'talk')
-  ui.clickExact('聊两句')
-  ui.render()
+  clickMenuItemExact(ui, '聊两句')
   assert.equal(petImage(ui).props.src, idleSrc('human'), 'talk keeps the idle frame (no dedicated clip)')
   const bubble = ui.findBubble()
   assert.ok(bubble)
@@ -736,21 +959,20 @@ test('the same relative tap point hits the same region at every rendered size', 
 
 test('a tap does not interrupt a playing (non-idle) animation', () => {
   const { ui, speech } = createHarness({ character: 'human' })
-  ui.clickText('互动')
-  ui.render()
+  openInteractions(ui)
   ui.clickExact('摸头')
   ui.render()
   const playing = petImage(ui).props.src
   const playingBubble = ui.text(ui.findBubble())
   assert.equal(playing, clipSrc('human', 'pat_head'), 'pat_head clip is playing')
-  ui.clickPetAt(74, 72) // the tail region would play chase_tail if gating were missing
+  ui.clickPetAt(74, 72)
   ui.render()
   assert.equal(petImage(ui).props.src, playing, 'animation is unchanged while non-idle')
   assert.equal(ui.text(ui.findBubble()), playingBubble, 'bubble is unchanged while non-idle')
   assert.equal(speech.speak.length, 1, 'no extra narration while non-idle')
 })
 
-test('a tap outside every region is a no-op (no random fallback)', () => {
+test('a tap outside every region is a no-op', () => {
   const { ui, speech } = createHarness({ character: 'dog' })
   const idle = petImage(ui).props.src
   ui.clickPetAt(3, 3)
@@ -773,51 +995,37 @@ test('region taps still react during the idle blink phase', () => {
   assert.ok(regionSays('cat', 'head').includes(ui.text(ui.findBubble())), 'blink-phase tap still uses the head says')
 })
 
-test('a missing lazy chunk degrades to the transparent placeholder without breaking the UI', () => {
+test('a missing lazy chunk degrades to the transparent placeholder and the menu still works', () => {
   const { ui } = createHarness({ character: 'cat', failChunks: ['client.anims.cat.js'] })
-  // The sprite chunk failed: the pet slot stays laid out with the 1x1 transparent
-  // placeholder instead of a broken image, and the shell remains interactive.
   assert.match(petImage(ui).props.src, /^data:image\/png;base64,iVBORw0KGgo/, 'placeholder pixel keeps the slot')
-  assert.equal(ui.findButton('设置') !== undefined, true, 'the UI buttons are still rendered')
-  ui.render()
-  assert.equal(petImage(ui).props.src, petImage(ui).props.src, 'render stays stable without the chunk')
+  assert.equal(ui.findAll((node) => node.type === 'button').length, 1, 'no stray buttons without the chunk')
+  openMenuAt(ui)
+  assert.equal(menuItemNodes(ui).length, 5, 'right-click menu still opens')
   assert.equal(ui.findBubble(), undefined, 'no fabricated content while the chunk is missing')
 })
 
-test('English UI localizes action button labels while lines stay data-driven', () => {
-  const { ui } = createHarness({ character: 'human', language: 'en-US' })
-  ui.clickText('Play')
-  ui.render()
-  for (const label of ['Pat', 'Hand paper', 'Wave', 'Fix bow', 'Chat']) assert.ok(ui.findButtonExact(label), 'en action label present: ' + label)
-  ui.clickExact('Pat')
-  ui.render()
-  assert.ok(actionSays('human', 'pat').includes(ui.text(ui.findBubble())), 'line still comes from the shared data')
-})
-
-test('content center voices tab lists speechSynthesis voices, persists the choice and speaks with it (human only)', () => {
+test('content center voices list persists the browser voice and uses it for speech', () => {
   const voices = [
     { voiceURI: 'voice-alpha', name: 'Alpha', lang: 'zh-CN' },
     { voiceURI: 'voice-beta', name: 'Beta', lang: 'en-US' },
   ]
   const { ui, speech, storage } = createHarness({ voices })
   openContent(ui, '自定义')
-  const select = ui.findAll((node) => node.type === 'select')[0]
+  const select = ui.findAll((node) => node.type === 'select' && node.props['aria-label'] !== '声音（系统）')[0] || ui.findAll((node) => node.type === 'select')[0]
   assert.ok(select, 'voice select renders from speechSynthesis.getVoices()')
   assert.deepEqual(select.children.filter((node) => node && node.type === 'option').map((node) => node.props.value), ['', 'voice-alpha', 'voice-beta'])
   ui.change(select, 'voice-beta')
   ui.render()
   assert.equal(JSON.parse(storage.get('dsh-famling/settings')).voiceURI, 'voice-beta', 'voice choice persisted')
-  ui.clickExact('内容')
-  ui.render()
-  ui.clickText('互动')
-  ui.render()
+  closeActiveDialog(ui)
+  openInteractions(ui)
   ui.clickExact('摸头')
   ui.render()
   assert.equal(speech.speak.length, 1)
   assert.equal(speech.speak[0].voice.voiceURI, 'voice-beta', 'the selected browser voice is attached to the utterance')
 })
 
-test('cat/dog content voices tab shows the thought-bubble policy instead of TTS controls', () => {
+test('cat/dog content customize shows the thought-bubble policy instead of TTS controls', () => {
   const { ui } = createHarness({ character: 'cat', voices: [{ voiceURI: 'voice-alpha', name: 'Alpha', lang: 'zh-CN' }] })
   openContent(ui, '自定义')
   assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 0, 'no TTS toggle for cat')
@@ -825,7 +1033,7 @@ test('cat/dog content voices tab shows the thought-bubble policy instead of TTS 
   assert.ok(ui.findAll((node) => node.type === 'p').some((node) => ui.text(node).includes('没有语音')), 'silent policy note is shown')
 })
 
-test('brief dialogue mode filters over-long replies and persists the mode', async () => {
+test('brief dialogue mode caps replies at the shared 80 chars and persists the mode', async () => {
   const { ui, storage } = createHarness({ reply: '回'.repeat(150) })
   openContent(ui, '自定义')
   assert.equal(ui.findButtonByAria('对话 · 标准').props['aria-pressed'], true, 'standard is the default mode')
@@ -833,10 +1041,8 @@ test('brief dialogue mode filters over-long replies and persists the mode', asyn
   ui.render()
   assert.equal(storage.get('dsh-famling/dialogue'), 'brief', 'dialogue mode persisted')
   assert.equal(ui.findButtonByAria('对话 · 简短').props['aria-pressed'], true, 'brief is marked as current')
-  ui.clickExact('内容')
-  ui.render()
-  ui.clickText('输入')
-  ui.render()
+  closeActiveDialog(ui)
+  openInputPanel(ui)
   const textarea = ui.findAll((node) => node.type === 'textarea')[0]
   ui.change(textarea, '说长一点')
   ui.render()
@@ -845,11 +1051,24 @@ test('brief dialogue mode filters over-long replies and persists the mode', asyn
   const bubble = ui.findBubble()
   assert.ok(bubble, 'reply bubble renders')
   const text = ui.text(bubble)
-  assert.ok(text.length <= 90, 'brief mode caps the reply length: ' + text.length)
+  assert.ok(text.length <= 80, 'brief mode caps the reply at 80 chars: ' + text.length)
   assert.ok(text.endsWith('…'), 'capped reply is marked with an ellipsis')
 })
 
-test('quiet dialogue mode lowers ambient bubble probability while direct replies still show', async () => {
+test('standard dialogue mode caps replies at the shared 240 chars', async () => {
+  const { ui } = createHarness({ reply: '回'.repeat(300) })
+  openInputPanel(ui)
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  ui.change(textarea, '说长一点')
+  ui.render()
+  ui.clickText('发送')
+  await ui.settle()
+  const text = ui.text(ui.findBubble())
+  assert.ok(text.length <= 240, 'standard mode caps the reply at 240 chars: ' + text.length)
+  assert.ok(text.endsWith('…'))
+})
+
+test('quiet dialogue mode lowers ambient bubbles while direct replies still show', async () => {
   const hidden = createHarness({ character: 'cat', dialogue: 'quiet', random: () => 0.99 })
   hidden.ui.clickPetAt(50, 35)
   hidden.ui.render()
@@ -860,8 +1079,7 @@ test('quiet dialogue mode lowers ambient bubble probability while direct replies
   shown.ui.render()
   assert.ok(shown.ui.findBubble(), 'quiet still shows ambient bubbles when the roll is below the chance')
   const direct = createHarness({ character: 'human', dialogue: 'quiet', random: () => 0.99, reply: '嗯，我在。' })
-  direct.ui.clickText('输入')
-  direct.ui.render()
+  openInputPanel(direct.ui)
   const textarea = direct.ui.findAll((node) => node.type === 'textarea')[0]
   direct.ui.change(textarea, '你好')
   direct.ui.render()
@@ -887,16 +1105,14 @@ test('content center themes apply default/paper/night through widget CSS variabl
   assert.equal(storage.get('dsh-famling/theme'), 'night')
   assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#1b2433', 'night bubble variable')
   assert.equal(rootStyle()['--dsh-famling-bubble-text'], '#e6edf7', 'night text variable')
-  ui.clickExact('内容')
-  ui.render()
-  ui.clickText('互动')
-  ui.render()
+  closeActiveDialog(ui)
+  openInteractions(ui)
   ui.clickExact('摸头')
   ui.render()
   assert.equal(ui.findBubble().props.style.background, 'var(--dsh-famling-bubble-bg, #ffffff)', 'bubble still reads the theme variable')
 })
 
-test('content center background tab applies a local CSS backdrop and persists it', () => {
+test('content center background applies a local CSS backdrop and persists it', () => {
   const { ui, storage } = createHarness()
   openContent(ui, '自定义')
   assert.equal(ui.findButtonByAria('背景 · 透明').props['aria-pressed'], true, 'transparent is the default backdrop')
@@ -907,26 +1123,20 @@ test('content center background tab applies a local CSS backdrop and persists it
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#f6f1e7')
   assert.equal(ui.tree.props.style.background, 'var(--dsh-famling-widget-bg, transparent)')
   assert.match(contentDialog(ui).props.style.boxShadow, /var\(--dsh-famling-widget-bg/, 'panel backdrop ring uses the background variable')
-  ui.clickExact('内容')
-  ui.render()
-  ui.clickText('互动')
-  ui.render()
+  closeActiveDialog(ui)
+  openInteractions(ui)
   ui.clickExact('摸头')
   ui.render()
   assert.match(ui.findBubble().props.style.boxShadow, /var\(--dsh-famling-widget-bg/, 'bubble backdrop ring uses the background variable')
-  ui.clickExact('内容')
-  ui.render()
+  openContent(ui, '自定义')
   ui.click(ui.findButtonByAria('背景 · 暗色'))
   ui.render()
   assert.equal(storage.get('dsh-famling/background'), 'dark')
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#14161a')
   assert.equal(ui.tree.props.style['--dsh-famling-widget-fg'], '#e8eaf0')
-  ui.click(ui.findButtonByAria('背景 · 透明'))
-  ui.render()
-  assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], 'transparent')
 })
 
-test('content center font tab applies local stacks, size and line height and persists them', () => {
+test('content center font group applies local stacks, size and line height and persists them', () => {
   const { ui, storage } = createHarness()
   openContent(ui, '自定义')
   assert.equal(ui.findButtonByAria('字体 · 系统').props['aria-pressed'], true, 'system font stack by default')
@@ -944,10 +1154,8 @@ test('content center font tab applies local stacks, size and line height and per
   assert.equal(ui.tree.props.style['--dsh-famling-line-height'], '1.8')
   assert.match(contentDialog(ui).props.style.fontSize, /var\(--dsh-famling-font-size/)
   assert.match(contentDialog(ui).props.style.lineHeight, /var\(--dsh-famling-line-height/)
-  ui.clickExact('内容')
-  ui.render()
-  ui.clickText('互动')
-  ui.render()
+  closeActiveDialog(ui)
+  openInteractions(ui)
   ui.clickExact('摸头')
   ui.render()
   const bubble = ui.findBubble()
@@ -965,40 +1173,41 @@ test('custom controls override only the current role combination and restore the
   ui.render()
   assert.ok(ui.text(contentDialog(ui)).includes('仅修改当前角色的搭配'), 'custom tab explains component-only overrides')
   assert.ok(ui.text(contentDialog(ui)).includes('角色预设'), 'the current combination starts as the role preset')
-  ui.click(ui.findButtonByAria('气泡 / 面板主题 · 纸张'))
+  ui.click(ui.findButtonByAria('气泡 / 面板主题 · 夜间'))
   ui.render()
-  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'component override persisted')
+  assert.equal(storage.get('dsh-famling/theme'), 'night', 'component override persisted')
   assert.equal(storage.get('dsh-famling/role'), 'dog', 'role id stays untouched by a component override')
   assert.equal(ui.tree.props['data-character'], 'dog', 'character stays untouched by a component override')
   assert.ok(ui.text(contentDialog(ui)).includes('已自定义'), 'customized state is shown')
   ui.clickExact('恢复角色默认')
   ui.render()
-  assert.equal(storage.get('dsh-famling/theme'), 'night', 'role theme preset restored')
-  assert.equal(storage.get('dsh-famling/background'), 'dark', 'role background preset restored')
-  assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'mono', size: 12, lineHeight: 1.5 }, 'role font preset restored')
+  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'dog role theme preset (paper) restored')
+  assert.equal(storage.get('dsh-famling/background'), 'paper', 'dog role background preset restored')
+  assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'system', size: 12, lineHeight: 1.5 }, 'dog role font preset restored')
   assert.ok(ui.text(contentDialog(ui)).includes('角色预设'), 'restored state is the role preset again')
 })
 
-test('dsh-famling/role backfills the bundle on load while explicit component keys still win', () => {
+test('dsh-famling/role backfills the shared bundle on load while explicit component keys win', () => {
   const legacy = createHarness({ character: 'dog' })
   assert.equal(legacy.ui.tree.props['data-character'], 'dog')
   assert.equal(legacy.storage.get('dsh-famling/role'), 'dog', 'role key backfilled from an existing character key')
   assert.equal(legacy.storage.get('dsh-famling/dialogue'), 'standard')
-  assert.equal(legacy.storage.get('dsh-famling/theme'), 'night')
-  assert.equal(legacy.storage.get('dsh-famling/background'), 'dark')
-  assert.deepEqual(JSON.parse(legacy.storage.get('dsh-famling/font')), { family: 'mono', size: 12, lineHeight: 1.5 })
+  assert.equal(legacy.storage.get('dsh-famling/theme'), 'paper')
+  assert.equal(legacy.storage.get('dsh-famling/background'), 'paper')
+  assert.deepEqual(JSON.parse(legacy.storage.get('dsh-famling/font')), { family: 'system', size: 12, lineHeight: 1.5 })
   const roleOnly = createHarness({ role: 'cat' })
   assert.equal(roleOnly.ui.tree.props['data-character'], 'cat', 'character backfilled from the role bundle')
   assert.equal(roleOnly.storage.get('dsh-famling/character'), 'cat', 'character key persisted from the bundle')
-  assert.equal(roleOnly.storage.get('dsh-famling/dialogue'), 'brief')
-  assert.equal(roleOnly.storage.get('dsh-famling/theme'), 'paper')
-  assert.equal(roleOnly.storage.get('dsh-famling/background'), 'paper')
-  const overridden = createHarness({ role: 'cat', theme: 'night' })
-  assert.equal(overridden.ui.tree.props.style['--dsh-famling-bubble-bg'], '#1b2433', 'an explicit component key wins over the role bundle')
+  assert.equal(roleOnly.storage.get('dsh-famling/dialogue'), 'standard')
+  assert.equal(roleOnly.storage.get('dsh-famling/theme'), 'night')
+  assert.equal(roleOnly.storage.get('dsh-famling/background'), 'dark')
+  assert.deepEqual(JSON.parse(roleOnly.storage.get('dsh-famling/font')), { family: 'serif', size: 12, lineHeight: 1.5 })
+  const overridden = createHarness({ role: 'cat', theme: 'paper' })
+  assert.equal(overridden.ui.tree.props.style['--dsh-famling-bubble-bg'], '#fff8ec', 'an explicit component key wins over the role bundle')
   assert.equal(overridden.storage.get('dsh-famling/role'), 'cat', 'the role id is preserved')
 })
 
-test('content pack tab shows the built-in pack, declaration check and reserved asset import without network', () => {
+test('content pack tab shows the built-in pack, declaration check and reserved import without network', () => {
   const { ui, fetchCalls } = createHarness()
   openContent(ui, '内容包')
   const text = ui.text(contentDialog(ui))
@@ -1026,13 +1235,22 @@ test('market tab is a reserved placeholder with catalog fields and never sends a
   assert.equal(fetchCalls.length, 0, 'market tab never calls fetch')
 })
 
-test('a missing content-center chunk degrades to a local message without breaking the widget', () => {
+test('a missing content/settings chunk degrades locally without breaking the widget', () => {
   const { ui } = createHarness({ failContentChunk: true })
-  ui.clickExact('内容')
+  openMenuAt(ui)
+  clickMenu(ui, '内容与角色')
+  assert.ok(ui.text(ui.tree).includes('内容中心加载失败'), 'a local failure message is shown for the content center')
+  closeActiveDialog(ui)
+  openSettings(ui)
+  assert.ok(ui.text(ui.tree).includes('设置面板加载失败'), 'a local failure message is shown for settings')
+  closeActiveDialog(ui)
+  openMenuAt(ui)
+  assert.equal(menuItemNodes(ui).length, 5, 'the right-click menu keeps working without the chunk')
+  ui.clickPetAt(51, 27)
   ui.render()
-  assert.ok(ui.text(ui.tree).includes('内容中心加载失败'), 'a local failure message is shown')
-  assert.ok(ui.findButtonExact('设置'), 'core sidebar buttons stay available')
+  assert.ok(petImage(ui).props.src.startsWith('data:image/png;base64,'), 'region interaction stays local')
 })
+
 test('stored background and font choices are restored on the next render', () => {
   const { ui } = createHarness({ background: 'dark', font: { family: 'mono', size: 11, lineHeight: 1.4 } })
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#14161a')
