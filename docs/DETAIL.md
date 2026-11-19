@@ -48,7 +48,7 @@
 - 生效值 = `global × axis` 后 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px）、组件 0.5×–2×。气泡宽度硬上限 240px 且左边界按视口夹取；菜单/面板用「布局尺寸 ÷ zoom + transform scale」在缩放后仍夹在视口内。
 - 持久化 `dsh-famling/scale/model` + `/global` + `/ui-text` + `/image` + `/component/<id>`；默认/跟随值不写轴键，恢复默认只写 `global=1` 与版本标记。旧绝对倍率 `dsh-famling/scale`（数字或 `{pet,text}` JSON）/ `dsh-famling/text-scale` 只在没有版本标记时一次性迁移（global=100%，等效值不变），旧键保留但失效；清除本机设置会删除全部 `dsh-famling/*` 缩放键。
 - 键盘 / ARIA：原生 range（方向键可用）+ `aria-label`/`aria-valuetext`；高级组 `aria-expanded`；组件下拉 `aria-label`；跟随时「跟随整体」`disabled`；设置弹窗 `role="dialog"`。
-- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无业务 bridge 请求），`npm test` 合计 190 项。
+- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无业务 bridge 请求），`npm test` 合计 200 项。
 
 ## 低打扰：安静时段 / 动画偏好 / 暂时隐藏（0.10.6，E7 剩余 / P-04）
 
@@ -65,7 +65,7 @@
 - 设置弹窗新增「低打扰」分组（`client.content.js` 的 `lowDisturbGroup`）：开关、两个 `input[type=time]`（非法/空值保留原值）、三选一动画偏好（`aria-pressed`）、状态行（当前是否在安静时段）与两个隐藏按钮；「更多」菜单与设置内隐藏入口指向同一实现。
 - 隐藏不是永久退出：`exit`（退出，刷新恢复）仍与隐藏分开；隐藏按截止时间自动恢复，且跨重载保持（`loadHiddenUntil` 只接受未来时间戳）。
 - 首屏预算：输入面板/同意弹窗/使用限制弹窗与低打扰 UI 文案全部在懒加载 `client.content.js`；`client.js` 只保留纯模型与接线。
-- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 190 项。
+- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 200 项。
 
 
 ## DSH 宿主能力协商 hello/probe（0.10.7，MB-034 / E3-T2）

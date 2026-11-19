@@ -11,10 +11,22 @@
     "check:anims": "node scripts/embed-anims.mjs --check",
     "verify:anims": "node scripts/verify-anims.mjs",
     "measure:bundle": "node scripts/measure-bundle.mjs",
-    "qa:anims": "node scripts/embed-anims.mjs --qa"
+    "qa:anims": "node scripts/embed-anims.mjs --qa",
+    "check:package": "node scripts/check-package.mjs",
+    "verify:package": "node scripts/check-package.mjs --pack",
+    "release:check": "npm test && npm run check && npm run verify && npm run verify:package",
+    "prepack": "node scripts/check-package.mjs --prepack"
   },
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations with a minimal zero-button UI, a right-click / Shift+F10 hierarchical menu, region-aware interactions, chat personas, a role-as-theme content center (roles / customize / packs / market), a unified settings popup with low-disturb controls (quiet hours / reduce-motion / temporary hide), and a reserved v3 third-party content-pack contract with a mandatory research-only usage declaration.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PerryLink/dsh-famling.git"
+  },
+  "homepage": "https://github.com/PerryLink/dsh-famling#readme",
+  "bugs": {
+    "url": "https://github.com/PerryLink/dsh-famling/issues"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -37,8 +49,7 @@
     "README.md",
     "LICENSE",
     "LICENSE-ART",
-    "NOTICE",
-    "docs"
+    "NOTICE"
   ],
   "keywords": [
     "deepseek-harness",

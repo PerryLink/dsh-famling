@@ -56,7 +56,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 生效值 = `global × axis` 后按可读性/安全上限 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px，仍在 240px 侧栏内）、组件 0.5×–2×。气泡宽度硬上限 240px 并按视口夹取左边界，不会溢出侧栏/窗口；菜单与面板用「布局尺寸 ÷ zoom + `transform: scale(zoom)`」在缩放后仍夹在视口内（左/底锚点、`transform-origin` 对齐锚点），内容不裁切。
 - 持久化：`dsh-famling/scale/model`（版本标记）+ `dsh-famling/scale/global`、`/ui-text`、`/image`、`/component/<id>`；跟随/默认值不写轴键（恢复跟随 = 删键），恢复默认缩放只写 `global=1` 与版本标记。首次加载若没有版本标记且存在旧绝对倍率键 `dsh-famling/scale`（数字或 `{pet,text}` JSON）或 `dsh-famling/text-scale`，一次性迁移为 `image`/`uiText`（global=100%，等效值不变）；迁移后旧键保留原处但被标记失效，不会重复应用。清除本机设置会删除 `dsh-famling/*` 下全部缩放键。
 - 键盘 / ARIA：所有缩放滑块是原生 `<input type="range">`（方向键可用），带 `aria-label` 与 `aria-valuetext`（如「150% · 独立」）；高级组按钮带 `aria-expanded`；组件下拉带 `aria-label`；跟随时「跟随整体」按钮 `disabled`；重置按钮有可读名称；设置弹窗仍是 `role="dialog"`。
-- 测试：`test/client-scale.test.js` 覆盖纯模型（clamp/解析/持久化/迁移/上限）+ fake React 行为（三层 IA、整体/独立轴、组件覆盖与继承、持久化/恢复、240px 气泡与视口夹取、菜单缩放夹取、键盘/ARIA、无 fetch）+ 静态门禁（widget 私有样式、无 `document.documentElement`、无外部 URL）。`npm test` 合计 190 项全绿。
+- 测试：`test/client-scale.test.js` 覆盖纯模型（clamp/解析/持久化/迁移/上限）+ fake React 行为（三层 IA、整体/独立轴、组件覆盖与继承、持久化/恢复、240px 气泡与视口夹取、菜单缩放夹取、键盘/ARIA、无 fetch）+ 静态门禁（widget 私有样式、无 `document.documentElement`、无外部 URL）。`npm test` 合计 200 项全绿。
 
 ## 低打扰（0.10.6，E7 剩余 / P-04）
 
@@ -72,7 +72,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - 清理入口「清除本机设置与同意」同时删除 `hidden-until`；设置「高级 / 调试」的存储键列表会列出它。
 - 全部文案与控件在懒加载 `client.content.js`（输入面板/同意弹窗/使用限制弹窗也自 0.10.6 起移入该 chunk），入口 `client.js` 保持 96 KiB 首屏预算内。
-- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 190 项全绿。
+- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 200 项全绿。
 
 ## Host 能力协商 hello/probe（0.10.7，MB-034 / E3-T2）
 
@@ -286,13 +286,26 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 3. 启用 `dsh-famling`，刷新 Web UI；
 4. 查看左侧栏底部账号区域下方是否出现 `汀岚`。
 
+## 发布与包卫生（0.10.9 工作树，MB-094 残余，2026-11-20）
+
+本插件以 npm tarball 分发，所以 `package.json` 的元数据与 `files` 白名单就是发布面；这些规则由脚本门禁强制，不是约定：
+
+- **元数据**：`repository` = `git+https://github.com/PerryLink/dsh-famling.git`，`homepage` = 本仓 README，`bugs` = 本仓 issues；三者必须同指一个仓（`dsh-famling` 是 DSH 插件仓；独立应用仓 `PerryLink/famling` 只在上面「两个包」表里作为相关产品链接）。
+- **`files` 白名单**：无重复（历史遗留的 `docs` 重复项已删除）、每个条目必须存在、运行必需文件与 `exports` 全部覆盖、`test/`/`scripts/`/`*.tgz` 永不打包；`npm run verify:package` 用 `npm pack --dry-run --json` 做「实际打包清单 = 白名单展开 + npm 始终包含项」的集合相等校验。
+- **`prepack`**：每次 `npm pack` / `npm publish` 自动跑静态发布卫生校验；成功信息走 stderr（避免污染 `npm pack --json` 的 stdout），失败直接中断打包。
+- **命令**：`npm run check:package`（静态）/ `npm run verify:package`（含 `npm pack --dry-run`）/ `npm run release:check`（test + check + verify + verify:package，发布前总门禁）。
+- **未做**：真实 `npm publish`、provenance、CI 首跑与 GitHub 公网可达性均未在本轮执行（不伪造外部验证）；npm 上目前仍是占位版本。细节、证据与本机实测记录见 [docs/RELEASE-HYGIENE.md](docs/RELEASE-HYGIENE.md)。
+
 ## 验证
 
 - `node --check client.js`
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试，**190 项**，不调用真实模型）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试 + 发布卫生（元数据 / files 白名单 / prepack 接线 / 打包清单）测试，**200 项**，不调用真实模型）
+- `npm run check:package`（静态发布卫生：repository/homepage/bugs 一致、files 无重复且存在、禁止项、exports 全覆盖）
+- `npm run verify:package`（静态 + `npm pack --dry-run --json`：实际 tarball 清单必须与白名单展开完全相等）
+- `npm run release:check`（发布前总门禁 = test + check + verify + verify:package）
 - `npm run check`（= `check:anims`：嵌入块与私有动画包一致）
 - `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
 - `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示 chunk 68.1 KiB 等实测）
