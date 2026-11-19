@@ -1,11 +1,11 @@
 # Famling · 汀岚
 
-在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；版本/README/LEGAL/locale/package 真值由测试统一校验。
+在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；**0.10.7 起有 Host 能力协商**（bridge wire 2 的 hello/probe 握手、可选 llm/schedule 降级、content-extension v3 契约握手）；版本/README/LEGAL/locale/package 真值由测试统一校验。
 
 - 显示 72px 像素桌宠：汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛，台词、动作与聊天人格随形象变化。
 - 动画：每角色 12 clip，帧数按 manifest（dog 68 / cat 72 / human 68，共 208 帧；clip：idle 循环、idle_blink 眨眼、pat_head、ball_throw、ball_chase、paw_face、scratch、stand_wag、chase_tail、walk、run、attack），随机微动作只取本形象的 clip。
-- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.6 实测：入口 **94.9 KiB**（97,163 B，gzip 26.8 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.9%）、首帧约 156.6 KiB、全量约 342.2 KiB；chunk sha256 进入 embed/verify 门禁。
-- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（60.6 KiB，gzip 16.8 KiB），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
+- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.7 实测：入口 **95.2 KiB**（97,472 B，gzip 27.2 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6/0.10.7 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.97%）、首帧约 156.9 KiB、全量约 342.5 KiB；chunk sha256 进入 embed/verify 门禁。
+- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（65.9 KiB，gzip 18.3 KiB，0.10.7 增加 Host 能力面板），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
 - 帧时长（0.8.4）：每帧停留时间读 manifest `holdMs`（缺省 1000/fps），非循环 clip 播完后按 `durationMs`/hold 总和回到 idle；cat 伸懒腰 10 帧 / 3200ms 按 300/300/300/350/400/400/400/350/250/150 逐帧播放。
 - 点击区域（0.8.2）：点击人物头部/身体/尾巴分别触发 pat_head/stand_wag/chase_tail；区域来自与独立 famling 共用的 `regions.json`（96×96 逻辑画布 + idle gating），非 idle/idle_blink 状态或空白区域不动作，不回退随机动作。
 - 随机回话（0.8.3）：每条区域规则与每个互动动作都带 `says` 数组，命中时随机挑一条且连续两次不会重复；气泡文案全量来自共用 `regions.json`。
@@ -26,7 +26,7 @@
 - 右键角色 / Shift+F10 / ContextMenu 打开自绘分级菜单：一级 5 项 **聊两句… / 互动 ▸ / 内容与角色… / 设置… / 更多 ▸**；互动/更多是带「« 返回」的二级页面。菜单 `role="menu"` + `role="menuitem"`、`aria-activedescendant`、roving tabIndex；`position: fixed` 并按视口夹取（8px 边距）；方向键/Home/End/←→/Enter/Escape/Tab 全可用；菜单外点、窗口失焦关闭，关闭后焦点回到角色。
 - 聊两句…：文本框 + 语音输入；聊天请求带当前形象，Host 据此切换人格。面板常驻 AI 声明（含发送去向与危机求助 12356/110/120）；「AI 聊天」关闭后发送按钮禁用且不发请求；Host 侧危机关键词命中时本地短路返回固定资源、不调模型。
 - 互动 ▸：按当前形象渲染物种专属动作（数据来自 `regions.json` actions），点击后跑对应 clip + 随机回话（金毛丢球→追球）；点击人物按头/身/尾区域触发对应动作并从该区域 says 随机回话，空白区域不动作。
-- 设置…：统一设置弹窗——**四层缩放（0.10.4：常用「整体缩放」+ 独立轴「UI + 文本 / 图像」+ 高级折叠「组件缩放」）**、**低打扰（0.10.6：安静时段 / 动画偏好 / 暂时隐藏）**、语音朗读（仅汀岚）、说话气泡、**显示菜单按钮（默认关闭）**、**数据与边界（0.10.2：AI 聊天开关、发送去向、危机资源、DSH 边界、清除本机设置与同意）**、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口、恢复角色默认；底部「高级 / 调试」折叠组显示版本、当前状态与全部本地存储键。
+- 设置…：统一设置弹窗——**四层缩放（0.10.4：常用「整体缩放」+ 独立轴「UI + 文本 / 图像」+ 高级折叠「组件缩放」）**、**低打扰（0.10.6：安静时段 / 动画偏好 / 暂时隐藏）**、语音朗读（仅汀岚）、说话气泡、**显示菜单按钮（默认关闭）**、**数据与边界（0.10.2：AI 聊天开关、发送去向、危机资源、DSH 边界、清除本机设置与同意）**、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口、恢复角色默认；底部「高级 / 调试」折叠组显示版本、当前状态、全部本地存储键与 **Host 握手块（0.10.7：hello 状态、宿主版本、bridge/内容契约版本、能力矩阵、降级项、「重新检测 Host 能力」）**。
 - 首启安全卡（0.10.2）：未确认时显示一次性、非阻断、可关闭卡片（发送去向 + AI 声明 + 12356/110/120 危机资源），确认只写 `dsh-famling/first-run/v1`；卡片 UI 在懒加载 chunk，不占首屏预算。
 - 内容与角色…：角色=主题的内容中心弹窗（四个一级 tabs，见下节）；导入/市场都留在内容包/市场 tab 内，不占一级菜单。
 - 更多 ▸：提醒…（输入面板 + 提醒表单）、使用限制与版本…（弹窗）。
@@ -48,7 +48,7 @@
 - 生效值 = `global × axis` 后 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px）、组件 0.5×–2×。气泡宽度硬上限 240px 且左边界按视口夹取；菜单/面板用「布局尺寸 ÷ zoom + transform scale」在缩放后仍夹在视口内。
 - 持久化 `dsh-famling/scale/model` + `/global` + `/ui-text` + `/image` + `/component/<id>`；默认/跟随值不写轴键，恢复默认只写 `global=1` 与版本标记。旧绝对倍率 `dsh-famling/scale`（数字或 `{pet,text}` JSON）/ `dsh-famling/text-scale` 只在没有版本标记时一次性迁移（global=100%，等效值不变），旧键保留但失效；清除本机设置会删除全部 `dsh-famling/*` 缩放键。
 - 键盘 / ARIA：原生 range（方向键可用）+ `aria-label`/`aria-valuetext`；高级组 `aria-expanded`；组件下拉 `aria-label`；跟随时「跟随整体」`disabled`；设置弹窗 `role="dialog"`。
-- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无 fetch），`npm test` 合计 164 项。
+- 测试：`test/client-scale.test.js`（纯模型 + fake React 行为 + 无业务 bridge 请求），`npm test` 合计 179 项。
 
 ## 低打扰：安静时段 / 动画偏好 / 暂时隐藏（0.10.6，E7 剩余 / P-04）
 
@@ -65,8 +65,47 @@
 - 设置弹窗新增「低打扰」分组（`client.content.js` 的 `lowDisturbGroup`）：开关、两个 `input[type=time]`（非法/空值保留原值）、三选一动画偏好（`aria-pressed`）、状态行（当前是否在安静时段）与两个隐藏按钮；「更多」菜单与设置内隐藏入口指向同一实现。
 - 隐藏不是永久退出：`exit`（退出，刷新恢复）仍与隐藏分开；隐藏按截止时间自动恢复，且跨重载保持（`loadHiddenUntil` 只接受未来时间戳）。
 - 首屏预算：输入面板/同意弹窗/使用限制弹窗与低打扰 UI 文案全部在懒加载 `client.content.js`；`client.js` 只保留纯模型与接线。
-- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 164 项。
+- 测试：`test/client-lowdisturb.test.js`（纯模型边界 + 静态接线）与 `test/client-behavior.test.js`（fake clock / matchMedia / hidden 存储行为），`npm test` 合计 179 项。
 
+
+## DSH 宿主能力协商 hello/probe（0.10.7，MB-034 / E3-T2）
+
+目标：插件在**能力未知或缺失**的 DSH Host 上仍能激活并如实降级，不靠 `engines.dsh` 假设 llm/schedule 一定存在。主机半与客户端半通过同源 bridge 的 **wire 2** 握手；wire 1 老客户端行为不变。
+
+### 主机半（index.js）
+
+- `export const inject = ['connection']`：只有认证同源 bridge 是必需服务；`llm` / `schedule` / `agentDefaultModel` 每次调用通过 `hostService(ctx, name)`（`ctx.get(name)` → `ctx[name]` 回退）读取，服务后加载也能被下一次调用发现。
+- `detectHost(ctx) → { services, capabilities, probes, degraded }` 是唯一宿主适配层：`capabilities = { llm, schedule, agentDefaultModel, brief, bridge }`，`probes[] = { id, available, method }`，`degraded` = 不可用能力 id 列表。纯读、无副作用。
+- `hostIdentity(payload)` 版本来源：`process.env.DSH_CLIENT_VERSION` → `source: "env:DSH_CLIENT_VERSION"`；否则客户端 `hello.hostVersion`（来自 `window.__DSH_BOOT__.release`）→ `source: "client-boot"`；都没有 → `version: null, source: "unknown"`。不猜、不伪造。
+- `handleHello(ctx, payload)`：校验/返回 `v: 2`、`plugin: { name, version }`（读本包 package.json）、`wire: { version: 2, min: 1, accepts: [1,2] }`、`contract: { bridge: 2, contentExtension: 3, contentExtensionSchema: 3 }`、`host: { version, commit?, source, engines }`、`client` 上报值、`capabilities`、`probes`、`degraded`、`compatible`、`versionMismatch`。`contentExtension` 直接取 `content-extension.mjs` 的 `CONTENT_EXTENSION_VERSION`。
+- `handleProbe(ctx)`：同样的能力/契约 + `generatedAt`；无副作用，不调模型、不建提醒。
+- bridge 版本策略：`v === 1 || v === 2` 才受理；`hello` / `probe` 要求 `v: 2`（否则 426 `E_WIRE`）；`echo` / `chat` / `brief` / `task` / `task-delete` 在 wire 1/2 均可用。
+- 缺能力错误：chat 无 llm → 503 `E_LLM` + `{ capability: "llm", unavailable: true }`；task/task-delete 无 schedule → 503 `E_TASK` + `{ capability: "schedule", unavailable: true }`。危机关键词短路在任何模型/服务检查之前，因此无 llm 时仍返回本地资源。
+
+### 客户端半（client.js）
+
+- 挂载后发一次 `POST /api/famling/bridge`：
+  `{ v: 2, op: "hello", clientVersion: PLUGIN_VERSION, wireVersion: 2, contentExtension: 3, hostVersion?, hostCommit? }`，4s 超时，失败/超时/非 JSON 一律降级为 `{ legacy: true }`。
+- 成功时把 capability 文档存入 state；`sendInput` 在 `settings.chat` 开关之后检查 `host.capabilities.llm === false` → 本地气泡提示、不发 bridge；`sendTask` 同理检查 `schedule`。
+- 输入面板（client.content.js）在 `llm === false` 时禁用发送并显示 `noModelDetail`；`schedule === false` 时提醒入口替换为 `noScheduleDetail`。
+- 设置 → 高级 / 调试 → Host 块：握手状态（已握手 / 兼容模式 / 检测中）、宿主版本、bridge 契约 v2、内容扩展契约 v3、能力矩阵、降级项、版本不一致提示、「重新检测 Host 能力」（`op: "probe"`）。
+- 老 Host（无 hello）→ 「兼容模式」，客户端保持 0.10.6 行为（乐观允许 chat/reminder，由 Host 的错误兜底）；不阻塞角色渲染。
+- 版本/契约不一致只提示，不阻塞、不崩溃。
+
+### content-extension v3 兼容
+
+本版**不升 v4**：`content-extension.mjs` 的 pack/entry schema 仍为 v3，并新增：
+
+- `CONTENT_EXTENSION_VERSION = 3`（契约 revision，`CONTENT_EXTENSION_POINTS.version` 引用它）。
+- `CONTENT_EXTENSION_COMPATIBILITY = { current: 3, supportedPackSchemaVersions: [3], policy: "additive-within-major", breakingChange: "..." }`（冻结）。
+- `isContentExtensionCompatible(version)`：仅接受整数 3，未知/旧/新版本 fail-closed。
+- hello/probe 的 `contract.contentExtension` 与该模块同源；测试同时冻结模块常量与 wire 字段，防止 schema 与握手各自漂移。
+
+### 测试
+
+- `test/host-bridge.test.js`：inject 最小化、最小 Host 激活、hello 字段/版本来源/契约不兼容、probe 无副作用、缺能力 503、wire 1/2 矩阵、版本不一致提示。
+- `test/client-behavior.test.js`：挂载 hello 载荷（含 `__DSH_BOOT__.release`）、缺 llm/schedule 的发送与面板降级、老 Host 兼容模式、版本/契约不一致提示、手动 probe。
+- `test/client-static.test.js`：静态冻结 `CONTENT_EXTENSION_VERSION` / 兼容策略 / hello wire 字段。
 
 ## 内容中心：角色就是主题（0.10.0）
 
@@ -111,7 +150,7 @@
 
 ### 懒加载与预算
 
-入口 `client.js` 94.9 KiB（97,163 B / gzip 26.8 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6 把输入/同意/使用限制弹窗移出入口、未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.9%，首帧 156.6 KiB = 51.0%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 `client.content.js` 60.6 KiB（gzip 16.8 KiB）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
+入口 `client.js` 95.2 KiB（97,472 B / gzip 27.2 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.97%，首帧 156.9 KiB = 51.1%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 `client.content.js` 65.9 KiB（gzip 18.3 KiB）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
 
 ## 内容扩展接口 CONTENT_EXTENSION_POINTS v3（预留）
 
@@ -122,6 +161,7 @@
 - `CONTENT_EXTENSION_POINTS`：version / status / transport（`network:false, execute:false, innerHTML:false, worker:false, assets:false`）/ pack schema（schemaVersion、fields、optionalFields、sources、limits、idPattern、versionPattern、usageDeclaration、assets、remoteCatalog）/ entry schema（**七类 kinds**：role / character / voice / dialogue / theme / background / font；fields、roleFields、idPattern、preview 类型与路径策略、permissions、各 kind 的 apply 形状、role 的六组件与 compatibility、本地字体栈策略）/ validation。
 - `validateContentPack(pack, { allowRemote? }) → { ok, errors }`：纯数据校验，不抛异常、不执行、不解析 URL、不读文件、不联网。
 - `CONTENT_PACK_EXAMPLE`：合法 v3 示例 pack（完整 usageDeclaration + 一个 role bundle + 一个 theme entry）。
+- `CONTENT_EXTENSION_VERSION` / `CONTENT_EXTENSION_COMPATIBILITY` / `isContentExtensionCompatible(version)`（0.10.7）：v3 单版本兼容策略（`additive-within-major`；未知/非整数版本 fail-closed），hello/probe 的 `contract.contentExtension` 直接引用该版本号。
 - `PROHIBITED_USES` / `USAGE_DECLARATION_TEMPLATE`：六项禁止用途的 canonical 列表与声明模板。
 
 ### 强制 usageDeclaration

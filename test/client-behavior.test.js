@@ -208,7 +208,21 @@ function createHarness(options = {}) {
   FakeDate.now = () => currentNow
   FakeDate.parse = RealDate.parse
   FakeDate.UTC = RealDate.UTC
+  // Host hello/probe replies used by the capability handshake. A test can pass
+  // hostHello: null for an older Host (404) or a function to shape one reply.
+  const defaultHostHello = () => ({
+    v: 2, ok: true, op: 'hello',
+    plugin: { name: 'dsh-famling', version: options.hostPluginVersion || PLUGIN_VERSION },
+    wire: { version: options.hostWireVersion || 2, min: 1, accepts: [1, 2] },
+    contract: { bridge: 2, contentExtension: options.hostContentExtension || 3, contentExtensionSchema: 3 },
+    host: { version: (options.bootRelease && options.bootRelease.version) || '0.2.2-rc.4', commit: null, source: 'client-boot' },
+    client: { version: PLUGIN_VERSION, wireVersion: 2, contentExtension: 3 },
+    capabilities: { llm: true, schedule: true, agentDefaultModel: true, brief: true, bridge: true, ...(options.hostCapabilities || {}) },
+    probes: [], degraded: options.hostDegraded || [], compatible: options.hostCompatible !== false,
+    versionMismatch: Boolean(options.hostPluginVersion && options.hostPluginVersion !== PLUGIN_VERSION),
+  })
   const windowStub = {
+    __DSH_BOOT__: options.bootRelease ? { release: options.bootRelease } : undefined,
     matchMedia(query) {
       return {
         matches: Boolean(options.reduceMotion) && String(query).includes('prefers-reduced-motion'),
@@ -243,6 +257,13 @@ function createHarness(options = {}) {
     SpeechSynthesisUtterance: class SpeechSynthesisUtterance { constructor(text) { this.text = text } },
     fetch: async (url, init) => {
       fetchCalls.push({ url: String(url), init })
+      let payload = {}
+      try { payload = JSON.parse(init && init.body) } catch {}
+      if (payload.op === 'hello' || payload.op === 'probe') {
+        const reply = typeof options.hostHello === 'function' ? options.hostHello(payload) : (options.hostHello === undefined ? defaultHostHello() : options.hostHello)
+        if (!reply) return { ok: false, status: 404, async json() { return { v: 1, ok: false, code: 'E_OP', message: 'Unsupported operation.' } } }
+        return { ok: true, async json() { return reply } }
+      }
       return {
         ok: true,
         async json() { return { v: 1, ok: true, reply: options.reply || '我在这里。', bubbleKind: options.bubbleKind || 'speech' } },
@@ -315,7 +336,12 @@ function createHarness(options = {}) {
   assert.equal(typeof Component, 'function', 'FamlingFooter is registered into the sidebar footer slot')
   const ui = createUi(Component, React)
   ui.render()
-  return { ui, speech, fetchCalls, storage, timers, asyncCalls, module: moduleObject, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
+  // Business bridge calls only: the mount hello (and a manual probe) are the
+  // capability handshake, not user data traffic.
+  const businessCalls = () => fetchCalls.filter((call) => {
+    try { const op = JSON.parse(call.init && call.init.body).op; return op !== 'hello' && op !== 'probe' } catch { return true }
+  })
+  return { ui, speech, fetchCalls, businessCalls, hostCalls: () => fetchCalls.filter((call) => businessCalls().indexOf(call) === -1), storage, timers, asyncCalls, module: moduleObject, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
 }
 
 function idleSrc(kind) {
@@ -1026,7 +1052,7 @@ test('cat stand_wag plays its 10 authored holdMs frames over 3200ms', () => {
 })
 
 test('chat bridge sends the active character so the Host can switch personas', async () => {
-  const { ui, fetchCalls } = createHarness()
+  const { ui, businessCalls } = createHarness()
   async function typeAndSend(text) {
     const textarea = ui.findAll((node) => node.type === 'textarea')[0]
     assert.ok(textarea, 'chat input panel is open')
@@ -1050,20 +1076,20 @@ test('chat bridge sends the active character so the Host can switch personas', a
   openInputPanel(ui)
   await typeAndSend('去玩球')
   assert.equal(ui.tree.props['data-character'], 'dog')
-  assert.deepEqual(fetchCalls.map((call) => JSON.parse(call.init.body).character), ['human', 'cat', 'dog'])
+  assert.deepEqual(businessCalls().map((call) => JSON.parse(call.init.body).character), ['human', 'cat', 'dog'])
 })
 
 test('chat bridge still works from the menu-driven input panel (op:chat, same endpoint)', async () => {
-  const { ui, fetchCalls, speech } = createHarness({ reply: '嗯，我在。' })
+  const { ui, businessCalls, speech } = createHarness({ reply: '嗯，我在。' })
   openInputPanel(ui)
   const textarea = ui.findAll((node) => node.type === 'textarea')[0]
   ui.change(textarea, '你好')
   ui.render()
   ui.clickText('发送')
   await ui.settle()
-  assert.equal(fetchCalls.length, 1)
-  assert.match(fetchCalls[0].url, /\/api\/famling\/bridge$/)
-  const payload = JSON.parse(fetchCalls[0].init.body)
+  assert.equal(businessCalls().length, 1)
+  assert.match(businessCalls()[0].url, /\/api\/famling\/bridge$/)
+  const payload = JSON.parse(businessCalls()[0].init.body)
   assert.deepEqual(payload, { v: 1, op: 'chat', text: '你好', character: 'human' })
   const bubble = ui.findBubble()
   assert.ok(bubble)
@@ -1412,7 +1438,7 @@ test('dsh-famling/role backfills the shared bundle on load while explicit compon
 })
 
 test('content pack tab shows the built-in pack, declaration check and reserved import without network', () => {
-  const { ui, fetchCalls } = createHarness()
+  const { ui, businessCalls } = createHarness()
   openContent(ui, '内容包')
   const text = ui.text(contentDialog(ui))
   assert.ok(text.includes('内置角色主题包'), 'bundled content pack is listed')
@@ -1424,11 +1450,11 @@ test('content pack tab shows the built-in pack, declaration check and reserved i
   assert.equal(importButton.props.disabled, true, 'asset import stays disabled without Host support')
   assert.ok(text.includes('不读取文件'), 'asset-pack interface is explicitly reserved')
   assert.ok(text.includes('不联网'), 'pack tab states no network')
-  assert.equal(fetchCalls.length, 0, 'opening the pack tab never calls fetch')
+  assert.equal(businessCalls().length, 0, 'opening the pack tab never calls bridge business ops')
 })
 
 test('market tab is a reserved placeholder with catalog fields and never sends a network request', () => {
-  const { ui, fetchCalls } = createHarness()
+  const { ui, businessCalls } = createHarness()
   openContent(ui, '市场')
   const text = ui.text(contentDialog(ui))
   assert.ok(text.includes('远程市场接口已预留，服务器未配置'), 'market status is explicit')
@@ -1436,7 +1462,7 @@ test('market tab is a reserved placeholder with catalog fields and never sends a
   assert.ok(text.includes('dsh-famling.market'), 'market config field is reserved')
   assert.ok(text.includes('不会发起任何网络请求'), 'no-network promise is shown')
   assert.ok(text.includes('未配置'), 'no fake catalog is configured')
-  assert.equal(fetchCalls.length, 0, 'market tab never calls fetch')
+  assert.equal(businessCalls().length, 0, 'market tab never calls bridge business ops')
 })
 
 test('a missing content/settings chunk degrades locally without breaking the widget', () => {
@@ -1465,7 +1491,7 @@ function firstRunDialogEn(ui) {
 }
 
 test('first run shows a dismissible safety card exactly once and keeps a local ack flag', () => {
-  const { ui, storage, fetchCalls } = createHarness({ firstRun: true })
+  const { ui, storage, businessCalls } = createHarness({ firstRun: true })
   const card = firstRunDialog(ui)
   assert.ok(card, 'the one-time safety card is shown on a fresh install')
   const text = ui.text(card)
@@ -1473,7 +1499,7 @@ test('first run shows a dismissible safety card exactly once and keeps a local a
   assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'card lists crisis resources')
   assert.ok(text.includes('请勿发送密码'), 'card warns against secrets/private data')
   assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'nothing is acknowledged before the click')
-  assert.equal(fetchCalls.length, 0, 'the card makes no network request')
+  assert.equal(businessCalls().length, 0, 'the card makes no bridge business request')
   ui.clickText('我知道了')
   ui.render()
   assert.equal(firstRunDialog(ui), undefined, 'dismissing the card removes it')
@@ -1510,7 +1536,7 @@ test('the chat input panel discloses the sending destination and crisis resource
 })
 
 test('turning AI chat off in settings blocks the bridge while reminders stay available', () => {
-  const { ui, storage, fetchCalls } = createHarness()
+  const { ui, storage, businessCalls } = createHarness()
   openSettings(ui)
   const toggle = checkboxByLabel(ui, 'AI 聊天')
   ui.change(toggle, false)
@@ -1523,8 +1549,120 @@ test('turning AI chat off in settings blocks the bridge while reminders stay ava
   ui.render()
   ui.clickExact('发送')
   ui.render()
-  assert.equal(fetchCalls.length, 0, 'no chat request is sent while the switch is off')
+  assert.equal(businessCalls().length, 0, 'no chat request is sent while the switch is off')
   assert.ok(ui.text(ui.findBubble()).includes('AI 聊天已关闭'), 'the local chat-off note is shown')
+})
+
+
+/* ==================== 0.10.7 host hello/probe capability negotiation ==================== */
+function hostOpCalls(fetchCalls, op) {
+  return fetchCalls.filter((call) => { try { return JSON.parse(call.init.body).op === op } catch { return false } })
+}
+function advancedToggle(ui) {
+  return ui.findAll((node) => node.type === 'button' && ui.text(node).includes('高级 / 调试'))[0]
+}
+function openAdvancedSettings(ui) {
+  openSettings(ui)
+  const toggle = advancedToggle(ui)
+  assert.ok(toggle, 'advanced toggle exists')
+  ui.click(toggle)
+  ui.render()
+  return settingsDialog(ui)
+}
+
+test('mount sends one hello handshake with version, wire revision, contract and the boot release', async () => {
+  const { ui, fetchCalls, businessCalls } = createHarness({ bootRelease: { version: '0.2.2-rc.4', commit: 'abc123' } })
+  await ui.settle()
+  const hellos = hostOpCalls(fetchCalls, 'hello')
+  assert.equal(hellos.length, 1, 'exactly one mount handshake')
+  const payload = JSON.parse(hellos[0].init.body)
+  assert.deepEqual(
+    { v: payload.v, op: payload.op, clientVersion: payload.clientVersion, wireVersion: payload.wireVersion, contentExtension: payload.contentExtension },
+    { v: 2, op: 'hello', clientVersion: PLUGIN_VERSION, wireVersion: 2, contentExtension: 3 },
+    'handshake carries the client version, bridge wire 2 and content-extension v3',
+  )
+  assert.equal(payload.hostVersion, '0.2.2-rc.4', 'the client reports the Host release it booted from')
+  assert.equal(payload.hostCommit, 'abc123')
+  assert.equal(businessCalls().length, 0, 'the handshake sends no chat/brief/reminder payload')
+  const dialog = openAdvancedSettings(ui)
+  const text = ui.text(dialog)
+  assert.ok(text.includes('已握手（hello）'), 'settings states the handshake succeeded')
+  assert.ok(text.includes('0.2.2-rc.4'), 'settings shows the Host version')
+  assert.ok(text.includes('桥接契约 v2'), 'settings shows the bridge contract revision')
+  assert.ok(text.includes('内容扩展契约 v3'), 'settings shows the content-extension v3 contract')
+  assert.ok(text.includes('模型服务 可用'), 'settings shows the capability matrix')
+})
+
+test('hello omits an unreported hostVersion instead of inventing one', async () => {
+  const { ui, fetchCalls } = createHarness()
+  await ui.settle()
+  const payload = JSON.parse(hostOpCalls(fetchCalls, 'hello')[0].init.body)
+  assert.equal('hostVersion' in payload, false, 'no boot release means no guessed Host version')
+  assert.equal('hostCommit' in payload, false)
+})
+
+test('missing Host llm/schedule degrades the input panel and never fakes a reply', async () => {
+  const { ui, businessCalls } = createHarness({ hostCapabilities: { llm: false, schedule: false }, hostDegraded: ['llm', 'schedule'] })
+  await ui.settle()
+  openInputPanel(ui)
+  const panelText = ui.text(ui.tree)
+  assert.ok(panelText.includes('未连接模型服务'), 'the chat degradation is explained in the panel')
+  assert.ok(panelText.includes('不支持提醒'), 'the reminder degradation is explained in the panel')
+  const send = ui.findButtonExact('发送')
+  assert.equal(send.props.disabled, true, 'send is disabled without an LLM service')
+  assert.equal(ui.findAll((node) => node.type === 'button' && ui.text(node) === '提醒').length, 0, 'reminder entry is not rendered without schedule')
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  ui.change(textarea, '你好')
+  ui.render()
+  ui.clickExact('发送')
+  ui.render()
+  assert.equal(businessCalls().length, 0, 'no chat request is sent without an LLM service')
+  assert.ok(ui.text(ui.findBubble()).includes('未连接模型'), 'the local degradation note is shown')
+  closeActiveDialog(ui)
+  const dialog = openAdvancedSettings(ui)
+  const text = ui.text(dialog)
+  assert.ok(text.includes('模型服务 不可用'), 'settings matrix reports the missing LLM service')
+  assert.ok(text.includes('提醒服务 不可用'), 'settings matrix reports the missing schedule service')
+  assert.ok(text.includes('降级项: llm, schedule'), 'settings lists the degraded capabilities')
+})
+
+test('an older Host without hello degrades to compatible mode and keeps chat working', async () => {
+  const { ui, fetchCalls, businessCalls } = createHarness({ hostHello: null })
+  await ui.settle()
+  assert.equal(hostOpCalls(fetchCalls, 'hello').length, 1, 'the probe still runs once')
+  openInputPanel(ui)
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  ui.change(textarea, '你好')
+  ui.render()
+  ui.clickText('发送')
+  await ui.settle()
+  assert.equal(businessCalls().length, 1, 'a legacy Host keeps the previous chat behavior')
+  assert.equal(ui.text(ui.findBubble()), '我在这里。')
+  closeActiveDialog(ui)
+  const dialog = openAdvancedSettings(ui)
+  assert.ok(ui.text(dialog).includes('兼容模式'), 'settings states the legacy/compatible handshake')
+})
+
+test('a stale client/host version mismatch and contract drift are reported without crashing', async () => {
+  const { ui } = createHarness({ hostPluginVersion: '0.9.9', hostContentExtension: 2, hostDegraded: ['content-extension'], hostCompatible: false })
+  await ui.settle()
+  const dialog = openAdvancedSettings(ui)
+  const text = ui.text(dialog)
+  assert.ok(text.includes('插件版本与宿主不一致'), 'a stale cached client is reported')
+  assert.ok(text.includes('内容扩展契约 v2'), 'the Host contract is shown even when it differs')
+  assert.ok(text.includes('降级项: content-extension'), 'contract drift is listed as a degradation')
+  assert.ok(petImage(ui), 'the pet still renders after a mismatch')
+})
+
+test('settings can re-probe the Host with op:probe', async () => {
+  const { ui, fetchCalls } = createHarness()
+  await ui.settle()
+  openAdvancedSettings(ui)
+  ui.clickText('重新检测 Host 能力')
+  await ui.settle()
+  const probes = hostOpCalls(fetchCalls, 'probe')
+  assert.equal(probes.length, 1, 'the manual re-probe uses op:probe')
+  assert.equal(JSON.parse(probes[0].init.body).v, 2, 'probe uses the new wire revision')
 })
 
 test('clearing local settings and consent empties only dsh-famling/* keys and withdraws consent', () => {

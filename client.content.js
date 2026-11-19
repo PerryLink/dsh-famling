@@ -27,6 +27,7 @@ window.__ModuleLoader__.load({
       'minor-intimacy', 'impersonation', 'illegal-use',
     ]
     const BUILTIN_PACK = { id: 'dsh-famling.builtin', entries: 4, source: 'bundled' }
+    const PLUGIN_VERSION = '0.10.7'
 
     const STRINGS = {
       zh: {
@@ -62,7 +63,17 @@ window.__ModuleLoader__.load({
         memory: '读取 Advisers 摘要',
         motion: '帧动画', bubble: '说话气泡', showMenuButton: '显示菜单按钮',
         menuButtonHint: '默认关闭：右键角色或按 Shift+F10 / ContextMenu 打开菜单；开启后角色旁出现「⋯」。',
-        advancedGroup: '高级 / 调试', version: 'dsh-famling 0.10.6 · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
+        advancedGroup: '高级 / 调试', version: 'dsh-famling ' + PLUGIN_VERSION + ' · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
+        hostGroup: 'Host 连接与能力', hostStatus: '握手', hostReady: '已握手（hello）', hostLegacy: '兼容模式（宿主未响应 hello）', hostPending: '检测中…',
+        hostVersion: '宿主版本', hostWire: '桥接契约', hostContent: '内容扩展契约', hostDegraded: '降级项',
+        hostCapLlm: '模型服务', hostCapSchedule: '提醒服务', hostCapBrief: 'Advisers 简报',
+        hostAvailable: '可用', hostUnavailable: '不可用', hostUnknown: '未知',
+        hostMismatch: '插件版本与宿主不一致：请刷新页面或重装插件；不匹配时不会崩溃。',
+        hostNoLlm: '未连接模型服务：聊天已降级关闭，不会伪造回复。',
+        hostNoSchedule: '当前宿主不支持提醒服务：提醒入口已禁用。',
+        probeHost: '重新检测 Host 能力', probeHint: '通过 hello/probe 重新读取宿主能力；不会调用模型或创建提醒。',
+        noModelDetail: '未连接模型服务（宿主缺少 llm）：发送不会调用任何模型，也不会伪造回复。',
+        noScheduleDetail: '当前宿主不支持提醒服务（schedule）：提醒已禁用。',
         dataGroup: '数据与边界', chat: 'AI 聊天（发送给模型供应商）',
         chatHint: '默认开启：聊天文本经 DSH Host 发送给 DSH 中配置的模型供应商；关闭后不发送任何聊天文本（提醒仍可用）。',
         boundaryHint: '本插件只运行在 DSH 内：模型、Key、会话与供应商数据由 DSH 和你配置的供应商管理；插件不保存聊天记录。',
@@ -137,7 +148,17 @@ window.__ModuleLoader__.load({
         memory: 'Read Advisers summary',
         motion: 'Frame animation', bubble: 'Speech bubble', showMenuButton: 'Show menu button',
         menuButtonHint: 'Off by default: right-click the pet or press Shift+F10 / ContextMenu; when on, a "⋯" appears next to the pet.',
-        advancedGroup: 'Advanced / debug', version: 'dsh-famling 0.10.6 · research prototype', debug: 'State', storageKeys: 'Local keys',
+        advancedGroup: 'Advanced / debug', version: 'dsh-famling ' + PLUGIN_VERSION + ' · research prototype', debug: 'State', storageKeys: 'Local keys',
+        hostGroup: 'Host connection & capabilities', hostStatus: 'Handshake', hostReady: 'handshaken (hello)', hostLegacy: 'compatible mode (Host did not answer hello)', hostPending: 'detecting…',
+        hostVersion: 'Host version', hostWire: 'Bridge contract', hostContent: 'Content-extension contract', hostDegraded: 'Degraded',
+        hostCapLlm: 'LLM service', hostCapSchedule: 'Schedule service', hostCapBrief: 'Advisers brief',
+        hostAvailable: 'available', hostUnavailable: 'unavailable', hostUnknown: 'unknown',
+        hostMismatch: 'Plugin version and Host disagree: refresh the page or reinstall the plugin; a mismatch never crashes.',
+        hostNoLlm: 'No LLM service connected: chat is degraded off and never fakes a reply.',
+        hostNoSchedule: 'This Host has no schedule service: reminders are disabled.',
+        probeHost: 'Re-detect Host capabilities', probeHint: 'Re-reads Host capabilities through hello/probe; never calls a model or creates a reminder.',
+        noModelDetail: 'No LLM service connected (Host lacks llm): sending calls no model and never fakes a reply.',
+        noScheduleDetail: 'This Host has no schedule service: reminders are disabled.',
         dataGroup: 'Data & boundaries', chat: 'AI chat (sends to the model provider)',
         chatHint: 'On by default: chat text goes through the DSH Host to the model provider configured in DSH; when off no chat text is sent (reminders still work).',
         boundaryHint: 'This plugin only runs inside DSH: model, key, session and provider data are managed by DSH and your provider; the plugin stores no chat history.',
@@ -409,7 +430,7 @@ window.__ModuleLoader__.load({
     function createSettingsPanel(props) {
       const {
         lang, character, roleId, canTts, ttsConsent, voices, settings, setSettings, menuButton,
-        dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, advancedOpen,
+        dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, host, onProbeHost, advancedOpen,
         aiNotice, useRestrictions, onToggleAdvanced, updateSetting,
         localDataCleared, onToggleChat, onClearLocalData,
         setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
@@ -586,12 +607,30 @@ window.__ModuleLoader__.load({
           ])
         }),
       ]) : null
+      // Host hello/probe handshake (0.10.7): state comes from client.js; this panel
+      // reports it and offers a manual re-probe. Unknown/legacy is stated explicitly.
+      const hostCaps = host && host.capabilities && typeof host.capabilities === 'object' ? host.capabilities : null
+      const hostFlag = (value) => value === true ? T.hostAvailable : value === false ? T.hostUnavailable : T.hostUnknown
+      const hostStatus = !host ? T.hostPending : host.legacy ? T.hostLegacy : T.hostReady
+      const hostSection = h('div', { key: 'host', style: { marginBottom: 8 } }, [
+        h('strong', { key: 'title', style: { display: 'block', marginBottom: 3 } }, T.hostGroup),
+        h('div', { key: 'status', role: 'status', style: captionStyle() }, T.hostStatus + ': ' + hostStatus),
+        host && !host.legacy ? h('div', { key: 'details', style: captionStyle() }, T.hostVersion + ': ' + ((host.host && host.host.version) || T.hostUnknown) + ' · ' + T.hostWire + ' v' + ((host.wire && host.wire.version) || 0) + ' · ' + T.hostContent + ' v' + ((host.contract && host.contract.contentExtension) || 0)) : null,
+        hostCaps ? h('div', { key: 'caps', style: captionStyle() }, T.hostCapLlm + ' ' + hostFlag(hostCaps.llm) + ' · ' + T.hostCapSchedule + ' ' + hostFlag(hostCaps.schedule) + ' · ' + T.hostCapBrief + ' ' + hostFlag(hostCaps.brief)) : null,
+        host && host.versionMismatch ? h('div', { key: 'mismatch', style: { ...captionStyle(), color: '#a63d35' } }, T.hostMismatch) : null,
+        host && Array.isArray(host.degraded) && host.degraded.length > 0 ? h('div', { key: 'degraded', style: captionStyle() }, T.hostDegraded + ': ' + host.degraded.join(', ')) : null,
+        hostCaps && hostCaps.llm === false ? h('div', { key: 'no-llm', style: captionStyle() }, T.hostNoLlm) : null,
+        hostCaps && hostCaps.schedule === false ? h('div', { key: 'no-schedule', style: captionStyle() }, T.hostNoSchedule) : null,
+        h('button', { key: 'probe', type: 'button', onClick: onProbeHost, style: { ...buttonBase, marginTop: 5, padding: '3px 8px', fontSize: 11 } }, T.probeHost),
+        h('div', { key: 'probe-hint', style: captionStyle() }, T.probeHint),
+      ])
       const advanced = h('div', { key: 'advanced', style: { marginTop: 8, paddingTop: 7, borderTop: '1px dashed var(--dsh-famling-panel-border, rgba(255,255,255,.22))' } }, [
         h('button', {
           key: 'toggle', type: 'button', 'aria-expanded': Boolean(advancedOpen), onClick: onToggleAdvanced,
           style: { ...buttonBase, padding: '3px 8px', fontSize: 11 },
         }, (advancedOpen ? '▾ ' : '▸ ') + T.advancedGroup),
         advancedOpen ? h('div', { key: 'body', style: { marginTop: 6 } }, [
+          hostSection,
           componentScale,
           h('div', { key: 'version', style: { ...captionStyle() } }, T.version),
           h('div', { key: 'debug', style: { ...captionStyle(), marginTop: 3 } }, T.debug + ': ' + character + ' / ' + roleId + ' / ' + dialogueMode + ' / ' + themeId + ' / ' + backgroundId + ' / ' + fontChoice.family + ' ' + fontChoice.size + 'px'),
@@ -620,7 +659,13 @@ window.__ModuleLoader__.load({
      * and arrive as props.
      */
     function createInputPanel(props) {
-      const { strings: S, charName, input, onInput, inputRef, settings, listening, taskMode, taskAt, onTaskAt, taskText, onTaskText, onToggleTask, onSend, onCreateTask, onStartVoice, onClose, buttonBase, style } = props
+      const { strings: S, charName, input, onInput, inputRef, settings, listening, taskMode, taskAt, onTaskAt, taskText, onTaskText, onToggleTask, onSend, onCreateTask, onStartVoice, onClose, host, lang, buttonBase, style } = props
+      // Host capabilities (0.10.7): a missing llm/schedule disables the matching
+      // control and states the degradation; unknown/legacy keeps the old behavior.
+      const T = STRINGS[lang] || STRINGS.zh
+      const hostCaps = host && host.capabilities && typeof host.capabilities === 'object' ? host.capabilities : null
+      const chatAvailable = !hostCaps || hostCaps.llm !== false
+      const scheduleAvailable = !hostCaps || hostCaps.schedule !== false
       const fillPet = (text) => String(text == null ? '' : text).replaceAll('{pet}', charName || '')
       const fieldStyle = { background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 6, font: 'inherit' }
       return h('div', { role: 'dialog', 'aria-label': fillPet(S.inputTitle), style }, [
@@ -637,19 +682,20 @@ window.__ModuleLoader__.load({
           }),
           h('div', { key: 'side', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
             h('button', { key: 'mic', type: 'button', title: S.mic, 'aria-label': S.mic, onClick: onStartVoice, style: { ...buttonBase, padding: '8px 7px' } }, listening ? '…' : '🎙'),
-            h('button', { key: 'send', type: 'button', onClick: onSend, disabled: settings.chat === false, style: { ...buttonBase, padding: '8px 7px', opacity: settings.chat === false ? 0.5 : 1 } }, S.send),
+            h('button', { key: 'send', type: 'button', onClick: onSend, disabled: settings.chat === false || !chatAvailable, style: { ...buttonBase, padding: '8px 7px', opacity: settings.chat === false || !chatAvailable ? 0.5 : 1 } }, S.send),
           ]),
         ]),
         h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, S.aiNotice),
         settings.chat === false ? h('p', { key: 'chat-off', style: { margin: 0, fontSize: 11, color: '#a63d35' } }, S.chatOff) : null,
-        h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, [
+        !chatAvailable ? h('p', { key: 'no-llm', style: { margin: '4px 0 0', fontSize: 11, color: '#a63d35' } }, T.noModelDetail) : null,
+        h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, scheduleAvailable ? [
           h('button', { key: 'toggle', type: 'button', onClick: onToggleTask, style: { ...buttonBase, padding: '4px 7px' } }, S.task),
           taskMode ? h('div', { key: 'form', style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 } }, [
             h('input', { key: 'at', type: 'datetime-local', value: taskAt, onChange: (event) => onTaskAt(event.target.value), 'aria-label': S.taskAt, style: fieldStyle }),
             h('textarea', { key: 'text', value: taskText, rows: 2, placeholder: S.task, onChange: (event) => onTaskText(event.target.value), style: { ...fieldStyle, resize: 'vertical' } }),
             h('button', { key: 'create', type: 'button', onClick: onCreateTask, style: { ...buttonBase, padding: '5px 7px' } }, S.createTask),
           ]) : null,
-        ]),
+        ] : [h('p', { key: 'no-schedule', style: { margin: 0, fontSize: 11, color: '#a63d35' } }, T.noScheduleDetail)]),
       ])
     }
 

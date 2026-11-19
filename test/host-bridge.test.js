@@ -1,15 +1,20 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 
-import { CRISIS_KEYWORDS, apply, crisisKeyword } from '../index.js'
+import { CRISIS_KEYWORDS, apply, crisisKeyword, inject } from '../index.js'
+import { CONTENT_EXTENSION_POINTS, CONTENT_EXTENSION_VERSION, CONTENT_PACK_SCHEMA_VERSION } from '../content-extension.mjs'
+
+const PLUGIN_VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version
 
 const BRIDGE_PATH = '/api/famling/bridge'
 
 /** Build a fake Host context: real Request/Response, fake llm/schedule/connection. */
-function makeContext({ selection = { provider: 'profile-provider', model: 'profile-model' } } = {}) {
+function makeContext({ selection = { provider: 'profile-provider', model: 'profile-model' }, omit = [] } = {}) {
   const calls = { llm: [], schedule: [] }
   let registered
   const ctx = {
@@ -19,7 +24,16 @@ function makeContext({ selection = { provider: 'profile-provider', model: 'profi
         register(options) { registered = options; return () => {} },
       },
     },
-    llm: {
+    get(name) {
+      if (name === 'agentDefaultModel' && selection && !omit.includes('agentDefaultModel')) {
+        return { currentSelection: () => selection }
+      }
+      return undefined
+    },
+  }
+  // Optional Host services: a capability test omits them to model a minimal Host.
+  if (!omit.includes('llm')) {
+    ctx.llm = {
       stream(options) {
         calls.llm.push(options)
         return (async function* () {
@@ -28,17 +42,13 @@ function makeContext({ selection = { provider: 'profile-provider', model: 'profi
           yield { type: 'finish', reason: { kind: 'stop' } }
         })()
       },
-    },
-    schedule: {
+    }
+  }
+  if (!omit.includes('schedule')) {
+    ctx.schedule = {
       async create(options) { calls.schedule.push(['create', options]); return { id: 'task-1' } },
       async edit(options) { calls.schedule.push(['edit', options]); return {} },
-    },
-    get(name) {
-      if (name === 'agentDefaultModel' && selection) {
-        return { currentSelection: () => selection }
-      }
-      return undefined
-    },
+    }
   }
   return { ctx, calls, route: () => registered }
 }
@@ -263,7 +273,7 @@ test('rejects malformed requests without touching services', async () => {
   const route = env.route()
 
   assert.equal((await post(route, 'not-json')).status, 400)
-  assert.equal((await post(route, { v: 2, op: 'chat', text: 'x' })).status, 400)
+  assert.equal((await post(route, { v: 3, op: 'chat', text: 'x' })).status, 400)
   assert.equal((await post(route, { v: 1, op: 'nope' })).status, 400)
   assert.equal((await post(route, { v: 1, op: 'echo', text: '   ' })).status, 400)
 
@@ -318,6 +328,126 @@ test('ordinary messages are not routed to the crisis floor and still reach the m
     assert.equal(body.meta.safety, undefined, text + ': no crisis route')
     assert.equal(env.calls.llm.length, 1, text + ': exactly one model call')
   }
+})
+
+
+/* ==================== 0.10.7: host hello/probe capability negotiation (MB-034) ==================== */
+
+test('the plugin declares only connection as required; optional Host services stay optional', async () => {
+  assert.deepEqual([...inject], ['connection'], 'llm/schedule/default-model are optional, not required injection')
+  const env = makeContext({ omit: ['llm', 'schedule', 'agentDefaultModel'] })
+  assert.doesNotThrow(() => apply(env.ctx), 'a minimal Host still activates the plugin')
+  assert.ok(env.route(), 'the authenticated bridge route is still registered')
+})
+
+test('hello negotiates the bridge wire revision and the content-extension v3 contract', async () => {
+  const env = makeContext()
+  apply(env.ctx)
+  const res = await post(env.route(), {
+    v: 2, op: 'hello',
+    clientVersion: PLUGIN_VERSION, wireVersion: 2, contentExtension: CONTENT_EXTENSION_VERSION,
+    hostVersion: '0.2.2-rc.4', hostCommit: 'abc123',
+  })
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.equal(body.v, 2)
+  assert.equal(body.ok, true)
+  assert.equal(body.op, 'hello')
+  assert.equal(body.plugin.version, PLUGIN_VERSION, 'plugin version comes from package.json')
+  assert.equal(body.wire.version, 2)
+  assert.deepEqual(body.wire.accepts, [1, 2])
+  assert.equal(body.contract.bridge, 2)
+  assert.equal(body.contract.contentExtension, CONTENT_EXTENSION_VERSION, 'the handshake reports content-extension v3')
+  assert.equal(body.contract.contentExtension, CONTENT_EXTENSION_POINTS.version)
+  assert.equal(body.contract.contentExtensionSchema, CONTENT_PACK_SCHEMA_VERSION)
+  assert.equal(body.host.version, '0.2.2-rc.4')
+  assert.equal(body.host.commit, 'abc123')
+  assert.equal(body.host.source, 'client-boot')
+  assert.match(body.host.engines, /0\.2\.2/)
+  assert.equal(body.client.version, PLUGIN_VERSION)
+  assert.equal(body.compatible, true)
+  assert.equal(body.versionMismatch, false)
+  assert.deepEqual(body.capabilities, { llm: true, schedule: true, agentDefaultModel: true, brief: true, bridge: true })
+  assert.deepEqual(body.degraded, [])
+  assert.ok(Array.isArray(body.probes) && body.probes.length >= 5, 'per-capability probe rows are reported')
+})
+
+test('hello reports hostVersion from the Host env first and flags a stale client version', async () => {
+  const previous = process.env.DSH_CLIENT_VERSION
+  process.env.DSH_CLIENT_VERSION = '0.2.2-rc.4'
+  try {
+    const env = makeContext()
+    apply(env.ctx)
+    const body = await (await post(env.route(), { v: 2, op: 'hello', clientVersion: '0.9.0', wireVersion: 2, contentExtension: 3, hostVersion: 'stale-client-report' })).json()
+    assert.equal(body.host.version, '0.2.2-rc.4', 'the Host environment wins over the client report')
+    assert.equal(body.host.source, 'env:DSH_CLIENT_VERSION')
+    assert.equal(body.versionMismatch, true, 'a stale cached client is reported, not hidden')
+    assert.equal(body.compatible, true, 'a stale version never blocks the wire')
+  } finally {
+    if (previous === undefined) delete process.env.DSH_CLIENT_VERSION
+    else process.env.DSH_CLIENT_VERSION = previous
+  }
+})
+
+test('hello degrades honestly for an incompatible content contract', async () => {
+  const env = makeContext()
+  apply(env.ctx)
+  const body = await (await post(env.route(), { v: 2, op: 'hello', clientVersion: PLUGIN_VERSION, wireVersion: 2, contentExtension: 2 })).json()
+  assert.equal(body.ok, true, 'the handshake still answers so the client can degrade')
+  assert.equal(body.compatible, false)
+  assert.ok(body.degraded.includes('content-extension'))
+  assert.equal(body.contract.contentExtension, 3)
+})
+
+test('probe returns fresh, side-effect-free capability diagnostics', async () => {
+  const env = makeContext()
+  apply(env.ctx)
+  const body = await (await post(env.route(), { v: 2, op: 'probe' })).json()
+  assert.equal(body.ok, true)
+  assert.equal(body.op, 'probe')
+  assert.equal(body.plugin.version, PLUGIN_VERSION)
+  assert.equal(body.contract.contentExtension, CONTENT_EXTENSION_VERSION)
+  assert.deepEqual(Object.keys(body.capabilities).sort(), ['agentDefaultModel', 'bridge', 'brief', 'llm', 'schedule'])
+  assert.deepEqual(body.probes.map((probe) => probe.id), ['bridge', 'llm', 'schedule', 'agentDefaultModel', 'brief'])
+  assert.equal(typeof body.generatedAt, 'string')
+  assert.equal(env.calls.llm.length, 0, 'probing never calls a model')
+  assert.equal(env.calls.schedule.length, 0, 'probing never creates a reminder')
+})
+
+test('a minimal Host degrades chat/reminders with typed capability errors, not crashes', async () => {
+  const env = makeContext({ omit: ['llm', 'schedule', 'agentDefaultModel'] })
+  apply(env.ctx)
+  const hello = await (await post(env.route(), { v: 2, op: 'hello', clientVersion: PLUGIN_VERSION, wireVersion: 2, contentExtension: 3 })).json()
+  assert.equal(hello.capabilities.llm, false)
+  assert.equal(hello.capabilities.schedule, false)
+  assert.deepEqual(hello.degraded, ['llm', 'schedule', 'agentDefaultModel'])
+  const chat = await post(env.route(), { v: 2, op: 'chat', text: '你好' })
+  assert.equal(chat.status, 503)
+  const chatBody = await chat.json()
+  assert.equal(chatBody.code, 'E_LLM')
+  assert.equal(chatBody.capability, 'llm')
+  assert.equal(chatBody.unavailable, true)
+  const task = await post(env.route(), { v: 2, op: 'task', text: '提醒', at: new Date(Date.now() + 3600_000).toISOString() })
+  assert.equal(task.status, 503)
+  const taskBody = await task.json()
+  assert.equal(taskBody.code, 'E_TASK')
+  assert.equal(taskBody.capability, 'schedule')
+  // Local-only paths keep working with no model/schedule service at all.
+  assert.equal((await post(env.route(), { v: 1, op: 'echo', text: 'ping' })).status, 200)
+  const crisis = await (await post(env.route(), { v: 2, op: 'chat', text: '我想自杀' })).json()
+  assert.equal(crisis.ok, true)
+  assert.equal(crisis.meta.llmCalls, 0)
+  assert.equal(crisis.meta.safety, 'crisis-local-resource')
+})
+
+test('hello/probe require wire 2 while legacy ops keep wire 1 and 2', async () => {
+  const env = makeContext()
+  apply(env.ctx)
+  const oldHello = await post(env.route(), { v: 1, op: 'hello' })
+  assert.equal(oldHello.status, 426)
+  assert.equal((await oldHello.json()).code, 'E_WIRE')
+  assert.equal((await post(env.route(), { v: 2, op: 'echo', text: 'two' })).status, 200, 'wire 2 still runs legacy ops')
+  assert.equal((await post(env.route(), { v: 1, op: 'chat', text: '你好' })).status, 200, 'wire 1 chat is unchanged')
 })
 
 test('crisisKeyword matches specific phrases and documents its public list', () => {

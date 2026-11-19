@@ -17,6 +17,8 @@ window.__ModuleLoader__.load({
     const CHARACTER_POLICY = {"human":{"canTts":true,"bubble":"speech"},"cat":{"canTts":false,"bubble":"thought"},"dog":{"canTts":false,"bubble":"thought"}}
     const CHARACTER_CHUNKS = {"human":"./client.anims.human.js","cat":"./client.anims.cat.js","dog":"./client.anims.dog.js"}
     // <dsh-famling:anims:end>
+    const PLUGIN_VERSION = '0.10.7'
+    const BRIDGE_WIRE_VERSION = 2
     const SIZE = 72
     const CHARACTER_KEY = 'dsh-famling/character'
     const CHARACTER_IDS = ['human', 'cat', 'dog']
@@ -434,13 +436,9 @@ window.__ModuleLoader__.load({
       }
       return durations
     }
-    // Data-driven tap regions, shared with the standalone famling hero contract:
-    // ANIMS[character].regions = { version, canvas, regions, gestures }. The art
-    // is authored on the logical 96x96 canvas, so a pointer offset in CSS pixels
-    // is converted back to art pixels with the image's rendered size - the same
-    // relative point hits the same region at every zoom/display size. Reactions
-    // are state-gated by the data (idle/idle_blink); a tap that misses every
-    // region is a deliberate no-op, never a random micro action.
+    // Data-driven tap regions shared with the famling hero contract: art pixels
+    // are 96x96, so CSS offsets map back through the rendered size; data-gated
+    // (idle/idle_blink) and a miss is a no-op, never a random micro action.
     /** Highest-priority region containing an art-pixel point, or null. */
     function regionAt(config, artX, artY) {
       if (!config || !Array.isArray(config.regions) || !Number.isFinite(artX) || !Number.isFinite(artY)) return null
@@ -508,7 +506,7 @@ window.__ModuleLoader__.load({
         contentLoading: '正在加载内容中心…', contentFailed: '内容中心加载失败，角色与外观设置仍可继续使用。',
         interact: '互动', settings: '设置',
         menu: '菜单', menuButton: '显示菜单按钮',
-        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', hideHour: '暂时隐藏 1 小时', hideTomorrow: '暂时隐藏到明天', showPet: '显示', notice: '使用限制与版本', version: 'dsh-famling 0.10.6 · 研究原型',
+        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', hideHour: '暂时隐藏 1 小时', hideTomorrow: '暂时隐藏到明天', showPet: '显示', notice: '使用限制与版本', version: 'dsh-famling ' + PLUGIN_VERSION + ' · 研究原型',
         inputTitle: '和{pet}说话', placeholder: '对{pet}说点什么…',
         mic: '语音输入', send: '发送',
         settingsTitle: '设置', sound: '语音朗读',
@@ -517,7 +515,7 @@ window.__ModuleLoader__.load({
         settingsLoading: '正在加载设置…', settingsFailed: '设置面板加载失败；右键菜单与角色互动仍可继续使用。',
         restriction: '研究原型 · 使用限制见设置。',
         task: '提醒', taskAt: '提醒时间', createTask: '创建提醒', taskEmpty: '写下提醒内容并选择未来时间。', taskDone: '已创建提醒。',
-        bridgeFailed: '桥接调用失败。',
+        bridgeFailed: '桥接调用失败。', noModel: '未连接模型，聊天不可用。', noSchedule: '当前宿主不支持提醒。',
         micUnsupported: '当前浏览器不支持语音输入。', inputEmpty: '先说点什么吧。',
         waveLine: '挥了挥手。', stretchLine: '伸了个懒腰。', coverFaceLine: '抬手理了理头发。', lookBackLine: '回头看了一眼。',
         catWashLine: '（洗洗脸。）', catStandLine: '（站起来看看。）', catTailLine: '（尾巴…转。）', catScratchLine: '（挠挠耳朵。）',
@@ -531,7 +529,7 @@ window.__ModuleLoader__.load({
         contentLoading: 'Loading content center…', contentFailed: 'The content center failed to load; character and appearance settings still work.',
         interact: 'Play', settings: 'Settings',
         menu: 'Menu', menuButton: 'Show menu button',
-        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', hideHour: 'Hide for 1 hour', hideTomorrow: 'Hide until tomorrow', showPet: 'Show', notice: 'Usage & version', version: 'dsh-famling 0.10.6 · research prototype',
+        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', hideHour: 'Hide for 1 hour', hideTomorrow: 'Hide until tomorrow', showPet: 'Show', notice: 'Usage & version', version: 'dsh-famling ' + PLUGIN_VERSION + ' · research prototype',
         inputTitle: 'Talk to {pet}', placeholder: 'Say something to {pet}…',
         mic: 'Voice input', send: 'Send',
         actionLabels: { pat: 'Pat', fetch: 'Throw / fetch', retrieve: 'Fetch', tail: 'Chase tail', run: 'Run', stretch: 'Stretch', wash: 'Wash face', feed: 'Hand paper', wave: 'Wave', tidy: 'Fix bow', talk: 'Chat' },
@@ -541,7 +539,7 @@ window.__ModuleLoader__.load({
         settingsLoading: 'Loading settings…', settingsFailed: 'The settings panel failed to load; the right-click menu and interactions still work.',
         restriction: 'Research prototype - see Settings for use restrictions.',
         task: 'Remind', taskAt: 'Remind at', createTask: 'Create reminder', taskEmpty: 'Write a reminder and choose a future time.', taskDone: 'Reminder created.',
-        bridgeFailed: 'Bridge call failed.',
+        bridgeFailed: 'Bridge call failed.', noModel: 'No model connected; chat unavailable.', noSchedule: 'This Host does not support reminders.',
         micUnsupported: 'Speech input is unavailable in this browser.', inputEmpty: 'Say something first.',
         waveLine: 'Waved hello.', stretchLine: 'Stretched a little.', coverFaceLine: 'Tidied her hair.', lookBackLine: 'Glanced back.',
         catWashLine: '(Washing my face.)', catStandLine: '(Standing up to look.)', catTailLine: '(Tail… spinning.)', catScratchLine: '(Scratching an ear.)',
@@ -576,9 +574,8 @@ window.__ModuleLoader__.load({
     function loadConsent() {
       try { return { tts: false, asr: false, ...JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') } } catch { return { tts: false, asr: false } }
     }
-    // Sidebar menu: the pet is the only permanent UI; right click / Shift+F10 /
-    // ContextMenu opens it at level one every time. Only the opt-in trigger
-    // preference persists (dsh-famling/menu); open/page state is transient.
+    // Sidebar menu: right click / Shift+F10 / ContextMenu opens it at level one
+    // every time; only the opt-in trigger preference persists (dsh-famling/menu).
     const MENU_KEY = 'dsh-famling/menu'
     const MENU_WIDTH = 200
     const MENU_ITEM_HEIGHT = 30
@@ -704,6 +701,8 @@ window.__ModuleLoader__.load({
       const [briefError, setBriefError] = useState('')
       const briefHideTimer = useRef(null)
       const bridgeInFlight = useRef(false)
+      // Host hello result: null while probing, { legacy:true } on an older Host.
+      const [host, setHost] = useState(null)
       const rootRef = useRef(null)
       const closeRef = useRef(null)
       const inputRef = useRef(null)
@@ -889,15 +888,23 @@ window.__ModuleLoader__.load({
         schedule()
         return () => { alive = false; if (timer !== null) clearTimeout(timer) }
       }, [anim, motionOn, character, mode, animDataVersion, settings.quietHours])
-      // Declared after the playback effects on purpose: on the first render there
-      // is no character data yet, so those effects no-op; when the chunk settles
-      // the version bump re-runs them exactly once with sprites available (no
-      // duplicate timers from a half-loaded first pass).
+      // Declared after the playback effects: the first pass has no sprites; the
+      // chunk settle bumps the version so timers start once with data available.
       useEffect(() => {
         let alive = true
         requestCharacterChunk(character, () => { if (alive) setAnimDataVersion((value) => value + 1) })
         return () => { alive = false }
       }, [character])
+      // Host hello handshake (0.10.7): one mount probe; an older Host degrades gracefully.
+      useEffect(() => {
+        let alive = true
+        let boot = null
+        try { boot = window.__DSH_BOOT__?.release || null } catch {}
+        const version = boot && typeof boot.version === 'string' ? boot.version : ''
+        callBridge({ v: BRIDGE_WIRE_VERSION, op: 'hello', clientVersion: PLUGIN_VERSION, wireVersion: BRIDGE_WIRE_VERSION, contentExtension: 3, ...(version ? { hostVersion: version, hostCommit: typeof boot.commit === 'string' ? boot.commit : '' } : {}) }, 4000)
+          .then(({ ok, result }) => { if (alive) setHost(ok && result?.capabilities && typeof result.capabilities === 'object' ? result : { legacy: true }) })
+        return () => { alive = false }
+      }, [])
       // First run: lazy-load the panel chunk only for the one-time safety notice.
       useEffect(() => {
         if (firstRunAck || contentState !== 'idle') return undefined
@@ -1261,67 +1268,59 @@ window.__ModuleLoader__.load({
         setAsrConsent(false)
         setLocalDataCleared(true)
       }
+      /** Manual capability re-probe from settings (Host services can hot-load). */
+      function probeHost() {
+        callBridge({ v: BRIDGE_WIRE_VERSION, op: 'probe' }, 4000).then(({ ok, result }) => { if (ok && result?.capabilities) setHost(result) })
+      }
+      /** One bridge-call shape for hello/brief/chat/task (0.10.7 host adapter). */
+      async function callBridge(payload, timeoutMs) {
+        const controller = typeof AbortController === 'function' ? new AbortController() : null
+        const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+        try {
+          const response = await fetch(new URL('api/famling/bridge', document.baseURI), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), ...(controller ? { signal: controller.signal } : {}) })
+          const result = await response.json().catch(() => null)
+          return { ok: response.ok && result !== null && result.ok !== false, result }
+        } catch { return { ok: false, result: null } } finally { if (timer) clearTimeout(timer) }
+      }
       async function loadBrief() {
         setBriefError('')
-        const controller = typeof AbortController === 'function' ? new AbortController() : null
-        const timer = controller ? setTimeout(() => controller.abort(), 8000) : null
-        try {
-          const response = await fetch(new URL('api/famling/bridge', document.baseURI), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ v: 1, op: 'brief' }), ...(controller ? { signal: controller.signal } : {}) })
-          const result = await response.json().catch(() => null)
-          if (!response.ok || !result || result.ok === false) throw new Error(result?.code || 'brief')
-          if (briefHideTimer.current) clearTimeout(briefHideTimer.current)
-          setBrief(result.brief || null)
-          if (result.brief && result.brief.displayPolicy === 'private') {
-            briefHideTimer.current = setTimeout(() => { setBrief(null) }, 30000)
-          }
-          if (result.reply) say(result.reply, 'thought', 'direct')
-        } catch { setBrief(null); setBriefError(L.bridgeFailed) }
-        finally { if (timer) clearTimeout(timer) }
+        const { ok, result } = await callBridge({ v: 1, op: 'brief' }, 8000)
+        if (!ok || !result) { setBrief(null); setBriefError(L.bridgeFailed); return }
+        if (briefHideTimer.current) clearTimeout(briefHideTimer.current)
+        setBrief(result.brief || null)
+        if (result.brief && result.brief.displayPolicy === 'private') briefHideTimer.current = setTimeout(() => { setBrief(null) }, 30000)
+        if (result.reply) say(result.reply, 'thought', 'direct')
       }
       async function sendInput() {
         const text = input.trim()
         if (!text) { say(L.inputEmpty, 'speech', 'direct'); return }
         if (settings.chat === false) { say(L.chatOff, 'speech', 'direct'); return }
+        if (host && host.capabilities && host.capabilities.llm === false) { say(L.noModel, 'speech', 'direct'); return }
         if (bridgeInFlight.current) return
         bridgeInFlight.current = true
-        const controller = typeof AbortController === 'function' ? new AbortController() : null
-        const timer = controller ? setTimeout(() => controller.abort(), 45000) : null
         try {
-          const response = await fetch(new URL('api/famling/bridge', document.baseURI), {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'content-type': 'application/json' },
-            // Carry the live character so switching the skin also switches the Host persona.
-            body: JSON.stringify({ v: 1, op: 'chat', text, character: chatCharacter(characterRef.current) }),
-            ...(controller ? { signal: controller.signal } : {}),
-          })
-          const result = await response.json().catch(() => null)
-          if (!response.ok || !result || result.ok === false) throw new Error(result?.code || 'bridge')
+          // Carry the live character so switching the skin also switches the Host persona.
+          const { ok, result } = await callBridge({ v: 1, op: 'chat', text, character: chatCharacter(characterRef.current) }, 45000)
+          if (!ok || !result) throw new Error('bridge')
           const reply = typeof result.reply === 'string' ? result.reply : ''
           if (reply.trim() !== '') say(reply, result.bubbleKind === 'thought' ? 'thought' : 'speech', 'direct')
         } catch { say(L.bridgeFailed, 'speech', 'direct') }
-        finally { if (timer) clearTimeout(timer); bridgeInFlight.current = false }
+        finally { bridgeInFlight.current = false }
       }
       async function sendTask() {
         const text = taskText.trim()
         if (!text || !taskAt) { say(L.taskEmpty, 'speech', 'direct'); return }
+        if (host && host.capabilities && host.capabilities.schedule === false) { say(L.noSchedule, 'speech', 'direct'); return }
         if (bridgeInFlight.current) return
         bridgeInFlight.current = true
-        const controller = typeof AbortController === 'function' ? new AbortController() : null
-        const timer = controller ? setTimeout(() => controller.abort(), 15000) : null
         const at = new Date(taskAt).toISOString()
         try {
-          const response = await fetch(new URL('api/famling/bridge', document.baseURI), {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ v: 1, op: 'task', text, at }),
-            ...(controller ? { signal: controller.signal } : {}),
-          })
-          const result = await response.json().catch(() => null)
-          if (!response.ok || !result || result.ok === false) throw new Error(result?.code || 'task')
+          const { ok, result } = await callBridge({ v: 1, op: 'task', text, at }, 15000)
+          if (!ok || !result) throw new Error('task')
           setTaskMode(false); setTaskText(''); setTaskAt('')
           say(result.reply || L.taskDone, 'speech', 'direct')
         } catch { say(L.bridgeFailed, 'speech', 'direct') }
-        finally { if (timer) clearTimeout(timer); bridgeInFlight.current = false }
+        finally { bridgeInFlight.current = false }
       }
       function startRecognition() {
         const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -1402,7 +1401,7 @@ window.__ModuleLoader__.load({
         ? panelChunk && typeof panelChunk.createInputPanel === 'function'
           ? panelChunk.createInputPanel({
               strings: L, charName, input, onInput: setInput, inputRef, settings, listening, taskMode,
-              taskAt, onTaskAt: setTaskAt, taskText, onTaskText: setTaskText, onToggleTask: () => setTaskMode((value) => !value),
+              host, lang: L.lang, taskAt, onTaskAt: setTaskAt, taskText, onTaskText: setTaskText, onToggleTask: () => setTaskMode((value) => !value),
               onSend: () => void sendInput(), onCreateTask: () => void sendTask(), onStartVoice: startVoice,
               onClose: () => setMode(null), buttonBase, style: { ...panelStyle, ...panelZoomStyle(panelBox) },
             })
@@ -1486,7 +1485,7 @@ window.__ModuleLoader__.load({
               lang: L.lang, aiNotice: L.aiNotice,
               localDataCleared, onToggleChat: () => updateSetting('chat'), onClearLocalData: clearLocalState,
               character, roleId, canTts, ttsConsent, voices, settings, setSettings,
-              menuButton, dialogueMode, themeId, backgroundId, fontChoice, brief, briefError,
+              menuButton, dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, host, onProbeHost: probeHost,
               advancedOpen: settingsAdvanced, onToggleAdvanced: () => setSettingsAdvanced((value) => !value),
               updateSetting, setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
               onToggleSound: () => updateSetting('sound'),

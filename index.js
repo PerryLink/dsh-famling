@@ -5,12 +5,29 @@
  * browser owns those. The exact /api route admits owner Peers and uses the
  * same-origin Cookie; no DSH key ever enters the client.
  */
+import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { CONTENT_EXTENSION_VERSION, CONTENT_PACK_SCHEMA_VERSION, isContentExtensionCompatible } from './content-extension.mjs'
 
 export const name = 'dsh-famling'
-export const inject = ['connection', 'llm', 'schedule']
+// Only the authenticated bridge route is mandatory (0.10.7 capability
+// negotiation): llm / schedule / agentDefaultModel are optional Host services.
+// A host without them still loads this plugin; hello + every bridge op report
+// the gap and the client degrades honestly instead of the whole plugin failing.
+export const inject = ['connection']
 
+/** This package's own manifest, read once: the version is the single truth. */
+function readOwnManifest() {
+  try { return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) } catch { return {} }
+}
+const PLUGIN_MANIFEST = readOwnManifest()
+const PLUGIN_VERSION = String(PLUGIN_MANIFEST.version || '')
+const DSH_ENGINE_RANGE = typeof PLUGIN_MANIFEST.engines?.dsh === 'string' ? PLUGIN_MANIFEST.engines.dsh : ''
+/** Wire revision of the bridge envelope. 1 = legacy ops, 2 = hello/probe + legacy ops. */
+const BRIDGE_WIRE_VERSION = 2
+const LEGACY_WIRE_VERSION = 1
+const WIRE_VERSIONS = [LEGACY_WIRE_VERSION, BRIDGE_WIRE_VERSION]
 const MAX_INPUT_CHARS = 2000
 const MAX_BODY_BYTES = 16 * 1024
 const BRIDGE_PATH = '/api/famling/bridge'
@@ -104,14 +121,142 @@ function configSelection(config) {
   return { provider, model, source: 'plugin-config', ...(reasoningEffort === '' ? {} : { reasoningEffort }) }
 }
 
+/** Bounded single-line string from untrusted wire input (control chars removed). */
+function boundedString(value, maxLength = 64) {
+  return typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, maxLength) : ''
+}
+
+/**
+ * Single Host-adapter seam (0.10.7 / E3-T1): every optional DSH service is read
+ * through here at call time. Cordis resolves services lazily, so a service that
+ * appears after startup is picked up without restarting the plugin; the
+ * `ctx[name]` fallback keeps hand-built test contexts working.
+ */
+function hostService(ctx, name) {
+  let service
+  try { service = typeof ctx.get === 'function' ? ctx.get(name) : undefined } catch { service = undefined }
+  if (service === undefined) { try { service = ctx[name] } catch { service = undefined } }
+  return service
+}
+
+function hasMethods(service, methods) {
+  return service !== null && typeof service === 'object' && methods.every((method) => typeof service[method] === 'function')
+}
+
+/**
+ * Side-effect-free capability probe of the running Host. hello/probe expose the
+ * result, and every bridge operation re-checks its own required service so a
+ * missing capability is reported honestly instead of throwing.
+ * @returns {{
+ *   services: { llm: object|undefined, schedule: object|undefined, defaultModel: object|undefined },
+ *   capabilities: Record<string, boolean>,
+ *   probes: Array<{ id: string, available: boolean, method: string }>,
+ *   degraded: string[],
+ * }}
+ */
+function detectHost(ctx) {
+  const connection = ctx && ctx.connection
+  const services = {
+    llm: hostService(ctx, 'llm'),
+    schedule: hostService(ctx, 'schedule'),
+    defaultModel: hostService(ctx, 'agentDefaultModel'),
+  }
+  const capabilities = {
+    llm: hasMethods(services.llm, ['stream']),
+    schedule: hasMethods(services.schedule, ['create', 'edit']),
+    agentDefaultModel: hasMethods(services.defaultModel, ['currentSelection']),
+    // The brief route is local file projection and needs no extra Host service.
+    brief: true,
+    bridge: hasMethods(connection && connection.fetch, ['register']),
+  }
+  const probes = [
+    { id: 'bridge', available: capabilities.bridge, method: 'ctx.connection.fetch.register' },
+    { id: 'llm', available: capabilities.llm, method: 'ctx.llm.stream' },
+    { id: 'schedule', available: capabilities.schedule, method: 'ctx.schedule.create/edit' },
+    { id: 'agentDefaultModel', available: capabilities.agentDefaultModel, method: 'ctx.agentDefaultModel.currentSelection' },
+    { id: 'brief', available: capabilities.brief, method: 'local ~/.advisers/pet-brief.json projection' },
+  ]
+  return { services, capabilities, probes, degraded: Object.keys(capabilities).filter((key) => capabilities[key] === false) }
+}
+
+/** Running DSH release identity, honestly labelled: Host env first, browser boot report second. */
+function hostIdentity(payload) {
+  const fromEnv = boundedString(process.env.DSH_CLIENT_VERSION)
+  const fromClient = boundedString(payload && payload.hostVersion)
+  return {
+    version: fromEnv || fromClient || null,
+    commit: boundedString(payload && payload.hostCommit) || null,
+    source: fromEnv ? 'env:DSH_CLIENT_VERSION' : fromClient ? 'client-boot' : 'unknown',
+  }
+}
+
+/**
+ * `hello` handshake: negotiate the bridge wire revision and the content-extension
+ * v3 contract, then report optional Host capabilities. Never calls a model,
+ * never reads a file and never mutates state; an incompatible client still gets
+ * a readable contract so it can degrade instead of breaking.
+ */
+function handleHello(ctx, payload) {
+  const host = detectHost(ctx)
+  const clientVersion = boundedString(payload.clientVersion)
+  const clientWire = Number.isInteger(payload.wireVersion) ? payload.wireVersion : 0
+  const clientContent = Number.isInteger(payload.contentExtension) ? payload.contentExtension : 0
+  const wireCompatible = clientWire >= LEGACY_WIRE_VERSION && clientWire <= BRIDGE_WIRE_VERSION
+  const contentCompatible = clientContent === 0 || isContentExtensionCompatible(clientContent)
+  const degraded = host.degraded.slice()
+  if (!wireCompatible && clientWire !== 0) degraded.push('wire')
+  if (!contentCompatible) degraded.push('content-extension')
+  return {
+    v: BRIDGE_WIRE_VERSION,
+    ok: true,
+    op: 'hello',
+    plugin: { name, version: PLUGIN_VERSION },
+    wire: { version: BRIDGE_WIRE_VERSION, min: LEGACY_WIRE_VERSION, accepts: WIRE_VERSIONS },
+    contract: {
+      bridge: BRIDGE_WIRE_VERSION,
+      contentExtension: CONTENT_EXTENSION_VERSION,
+      contentExtensionSchema: CONTENT_PACK_SCHEMA_VERSION,
+    },
+    host: { ...hostIdentity(payload), engines: DSH_ENGINE_RANGE || null },
+    client: { version: clientVersion || null, wireVersion: clientWire || null, contentExtension: clientContent || null },
+    capabilities: host.capabilities,
+    probes: host.probes,
+    degraded,
+    compatible: wireCompatible && contentCompatible,
+    versionMismatch: clientVersion !== '' && clientVersion !== PLUGIN_VERSION,
+  }
+}
+
+/** `probe`: fresh, side-effect-free capability diagnostics for tooling and debug UI. */
+function handleProbe(ctx) {
+  const host = detectHost(ctx)
+  return {
+    v: BRIDGE_WIRE_VERSION,
+    ok: true,
+    op: 'probe',
+    plugin: { name, version: PLUGIN_VERSION },
+    wire: { version: BRIDGE_WIRE_VERSION, min: LEGACY_WIRE_VERSION, accepts: WIRE_VERSIONS },
+    contract: {
+      bridge: BRIDGE_WIRE_VERSION,
+      contentExtension: CONTENT_EXTENSION_VERSION,
+      contentExtensionSchema: CONTENT_PACK_SCHEMA_VERSION,
+    },
+    host: { ...hostIdentity(null), engines: DSH_ENGINE_RANGE || null },
+    capabilities: host.capabilities,
+    probes: host.probes,
+    degraded: host.degraded,
+    generatedAt: new Date().toISOString(),
+  }
+}
+
 /**
  * Read the current DSH default model selection (the profile setting / model
  * picker) from the Host. This is the normal source: pet chat must follow the
  * model the user configured in DSH, never a frozen provider/model literal.
+ * @param service - `ctx.agentDefaultModel` from the host adapter, or undefined.
  * @returns the profile selection, or null when the service is unavailable.
  */
-function profileSelection(ctx) {
-  const service = typeof ctx.get === 'function' ? ctx.get('agentDefaultModel') : undefined
+function profileSelection(service) {
   if (!service || typeof service.currentSelection !== 'function') return null
   let selection
   try { selection = service.currentSelection() } catch { return null }
@@ -124,8 +269,8 @@ function profileSelection(ctx) {
 }
 
 /** Resolve this call's model: explicit plugin config wins, else the DSH profile default. */
-function resolveSelection(ctx, config) {
-  return configSelection(config) || profileSelection(ctx)
+function resolveSelection(services, config) {
+  return configSelection(config) || profileSelection(services.defaultModel)
 }
 
 function json(status, body) {
@@ -135,8 +280,8 @@ function json(status, body) {
   })
 }
 
-function error(code, message, status = 400) {
-  return json(status, { v: 1, ok: false, code, message })
+function error(code, message, status = 400, extra = null) {
+  return json(status, { v: 1, ok: false, code, message, ...(extra === null ? {} : extra) })
 }
 
 function advisersHome() {
@@ -201,14 +346,14 @@ async function readBriefProjection() {
   }
 }
 
-async function chatWithDsh(ctx, input, config, character) {
-  const selection = resolveSelection(ctx, config)
+async function chatWithDsh(host, input, config, character) {
+  const selection = resolveSelection(host.services, config)
   if (!selection) throw new Error('no-model')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
   let reply = ''
   try {
-    for await (const chunk of ctx.llm.stream({
+    for await (const chunk of host.services.llm.stream({
       provider: selection.provider,
       model: selection.model,
       ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort }),
@@ -238,9 +383,17 @@ async function handleBridge(ctx, request, config) {
   if (Buffer.byteLength(text, 'utf8') > MAX_BODY_BYTES) return error('E_INPUT', 'Request is too large.', 413)
   let payload
   try { payload = JSON.parse(text) } catch { return error('E_INPUT', 'Invalid JSON.') }
-  if (!payload || payload.v !== 1 || typeof payload.op !== 'string') return error('E_INPUT', 'Invalid bridge request.')
+  if (!payload || !WIRE_VERSIONS.includes(payload.v) || typeof payload.op !== 'string') return error('E_INPUT', 'Invalid bridge request.')
   const op = payload.op
-  if (op !== 'echo' && op !== 'chat' && op !== 'brief' && op !== 'task' && op !== 'task-delete') return error('E_OP', 'Unsupported operation.')
+  if (!['echo', 'chat', 'brief', 'task', 'task-delete', 'hello', 'probe'].includes(op)) return error('E_OP', 'Unsupported operation.')
+  // New capability ops require wire 2; legacy ops keep working on wire 1 and 2.
+  if (op === 'hello' || op === 'probe') {
+    if (payload.v < BRIDGE_WIRE_VERSION) return error('E_WIRE', 'hello/probe require bridge wire 2.', 426)
+    return json(200, op === 'hello' ? handleHello(ctx, payload) : handleProbe(ctx))
+  }
+  // Host capability snapshot for this request; optional services are read at
+  // call time, so a missing one becomes a typed 503 instead of a crash.
+  const host = detectHost(ctx)
   if (op === 'echo') {
     if (typeof payload.text !== 'string') return error('E_INPUT', 'text is required.')
     const echo = payload.text.trim()
@@ -255,8 +408,9 @@ async function handleBridge(ctx, request, config) {
   }
   if (op === 'task-delete') {
     if (typeof payload.id !== 'string' || payload.id.length === 0) return error('E_INPUT', 'id is required.')
+    if (!host.capabilities.schedule) return error('E_TASK', 'DSH schedule is unavailable in this host.', 503, { capability: 'schedule', unavailable: true })
     try {
-      await ctx.schedule.edit({ id: payload.id, action: 'delete' })
+      await host.services.schedule.edit({ id: payload.id, action: 'delete' })
       return json(200, { v: 1, ok: true, reply: '已删除提醒。', meta: { stage: 'P4' } })
     } catch {
       return error('E_TASK', 'DSH schedule could not delete the reminder.', 503)
@@ -269,8 +423,9 @@ async function handleBridge(ctx, request, config) {
     const at = payload.at.trim()
     const timestamp = Date.parse(at)
     if (!Number.isFinite(timestamp) || timestamp <= Date.now() + 30_000) return error('E_INPUT', 'at must be a future RFC 3339 time.')
+    if (!host.capabilities.schedule) return error('E_TASK', 'DSH schedule is unavailable in this host.', 503, { capability: 'schedule', unavailable: true })
     try {
-      const task = await ctx.schedule.create({
+      const task = await host.services.schedule.create({
         title: text.slice(0, 120),
         prompt: text,
         timing: { kind: 'at', at: new Date(timestamp).toISOString() },
@@ -300,8 +455,10 @@ async function handleBridge(ctx, request, config) {
   // Persona follows the character picked in the client; invalid/absent values
   // deliberately fall back to the human Tinglan persona instead of failing.
   const character = characterId(payload.character)
+  // No LLM service on this Host: a typed capability error, never a fake reply.
+  if (!host.capabilities.llm) return error('E_LLM', 'DSH LLM is unavailable in this host.', 503, { capability: 'llm', unavailable: true })
   try {
-    const chat = await chatWithDsh(ctx, input, config, character)
+    const chat = await chatWithDsh(host, input, config, character)
     return json(200, {
       v: 1,
       ok: true,

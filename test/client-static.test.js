@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import { CHARACTERS, CHUNK_NAMES, PLUGIN_ROOT, chunkPath, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
 import { FIRST_SCREEN_BUDGET_BYTES, loadChunkModule, loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
 import { AUDIT_BASELINE_BYTES } from '../scripts/measure-bundle.mjs'
-import { CONTENT_EXTENSION_POINTS, CONTENT_PACK_EXAMPLE, PROHIBITED_USES, ROLE_BUNDLE_IDS, USAGE_DECLARATION_TEMPLATE, validateContentPack } from '../content-extension.mjs'
+import { CONTENT_EXTENSION_COMPATIBILITY, CONTENT_EXTENSION_POINTS, CONTENT_EXTENSION_VERSION, CONTENT_PACK_EXAMPLE, CONTENT_PACK_SCHEMA_VERSION, PROHIBITED_USES, ROLE_BUNDLE_IDS, USAGE_DECLARATION_TEMPLATE, isContentExtensionCompatible, validateContentPack } from '../content-extension.mjs'
 
 const clientPath = join(PLUGIN_ROOT, 'client.js')
 const clientSource = readFileSync(clientPath, 'utf8')
@@ -14,9 +14,9 @@ const contentChunkPath = join(PLUGIN_ROOT, 'client.content.js')
 const contentSource = readFileSync(contentChunkPath, 'utf8')
 const clientData = loadClientData(clientSource)
 
-// Release pin: bump together with package.json (test/version-truth.test.js keeps
-// every public version surface in sync with package.json).
-const EXPECTED_VERSION = '0.10.6'
+// Release pin follows package.json (the single version truth): version-truth
+// keeps every public surface in sync, and this test proves the package ships it.
+const EXPECTED_VERSION = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8')).version
 
 // Frame counts come from the private manifests: dog/human 68 each, cat 72
 // (10-frame stand_wag). Total 208 embedded frames; never assume 12x68/204.
@@ -504,6 +504,39 @@ test('content extension points publish the reserved v3 role/pack contract', () =
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'contract is a package export')
 })
 
+
+test('the v3 content contract publishes a single-version compatibility policy for hello', () => {
+  assert.equal(CONTENT_EXTENSION_VERSION, 3, 'v3 stays the current contract revision')
+  assert.equal(CONTENT_PACK_SCHEMA_VERSION, 3)
+  assert.equal(CONTENT_EXTENSION_POINTS.version, CONTENT_EXTENSION_VERSION)
+  assert.deepEqual(
+    { ...CONTENT_EXTENSION_COMPATIBILITY },
+    { current: 3, supportedPackSchemaVersions: [3], policy: 'additive-within-major', breakingChange: 'requires a documented major bump and a migration note' },
+    'compatibility policy is explicit and frozen',
+  )
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.compatibility.supportedPackSchemaVersions], [3])
+  assert.equal(isContentExtensionCompatible(3), true)
+  for (const value of [0, 2, 4, '3', 3.5, null, undefined, Number.NaN, [3], { version: 3 }]) {
+    assert.equal(isContentExtensionCompatible(value), false, 'incompatible/unknown value rejected: ' + String(value))
+  }
+})
+
+test('the host bridge exposes hello/probe wire 2 and keeps llm/schedule optional', () => {
+  const hostSource = readFileSync(join(PLUGIN_ROOT, 'index.js'), 'utf8')
+  assert.ok(hostSource.includes("export const inject = ['connection']"), 'only the connection service is required injection')
+  assert.ok(hostSource.includes('const BRIDGE_WIRE_VERSION = 2'), 'bridge wire revision is explicit')
+  for (const term of ["op === 'hello'", "op === 'probe'", 'contentExtension: CONTENT_EXTENSION_VERSION', 'capabilities:', 'degraded', 'hostIdentity', 'detectHost']) {
+    assert.ok(hostSource.includes(term), 'host bridge wires: ' + term)
+  }
+  assert.ok(hostSource.includes("from './content-extension.mjs'"), 'the hello contract is sourced from content-extension.mjs (v3)')
+  assert.ok(clientSource.includes('const BRIDGE_WIRE_VERSION = 2'), 'client speaks bridge wire 2')
+  assert.ok(clientSource.includes("op: 'hello'"), 'client sends the hello handshake')
+  assert.ok(clientSource.includes('contentExtension: 3'), 'client declares content-extension v3 in the handshake')
+  assert.ok(clientSource.includes('setHost('), 'client stores the capability document')
+  assert.ok(contentSource.includes('hostGroup'), 'settings exposes the Host capability section')
+  assert.ok(contentSource.includes('noModelDetail') && contentSource.includes('noScheduleDetail'), 'input panel states capability degradation')
+})
+
 test('every v3 pack must declare research use and all six prohibited uses', () => {
   const clone = () => JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
   const cases = []
@@ -629,7 +662,7 @@ test('the host bridge ships a local crisis short-circuit with 12356/110/120 and 
   for (const term of ['12356', '110', '120', '不是诊断', 'not a diagnosis']) assert.ok(source.includes(term), 'host crisis reply carries: ' + term)
   assert.ok(source.includes("safety: 'crisis-local-resource'"), 'crisis route is identifiable in the bridge response')
   assert.ok(source.includes('llmCalls: 0'), 'crisis route reports zero model calls')
-  assert.ok(source.indexOf('crisisKeyword(input)') < source.indexOf('await chatWithDsh(ctx, input'), 'the local crisis check runs before any model call')
+  assert.ok(source.indexOf('crisisKeyword(input)') < source.indexOf('await chatWithDsh(host, input'), 'the local crisis check runs before any model call')
 })
 
 test('the chat surfaces disclose the DSH-configured model provider in both languages', () => {

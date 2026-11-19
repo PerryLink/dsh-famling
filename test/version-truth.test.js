@@ -26,7 +26,9 @@ const LEGAL_FILE = 'docs/LEGAL-NOTICE-2026-11-18.md'
 function read(file) { return readFileSync(join(ROOT, file), 'utf8') }
 
 /** Every current-version statement, as [file, pattern] pairs used by check and write. */
-const CLIENT_VERSION = /version: 'dsh-famling (\d+\.\d+\.\d+)/g
+// client.js / client.content.js carry one PLUGIN_VERSION constant each; the
+// visible labels are built from it, so the const is the only literal to sync.
+const CLIENT_VERSION = /const PLUGIN_VERSION = '(\d+\.\d+\.\d+)'/g
 const README_VERSION = /(## 当前实现（)(\d+\.\d+\.\d+)(）)/
 const LEGAL_VERSION = /(适用插件版本：dsh-famling )(\d+\.\d+\.\d+)/
 
@@ -47,8 +49,8 @@ export function syncVersionReferences(version = VERSION) {
     const after = before.replace(pattern, replacement)
     if (after !== before) writeFileSync(join(ROOT, file), after)
   }
-  replace('client.js', CLIENT_VERSION, (whole, old) => old === version ? whole : "version: 'dsh-famling " + version)
-  replace('client.content.js', CLIENT_VERSION, (whole, old) => old === version ? whole : "version: 'dsh-famling " + version)
+  replace('client.js', CLIENT_VERSION, (whole, old) => old === version ? whole : "const PLUGIN_VERSION = '" + version + "'")
+  replace('client.content.js', CLIENT_VERSION, (whole, old) => old === version ? whole : "const PLUGIN_VERSION = '" + version + "'")
   replace('README.md', new RegExp(README_VERSION.source, 'g'), (_whole, start, _old, end) => start + version + end)
   replace(LEGAL_FILE, new RegExp(LEGAL_VERSION.source, 'g'), (_whole, start) => start + version)
   for (const file of ['locale/zh.json', 'locale/en.json']) {
@@ -71,8 +73,11 @@ test('client.js, client.content.js, README, LEGAL-NOTICE and locale all state th
     assert.ok(versions.length > 0, file + ': no current version statement found')
     for (const version of versions) assert.equal(version, VERSION, file + ': stale version ' + version + ' (expected ' + VERSION + ')')
   }
-  assert.equal(found['client.js'].length, 2, 'client.js states the version in zh and en')
-  assert.equal(found['client.content.js'].length, 2, 'client.content.js states the version in zh and en')
+  assert.equal(found['client.js'].length, 1, 'client.js has one PLUGIN_VERSION constant')
+  assert.equal(found['client.content.js'].length, 1, 'client.content.js has one PLUGIN_VERSION constant')
+  for (const file of ['client.js', 'client.content.js']) {
+    assert.equal(read(file).split("'dsh-famling ' + PLUGIN_VERSION").length - 1, 2, file + ': zh and en version labels both derive from PLUGIN_VERSION')
+  }
 })
 
 test('safety floor docs stay truthful: destination, crisis resources, clear/withdraw, cross-product wording', () => {

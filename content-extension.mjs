@@ -38,12 +38,52 @@
  *     remoteCatalog field is metadata only and is reserved for a future host
  *     catalog; the loader/UI is not implemented in this package.
  *
+ * v3 compatibility (0.10.7): CONTENT_EXTENSION_VERSION stays 3 in the 0.10.x
+ * line. CONTENT_EXTENSION_COMPATIBILITY / isContentExtensionCompatible expose the
+ * single-version policy and the bridge hello/probe handshake reports the same
+ * revision through CONTENT_EXTENSION_POINTS.version, so wire and schema cannot
+ * drift independently.
+ *
  * Import (Node / tooling):
  *   import { CONTENT_EXTENSION_POINTS, validateContentPack } from 'dsh-famling/content-extension'
  */
 
 /** Schema version of the pack document itself. */
 export const CONTENT_PACK_SCHEMA_VERSION = 3
+
+/**
+ * Contract revision of this extension-point document (the wire contract the
+ * bridge hello/probe handshake reports). v3 is the current version in the
+ * 0.10.x line: there is no v4 in this release, and v3 stays backward compatible
+ * for older pack authors by only accepting additive optional fields.
+ */
+export const CONTENT_EXTENSION_VERSION = 3
+
+/**
+ * Version compatibility policy for external pack tooling. The v3 contract is
+ * single-version (no multi-major loader ships in this package): exactly the
+ * published v3 schema is accepted; additive optional fields may appear inside
+ * v3, while a breaking change requires a documented major bump first.
+ * `hello` / `probe` report CONTENT_EXTENSION_VERSION so a stale cached client
+ * can detect a contract mismatch instead of silently reading packs with the
+ * wrong semantics.
+ */
+export const CONTENT_EXTENSION_COMPATIBILITY = Object.freeze({
+  current: CONTENT_EXTENSION_VERSION,
+  supportedPackSchemaVersions: Object.freeze([CONTENT_PACK_SCHEMA_VERSION]),
+  policy: 'additive-within-major',
+  breakingChange: 'requires a documented major bump and a migration note',
+})
+
+/**
+ * Whether a caller speaks this package's current content-extension contract.
+ * Unknown/non-integer versions are incompatible (fail closed, never guess).
+ * @param {unknown} version Candidate contract revision (e.g. from a hello reply).
+ * @returns {boolean}
+ */
+export function isContentExtensionCompatible(version) {
+  return Number.isInteger(version) && version === CONTENT_EXTENSION_VERSION
+}
 
 /** Closed entry-kind set shared with the bundled content center. Role is the
  * bundle kind added by v3: its apply payload carries the six role components. */
@@ -139,9 +179,11 @@ const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg']
  */
 export const CONTENT_EXTENSION_POINTS = Object.freeze({
   /** Contract revision; bump only with a documented migration. */
-  version: 3,
+  version: CONTENT_EXTENSION_VERSION,
   /** "reserved" = schema published, no pack loader ships in this package yet. */
   status: 'reserved',
+  /** v3 compatibility policy reported by hello/probe and usable by pack tooling. */
+  compatibility: CONTENT_EXTENSION_COMPATIBILITY,
   /** What the runtime guarantees. Every flag is false by design. */
   transport: Object.freeze({ network: false, execute: false, innerHTML: false, worker: false, assets: false }),
   /** Built-in role bundle ids; origami is reserved until its art pack lands. */

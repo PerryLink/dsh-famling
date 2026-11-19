@@ -437,7 +437,11 @@ function createHarness(options = {}) {
   assert.equal(typeof Component, 'function', 'FamlingFooter is registered into the sidebar footer slot')
   const ui = createUi(Component, React)
   ui.render()
-  return { ui, storage, fetchCalls, asyncCalls, speech, module: moduleObject, documentListeners: listeners, windowListeners, window: windowStub }
+  // Business bridge calls only; the mount hello/probe handshake is not user traffic.
+  const businessCalls = () => fetchCalls.filter((call) => {
+    try { const op = JSON.parse(call.init && call.init.body).op; return op !== 'hello' && op !== 'probe' } catch { return true }
+  })
+  return { ui, storage, fetchCalls, businessCalls, asyncCalls, speech, module: moduleObject, documentListeners: listeners, windowListeners, window: windowStub }
 }
 
 /* ---------------- behavior helpers ---------------- */
@@ -475,7 +479,7 @@ function storedOrNull(storage, key) { return storage.has(key) ? storage.get(key)
 /* ---------------- behavior tests ---------------- */
 
 test('fresh profile renders the 100% shipped look without writing scale keys', () => {
-  const { ui, storage, fetchCalls } = createHarness()
+  const { ui, storage, businessCalls } = createHarness()
   const image = petImage(ui)
   assert.equal(image.props.width, 72, 'shipped 72px pet')
   assert.equal(image.props.height, 72)
@@ -483,11 +487,11 @@ test('fresh profile renders the 100% shipped look without writing scale keys', (
   assert.equal(ui.tree.props.style['--dsh-famling-bubble-zoom'], '1', 'bubble 100%')
   assert.equal(storage.has('dsh-famling/scale/model'), false, 'no scale write before the user changes anything')
   assert.equal(storage.has('dsh-famling/scale/global'), false)
-  assert.equal(fetchCalls.length, 0, 'scale load never fetches')
+  assert.equal(businessCalls().length, 0, 'scale load never makes a bridge business call')
 })
 
 test('settings IA: 整体缩放 first, UI+文本/图像 independent second, component scaling folded in 高级', () => {
-  const { ui, fetchCalls } = createHarness()
+  const { ui, businessCalls } = createHarness()
   openSettings(ui)
   const dialog = settingsDialog(ui)
   assert.ok(dialog, 'settings dialog renders from the lazy chunk')
@@ -523,11 +527,11 @@ test('settings IA: 整体缩放 first, UI+文本/图像 independent second, comp
     assert.ok(options.includes('继承（跟随 UI + 文本）'), 'inherit option')
     assert.ok(options.some((option) => option === '125%'), 'override options')
   }
-  assert.equal(fetchCalls.length, 0, 'opening settings and expanding advanced never fetches')
+  assert.equal(businessCalls().length, 0, 'opening settings and expanding advanced never makes a bridge business call')
 })
 
 test('整体缩放 scales image + UI + components together and persists dsh-famling/scale', () => {
-  const { ui, storage, fetchCalls } = createHarness()
+  const { ui, storage, businessCalls } = createHarness()
   openSettings(ui)
   setRange(ui, '整体缩放（所有内容一并缩放）', '150')
   assert.equal(petImage(ui).props.width, 108, '72px x 150% = 108px')
@@ -538,7 +542,7 @@ test('整体缩放 scales image + UI + components together and persists dsh-faml
   assert.equal(storage.get('dsh-famling/scale/global'), '1.5')
   assert.equal(storedOrNull(storage, 'dsh-famling/scale/ui-text'), null, 'following axes are not written')
   assert.equal(storedOrNull(storage, 'dsh-famling/scale/image'), null)
-  assert.equal(fetchCalls.length, 0, 'changing the scale never fetches')
+  assert.equal(businessCalls().length, 0, 'changing the scale never makes a bridge business call')
   setRange(ui, '整体缩放（所有内容一并缩放）', '50')
   assert.equal(petImage(ui).props.width, 36, '72px x 50%')
   assert.equal(ui.tree.props.style['--dsh-famling-ui-scale'], '0.6', 'UI/text is floored at the readability cap 0.6x')
@@ -692,7 +696,7 @@ test('stored scale choices restore on the next mount', () => {
   assert.equal(petImage(second.ui).props.width, 126, '72px x 175% = 126px')
   assert.equal(second.ui.tree.props.style['--dsh-famling-ui-scale'], '1.75')
   assert.equal(second.ui.tree.props.style['--dsh-famling-bubble-zoom'], '2', '1.75 x 1.25 bubble override clamped to 2x')
-  assert.equal(second.fetchCalls.length, 0, 'restoring the scale never fetches')
+  assert.equal(second.businessCalls().length, 0, 'restoring the scale never makes a bridge business call')
 })
 
 test('legacy absolute pet/text scales migrate once on mount and are then inert', () => {
@@ -720,7 +724,7 @@ test('清除本机设置与同意 removes every scale key and does not write the
 })
 
 test('scale interactions never fetch and load only the lazy content UI chunk', () => {
-  const { ui, fetchCalls, asyncCalls } = createHarness()
+  const { ui, businessCalls, asyncCalls } = createHarness()
   openSettings(ui)
   setRange(ui, '整体缩放（所有内容一并缩放）', '150')
   setRange(ui, 'UI + 文本', '125')
@@ -728,7 +732,7 @@ test('scale interactions never fetch and load only the lazy content UI chunk', (
   ui.render()
   ui.change(componentSelect(ui, '面板'), '1.25')
   ui.render()
-  assert.equal(fetchCalls.length, 0, 'no network request for any scale interaction')
+  assert.equal(businessCalls().length, 0, 'no bridge business request for any scale interaction')
   assert.ok(asyncCalls.includes('client.content.js'), 'the scale controls come from the lazy package-local chunk')
   assert.equal(asyncCalls.filter((name) => name.startsWith('client.anims.')).length, 1, 'opening settings does not download other characters')
 })
