@@ -3,6 +3,11 @@
  * Verify the generated multi-character animation block in client.js.
  *
  * Checks, without a browser:
+ *   - the first-screen client.js carries no sprite base64 payload: the per-character
+ *     sprite sets live in package-local lazy chunks (client.anims.<character>.js)
+ *     that register through window.__ModuleLoader__.load and are loaded on demand
+ *     via require.async - the chunks are part of this one package and are served
+ *     by the local DSH host, so the split stays offline/no-network;
  *   - the generated ANIMS/SPRITES block and the hand-written EVENT_CLIPS/
  *     MICRO_LINES block are structurally valid and every action maps to a clip
  *     that really exists for that character (talk is the documented bubble-only
@@ -27,19 +32,24 @@
  *   node scripts/verify-anims.mjs            # verify, cross-check assets if found
  *   node scripts/verify-anims.mjs --no-assets # skip the private asset cross-check
  */
-import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import vm from 'node:vm'
 
 import {
   ACTION_EVENTS,
   BEGIN_MARKER,
   CHARACTERS,
+  CHUNK_NAMES,
+  CLIENT_MODULE_ID,
   DEFAULT_ASSETS_ROOT,
   END_MARKER,
   PLUGIN_ROOT,
   REGION_EVENTS,
   buildAnimationData,
+  chunkPath,
   decodePng,
   resolveAssetsRoot,
 } from './embed-anims.mjs'
@@ -48,6 +58,12 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 export const ACTION_BEGIN = '// <dsh-famling:actions:begin>'
 export const ACTION_END = '// <dsh-famling:actions:end>'
 export const CLIENT_PATH = join(PLUGIN_ROOT, 'client.js')
+/** First-screen budget for client.js itself (sprite payloads are lazy chunks). */
+export const FIRST_SCREEN_BUDGET_BYTES = 64 * 1024
+/** Package-local lazy chunk file names, accepted by the DSH client module table. */
+export const CLIENT_CHUNK_RE = /^client\.anims\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
+/** Absolute external URLs in a load path would break the offline/no-network contract. */
+const EXTERNAL_NETWORK = /(?:(?:fetch|import)\s*\(\s*['"]https?:\/\/|(?:src|href)\s*[:=]\s*['"]https?:\/\/)/
 const EXPECTED_CANVAS = 96
 /** Per-clip timing: holdMs must cover every frame and sum to durationMs. */
 const MAX_FRAME_HOLD_MS = 60_000
@@ -233,13 +249,62 @@ function extractConstBlock(source, beginMarker, endMarker) {
   return lines.slice(begin + 1, end).join('\n')
 }
 
-/** Evaluate the two generated/hand-written const blocks out of client.js. */
-export function loadClientData(source) {
+/**
+ * Evaluate one generated lazy chunk from disk and return its registration plus
+ * factory exports. The chunk is a browser script that only calls
+ * window.__ModuleLoader__.load, so a stub window is enough here.
+ */
+export function loadChunkModule(filePath) {
+  const code = readFileSync(filePath, 'utf8')
+  let registration = null
+  const sandbox = { window: { __ModuleLoader__: { load(value) { registration = value } } } }
+  sandbox.globalThis = sandbox
+  vm.createContext(sandbox)
+  vm.runInContext(code, sandbox, { filename: filePath })
+  if (!registration || typeof registration.factory !== 'function') throw new Error('chunk did not register a module factory: ' + filePath)
+  if (typeof registration.id !== 'string' || registration.id.length === 0) throw new Error('chunk registration has no module id: ' + filePath)
+  return { registration, exports: registration.factory(() => { throw new Error('chunk factory must not require modules') }) }
+}
+
+/**
+ * Evaluate the two generated/hand-written const blocks out of client.js and
+ * merge the lazily loaded per-character chunk files. Callers therefore see the
+ * same { ANIMS, SPRITES } view the browser assembles after each chunk arrives;
+ * chunkPayloads keeps the raw registrations for chunk-contract assertions.
+ */
+export function loadClientData(source, options = {}) {
+  const pluginRoot = options.pluginRoot || PLUGIN_ROOT
   const animsBlock = extractConstBlock(source, BEGIN_MARKER, END_MARKER)
   const actionsBlock = extractConstBlock(source, ACTION_BEGIN, ACTION_END)
-  const code = animsBlock + '\n' + actionsBlock + '\n' + 'return { ANIMS, SPRITES, EVENT_CLIPS, MICRO_LINES }'
+  const code = animsBlock + '\n' + actionsBlock + '\n'
+    + 'return { ANIMS, SPRITES, CHARACTER_POLICY, CHARACTER_CHUNKS, EVENT_CLIPS, MICRO_LINES }'
   const data = new Function(code)()
-  return { ANIMS: data.ANIMS, SPRITES: data.SPRITES, EVENT_CLIPS: data.EVENT_CLIPS, MICRO_LINES: data.MICRO_LINES }
+  const chunkPayloads = {}
+  for (const kind of CHARACTERS) {
+    const loaded = loadChunkModule(chunkPath(pluginRoot, kind))
+    const registration = loaded.registration
+    if (registration.id !== CLIENT_MODULE_ID) throw new Error(kind + ': chunk id must be ' + CLIENT_MODULE_ID + ', got ' + String(registration.id))
+    if (registration.chunk !== CHUNK_NAMES[kind]) throw new Error(kind + ': chunk field must be ' + CHUNK_NAMES[kind] + ', got ' + String(registration.chunk))
+    if (!loaded.exports || typeof loaded.exports !== 'object' || !loaded.exports.anims || !loaded.exports.sprites) {
+      throw new Error(kind + ': chunk must export { anims, sprites }')
+    }
+    // The chunk factory runs in a vm realm, so normalize to this realm's plain
+    // objects before deep comparisons (prototypes differ across realms).
+    const anims = JSON.parse(JSON.stringify(loaded.exports.anims))
+    const sprites = JSON.parse(JSON.stringify(loaded.exports.sprites))
+    data.ANIMS[kind] = anims
+    Object.assign(data.SPRITES, sprites)
+    chunkPayloads[kind] = { registration: loaded.registration, exports: { anims, sprites } }
+  }
+  return {
+    ANIMS: data.ANIMS,
+    SPRITES: data.SPRITES,
+    CHARACTER_POLICY: data.CHARACTER_POLICY,
+    CHARACTER_CHUNKS: data.CHARACTER_CHUNKS,
+    EVENT_CLIPS: data.EVENT_CLIPS,
+    MICRO_LINES: data.MICRO_LINES,
+    chunkPayloads,
+  }
 }
 
 function extractSourceSha256(source) {
@@ -257,16 +322,94 @@ export function verifyClient(options = {}) {
   const source = readFileSync(clientPath, 'utf8')
   const errors = []
   const warnings = []
-  const stats = { characters: {}, totalFrames: 0, totalBase64Chars: 0 }
+  const stats = { characters: {}, totalFrames: 0, totalBase64Chars: 0, chunkBytes: {}, entryBytes: 0, firstPaintBytes: 0, totalBytes: 0 }
   let data
   try {
-    data = loadClientData(source)
+    data = loadClientData(source, { pluginRoot })
   } catch (error) {
     return { ok: false, errors: ['cannot load generated animation block: ' + error.message], warnings, stats }
   }
-  const { ANIMS, SPRITES, EVENT_CLIPS, MICRO_LINES } = data
+  const { ANIMS, SPRITES, EVENT_CLIPS, MICRO_LINES, CHARACTER_POLICY, CHARACTER_CHUNKS, chunkPayloads } = data
   if (!ANIMS || typeof ANIMS !== 'object') errors.push('ANIMS is missing or not an object')
   if (!SPRITES || typeof SPRITES !== 'object') errors.push('SPRITES is missing or not an object')
+  // P1-2 first-screen budget: client.js must stay code + metadata; the three
+  // sprite sets are lazy package-local chunks, so the entry itself is small.
+  stats.entryBytes = Buffer.byteLength(source)
+  stats.totalBytes = stats.entryBytes
+  if (stats.entryBytes > FIRST_SCREEN_BUDGET_BYTES) {
+    errors.push('client.js first-screen size ' + stats.entryBytes + ' B exceeds the ' + FIRST_SCREEN_BUDGET_BYTES + ' B budget')
+  }
+  const embeddedPng = source.match(/data:image\/png;base64,([A-Za-z0-9+/]{512,})/)
+  if (embeddedPng) errors.push('client.js still embeds a full base64 PNG frame; sprite payloads belong to the lazy character chunks')
+  const longBase64 = source.match(/[A-Za-z0-9+/]{512,}={0,2}/)
+  if (longBase64) errors.push('client.js contains a long base64-like literal (sprite data must stay out of the first-screen bundle): ' + longBase64[0].slice(0, 24) + '...')
+  if (EXTERNAL_NETWORK.test(source)) errors.push('client.js load path references an external network URL (offline/no-network constraint)')
+  // The generated chunk map and the tiny pre-chunk policy must be consistent.
+  const published = new Set()
+  try {
+    const pkg = JSON.parse(readFileSync(join(pluginRoot, 'package.json'), 'utf8'))
+    if (Array.isArray(pkg.files)) for (const entry of pkg.files) published.add(entry)
+    if (pkg.dsh && pkg.dsh.client && pkg.dsh.client.immediately === true) {
+      errors.push('package.json dsh.client.immediately must not be true: the footer pet must not join the stage-one registration barrier')
+    }
+    stats.packageFiles = Array.isArray(pkg.files) ? pkg.files.slice() : []
+  } catch (error) {
+    errors.push('cannot read package.json: ' + error.message)
+  }
+  const declaredChunkHashes = {}
+  const declaredHashLine = source.match(/chunk-sha256: ([^\n]+)/)
+  if (!declaredHashLine) errors.push('client.js header is missing chunk-sha256: a chunk-only rebuild must still change the entry revision')
+  else {
+    for (const pair of declaredHashLine[1].trim().split(/\s+/)) {
+      const [kind, hash] = pair.split('=')
+      declaredChunkHashes[kind] = hash
+    }
+  }
+  for (const kind of CHARACTERS) {
+    if (!CHARACTER_CHUNKS || CHARACTER_CHUNKS[kind] !== './' + CHUNK_NAMES[kind]) {
+      errors.push(kind + ': CHARACTER_CHUNKS entry must be "./' + CHUNK_NAMES[kind] + '", got ' + JSON.stringify(CHARACTER_CHUNKS?.[kind]))
+    }
+    if (published.size > 0 && !published.has(CHUNK_NAMES[kind])) errors.push('package.json files must publish lazy chunk ' + CHUNK_NAMES[kind])
+    const payload = chunkPayloads[kind]
+    const chunkSource = readFileSync(chunkPath(pluginRoot, kind), 'utf8')
+    stats.chunkBytes[kind] = Buffer.byteLength(chunkSource)
+    stats.totalBytes += stats.chunkBytes[kind]
+    const policy = CHARACTER_POLICY && CHARACTER_POLICY[kind]
+    const anim = ANIMS && ANIMS[kind]
+    if (!policy) errors.push(kind + ': CHARACTER_POLICY is missing')
+    else if (anim && (policy.canTts !== anim.canTts || policy.bubble !== anim.bubble)) {
+      errors.push(kind + ': CHARACTER_POLICY differs from the embedded bubble/TTS policy')
+    }
+    if (!payload) {
+      errors.push(kind + ': lazy chunk was not loaded')
+      continue
+    }
+    const sprites = payload.exports.sprites
+    const clipFrames = new Set()
+    if (anim && anim.clips) for (const clip of Object.values(anim.clips)) for (const frameKey of clip.frames) clipFrames.add(frameKey)
+    for (const frameKey of Object.keys(sprites)) {
+      if (!frameKey.startsWith(kind + '/')) errors.push(kind + ': chunk contains a sprite for another character: ' + frameKey)
+      else if (!clipFrames.has(frameKey)) errors.push(kind + ': chunk contains a sprite not referenced by ANIMS: ' + frameKey)
+    }
+    for (const frameKey of clipFrames) {
+      if (!Object.prototype.hasOwnProperty.call(sprites, frameKey)) errors.push(kind + ': chunk is missing sprite ' + frameKey)
+    }
+    if (EXTERNAL_NETWORK.test(chunkSource)) errors.push(kind + ': lazy chunk references an external network URL (offline/no-network constraint)')
+    const chunkHash = chunkSource.match(/source-sha256: ([0-9a-f]{64})/)
+    if (!chunkHash) errors.push(kind + ': lazy chunk has no source-sha256 header')
+    else if (!source.includes(chunkHash[1])) errors.push(kind + ': lazy chunk source-sha256 does not match client.js (chunk/client drift)')
+    const actualChunkHash = createHash('sha256').update(chunkSource).digest('hex')
+    if (!declaredChunkHashes[kind]) errors.push('client.js header chunk-sha256 is missing ' + kind)
+    else if (declaredChunkHashes[kind] !== actualChunkHash) errors.push(kind + ': client.js chunk-sha256 does not match the chunk file (stale entry revision)')
+  }
+  stats.firstPaintBytes = stats.entryBytes + (stats.chunkBytes.human || 0)
+  try {
+    for (const name of readdirSync(pluginRoot)) {
+      if (CLIENT_CHUNK_RE.test(name) && !Object.values(CHUNK_NAMES).includes(name)) errors.push('unexpected stale lazy chunk file: ' + name)
+    }
+  } catch (error) {
+    warnings.push('cannot list plugin root for stale chunks: ' + error.message)
+  }
   if (!EVENT_CLIPS || typeof EVENT_CLIPS !== 'object') errors.push('EVENT_CLIPS is missing or not an object')
   if (!MICRO_LINES || typeof MICRO_LINES !== 'object') errors.push('MICRO_LINES is missing or not an object')
   if (EVENT_CLIPS && typeof EVENT_CLIPS === 'object') {
@@ -412,6 +555,14 @@ export async function main(argv = process.argv.slice(2)) {
   console.log('[verify-anims] total frames: ' + result.stats.totalFrames + ', base64: ' + formatKiB(result.stats.totalBase64Chars))
   for (const [kind, item] of Object.entries(result.stats.characters)) {
     console.log('[verify-anims] ' + kind.padEnd(5) + ' clips=' + item.clips + ' frames=' + item.frames + ' base64=' + formatKiB(item.base64Chars))
+  }
+  if (result.stats.entryBytes > 0) {
+    console.log('[verify-anims] first-screen client.js: ' + formatKiB(result.stats.entryBytes) + ' (lazy sprite payload stays out)')
+    for (const kind of CHARACTERS) {
+      if (result.stats.chunkBytes[kind] !== undefined) console.log('[verify-anims] lazy chunk ' + CHUNK_NAMES[kind] + ': ' + formatKiB(result.stats.chunkBytes[kind]))
+    }
+    console.log('[verify-anims] first paint (client.js + human chunk): ' + formatKiB(result.stats.firstPaintBytes))
+    console.log('[verify-anims] all lazy chunks + entry: ' + formatKiB(result.stats.totalBytes))
   }
   if (!result.ok) {
     for (const error of result.errors) console.error('[verify-anims] FAIL: ' + error)

@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
 
+import { dirname, join } from 'node:path'
+
 import { CLIENT_PATH } from '../scripts/embed-anims.mjs'
 import { loadClientData } from '../scripts/verify-anims.mjs'
 
@@ -184,8 +186,14 @@ function createHarness(options = {}) {
     removeEventListener(type) { listeners.delete(type) },
   }
   let definition = null
+  const chunkDefinitions = new Map()
   const windowStub = {
-    __ModuleLoader__: { load(loaded) { definition = loaded } },
+    __ModuleLoader__: {
+      load(loaded) {
+        if (loaded && typeof loaded.chunk === 'string') chunkDefinitions.set(loaded.chunk, loaded)
+        else definition = loaded
+      },
+    },
     speechSynthesis: {
       cancel() { speech.cancel += 1 },
       speak(utterance) { speech.speak.push(utterance) },
@@ -219,10 +227,34 @@ function createHarness(options = {}) {
   vm.runInContext(clientSource, sandbox, { filename: 'client.js' })
   assert.ok(definition, 'client.js registers a module')
   const React = createFakeReact()
-  const moduleObject = definition.factory((name) => {
+  /**
+   * Minimal mirror of the DSH module table: synchronously require React, and
+   * resolve a registered package-local lazy chunk through require.async. The
+   * thenable settles synchronously so the fake React effects can repaint in the
+   * same render pass; the real runtime hands back a Promise instead.
+   */
+  const requireModule = (name) => {
     if (name !== 'react') throw new Error('unexpected require: ' + name)
     return React.api
-  })
+  }
+  requireModule.async = (spec) => {
+    const fileName = String(spec).replace(/^\.\//, '')
+    if (!/^client\.anims\.(human|cat|dog)\.js$/.test(fileName)) throw new Error('unexpected async chunk: ' + spec)
+    if (Array.isArray(options.failChunks) && options.failChunks.includes(fileName)) {
+      return { then(resolve, reject) { reject(new Error('simulated missing lazy chunk: ' + fileName)) } }
+    }
+    if (!chunkDefinitions.has(fileName)) {
+      const chunkSource = readFileSync(join(dirname(CLIENT_PATH), fileName), 'utf8')
+      vm.runInContext(chunkSource, sandbox, { filename: fileName })
+    }
+    const registration = chunkDefinitions.get(fileName)
+    assert.ok(registration, 'lazy chunk registered: ' + fileName)
+    // Tests read the real generated chunk factory; production require.async
+    // returns the same exports as a Promise.
+    const payload = registration.factory(requireModule)
+    return { then(resolve) { resolve(payload) } }
+  }
+  const moduleObject = definition.factory(requireModule)
   let Component = null
   moduleObject.apply({
     slots: {
@@ -623,6 +655,17 @@ test('region taps still react during the idle blink phase', () => {
   ui.render()
   assert.equal(petImage(ui).props.src, clipSrc('cat', 'pat_head'), 'head tap reacts while blinking')
   assert.ok(regionSays('cat', 'head').includes(ui.text(ui.findBubble())), 'blink-phase tap still uses the head says')
+})
+
+test('a missing lazy chunk degrades to the transparent placeholder without breaking the UI', () => {
+  const { ui } = createHarness({ character: 'cat', failChunks: ['client.anims.cat.js'] })
+  // The sprite chunk failed: the pet slot stays laid out with the 1x1 transparent
+  // placeholder instead of a broken image, and the shell remains interactive.
+  assert.match(petImage(ui).props.src, /^data:image\/png;base64,iVBORw0KGgo/, 'placeholder pixel keeps the slot')
+  assert.equal(ui.findButton('设置') !== undefined, true, 'the UI buttons are still rendered')
+  ui.render()
+  assert.equal(petImage(ui).props.src, petImage(ui).props.src, 'render stays stable without the chunk')
+  assert.equal(ui.findBubble(), undefined, 'no fabricated content while the chunk is missing')
 })
 
 test('English UI localizes action button labels while lines stay data-driven', () => {

@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { CHARACTERS, PLUGIN_ROOT, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
-import { loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
+import { CHARACTERS, CHUNK_NAMES, PLUGIN_ROOT, chunkPath, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
+import { FIRST_SCREEN_BUDGET_BYTES, loadChunkModule, loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
+import { AUDIT_BASELINE_BYTES } from '../scripts/measure-bundle.mjs'
 
 const clientPath = join(PLUGIN_ROOT, 'client.js')
 const clientSource = readFileSync(clientPath, 'utf8')
@@ -212,6 +213,49 @@ test('embedded animation data is current against the private asset pack when pre
   assert.equal(result.ok, true, result.errors.join('; '))
 })
 
+test('first-screen client.js carries no sprite payload and meets the lazy budget', () => {
+  const entryBytes = Buffer.byteLength(clientSource)
+  const humanBytes = Buffer.byteLength(readFileSync(chunkPath(PLUGIN_ROOT, 'human'), 'utf8'))
+  assert.ok(entryBytes <= FIRST_SCREEN_BUDGET_BYTES, 'client.js ' + entryBytes + ' B is within the ' + FIRST_SCREEN_BUDGET_BYTES + ' B budget')
+  assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.25, 'entry shrinks >75% vs the pre-split audit snapshot')
+  assert.ok(entryBytes + humanBytes < AUDIT_BASELINE_BYTES * 0.5, 'first paint (entry + default chunk) shrinks >50% vs the pre-split audit snapshot')
+  assert.equal(/data:image\/png;base64,[A-Za-z0-9+/]{512,}/.test(clientSource), false, 'no full base64 PNG frame in client.js')
+  assert.equal(/[A-Za-z0-9+/]{4096,}={0,2}/.test(clientSource), false, 'no multi-KB base64 literal in client.js')
+  assert.ok(clientSource.includes('function requestCharacterChunk(kind, onSettled)'), 'lazy chunk request helper exists')
+  assert.ok(clientSource.includes('asyncRequire(CHARACTER_CHUNKS[kind])'), 'chunks load through the module table require.async')
+  assert.ok(clientSource.includes('const CHARACTER_CHUNKS = '), 'generated chunk map exists')
+  assert.ok(clientSource.includes('function characterCanTts(kind)'), 'bubble/TTS policy is available before the chunk arrives')
+  // Offline/no-network: no external URL is used in a load path (chunks are package-local).
+  assert.equal(/(?:fetch|import)\s*\(\s*['"]https?:\/\//.test(clientSource), false, 'no external fetch/import')
+  assert.equal(/(?:src|href)\s*[:=]\s*['"]https?:\/\//.test(clientSource), false, 'no external asset URL')
+})
+
+test('lazy character chunks register with the DSH module table and hold only their own sprites', () => {
+  for (const kind of CHARACTERS) {
+    const path = chunkPath(PLUGIN_ROOT, kind)
+    const source = readFileSync(path, 'utf8')
+    // DSH client/modules only serves names matching /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/.
+    assert.match(CHUNK_NAMES[kind], /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/, kind + ': chunk name is accepted by the DSH module table')
+    const loaded = loadChunkModule(path)
+    assert.equal(loaded.registration.id, 'dsh-famling', kind + ': chunk registers the package module id')
+    assert.equal(loaded.registration.chunk, CHUNK_NAMES[kind], kind + ': chunk field matches the file name')
+    assert.equal(typeof loaded.registration.factory, 'function', kind + ': factory is registered')
+    const anim = loaded.exports.anims
+    const sprites = loaded.exports.sprites
+    assert.ok(anim && anim.clips, kind + ': chunk exports clip metadata')
+    const frames = Object.values(anim.clips).reduce((sum, clip) => sum + clip.frames.length, 0)
+    assert.equal(Object.keys(sprites).length, frames, kind + ': one sprite per frame')
+    assert.equal(frames, EXPECTED_FRAME_COUNTS[kind], kind + ': manifest frame count')
+    for (const frameKey of Object.keys(sprites)) {
+      assert.ok(frameKey.startsWith(kind + '/'), kind + ': no foreign sprite ' + frameKey)
+      const png = decodePng(Buffer.from(sprites[frameKey], 'base64'))
+      assert.equal(png.width, 96, kind + ': sprite width')
+    }
+    assert.equal(source.includes('source-sha256: '), true, kind + ': chunk carries the source hash header')
+    assert.equal(/(?:fetch|import)\s*\(\s*['"]https?:\/\//.test(source), false, kind + ': chunk uses no external network')
+  }
+})
+
 test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () => {
   assert.ok(clientSource.includes("cat: '塞尔凯克卷毛猫'"), 'zh client label')
   assert.ok(clientSource.includes("cat: 'Selkirk Rex'"), 'en client label')
@@ -225,9 +269,12 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.8.5 and the host bridge entrypoint is still exported', async () => {
+test('package version is 0.8.6, publishes the lazy chunks and leaves the stage-one boot barrier', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.8.5')
+  assert.equal(pkg.version, '0.8.6')
+  for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
+  assert.equal(pkg.dsh.client.immediately, false, 'footer pet is not a stage-one registration barrier')
+  assert.equal(pkg.scripts['measure:bundle'], 'node scripts/measure-bundle.mjs')
   const module = await import('../index.js')
   assert.equal(typeof module.apply, 'function')
   assert.equal(module.name, 'dsh-famling')
