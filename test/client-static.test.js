@@ -6,10 +6,12 @@ import { test } from 'node:test'
 import { CHARACTERS, CHUNK_NAMES, PLUGIN_ROOT, chunkPath, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
 import { FIRST_SCREEN_BUDGET_BYTES, loadChunkModule, loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
 import { AUDIT_BASELINE_BYTES } from '../scripts/measure-bundle.mjs'
-import { CONTENT_EXTENSION_POINTS, CONTENT_PACK_EXAMPLE, validateContentPack } from '../content-extension.mjs'
+import { CONTENT_EXTENSION_POINTS, CONTENT_PACK_EXAMPLE, PROHIBITED_USES, ROLE_BUNDLE_IDS, USAGE_DECLARATION_TEMPLATE, validateContentPack } from '../content-extension.mjs'
 
 const clientPath = join(PLUGIN_ROOT, 'client.js')
 const clientSource = readFileSync(clientPath, 'utf8')
+const contentChunkPath = join(PLUGIN_ROOT, 'client.content.js')
+const contentSource = readFileSync(contentChunkPath, 'utf8')
 const clientData = loadClientData(clientSource)
 
 // Frame counts come from the private manifests: dog/human 68 each, cat 72
@@ -271,12 +273,13 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.9.1, publishes the lazy chunks, content contract and leaves the stage-one boot barrier', async () => {
+test('package version is 0.10.0, publishes the lazy chunks and the v3 content contract', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.9.1')
+  assert.equal(pkg.version, '0.10.0')
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'package exports the content extension contract')
   assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
+  assert.ok(pkg.files.includes('client.content.js'), 'package publishes the lazy content-center chunk')
   assert.equal(pkg.dsh.client.immediately, false, 'footer pet is not a stage-one registration barrier')
   assert.equal(pkg.scripts['measure:bundle'], 'node scripts/measure-bundle.mjs')
   const module = await import('../index.js')
@@ -284,145 +287,234 @@ test('package version is 0.9.1, publishes the lazy chunks, content contract and 
   assert.equal(module.name, 'dsh-famling')
 })
 
-test('client.js wires the 4th content button, the content-center panel and one settings entry', () => {
+test('client.js wires the 4th content button and lazy-loads the four-tab content UI chunk', () => {
   assert.ok(clientSource.includes("content: '内容'"), 'zh sidebar label for the content button')
   assert.ok(clientSource.includes("content: 'Content'"), 'en sidebar label for the content button')
   assert.ok(clientSource.includes("contentTitle: '内容中心'"), 'zh content-center title')
   assert.ok(clientSource.includes("contentEntry: '内容与角色…'"), 'single settings entry row')
-  assert.ok(clientSource.includes("contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题', backgrounds: '背景', fonts: '字体' }"), 'six category tabs')
+  assert.equal(clientSource.includes('contentTabs'), false, 'six first-level category tabs are gone from client.js')
+  assert.equal(clientSource.includes('const contentCards = {'), false, 'the old six-category card catalog is gone from client.js')
+  assert.ok(clientSource.includes('function requestContentChunk('), 'content UI chunk requester exists')
+  assert.ok(clientSource.includes("./client.content.js"), 'content UI loads from the package-local lazy chunk')
   assert.ok(clientSource.includes("onClick: () => openPanel('content')"), 'the settings row and the 4th button open the content center')
-  assert.equal(clientSource.includes("key: 'character', style: { marginBottom: 7 }"), false, 'settings no longer contains the scattered character block')
-  assert.equal(clientSource.includes("key: 'tts-note'"), false, 'the voice hint moved out of settings into the content center')
-  assert.ok(clientSource.includes('const contentCards = {') && clientSource.includes('contentCards[contentTab]'), 'category bodies are rendered from the content catalog')
-  assert.ok(clientSource.includes('characters: CHARACTER_IDS.map') && clientSource.includes('dialogue: DIALOGUE_MODE_IDS.map') && clientSource.includes('themes: THEME_IDS.map') && clientSource.includes('backgrounds: BACKGROUND_IDS.map') && clientSource.includes('fonts: [') && clientSource.includes('FONT_IDS.map'), 'all six categories build their cards from the catalog ids')
-  assert.ok(clientSource.includes("'aria-pressed': active"), 'selectable cards expose their current state')
+  assert.ok(contentSource.includes("chunk: 'client.content.js'"), 'content chunk registers the package-local chunk name')
+  assert.ok(contentSource.includes('function createContentCenter('), 'content chunk exposes the panel factory')
+  assert.ok(contentSource.includes('一键应用'), 'role cards expose a one-click apply button')
+  assert.ok(contentSource.includes('仅修改当前角色的搭配'), 'customize tab explains component-only overrides')
+  assert.ok(contentSource.includes('恢复角色默认'), 'customize tab has a restore-role-defaults button')
+  assert.ok(contentSource.includes('资产包'), 'pack tab documents asset-pack import')
+  assert.ok(contentSource.includes('远程市场接口已预留，服务器未配置'), 'market tab shows the reserved status')
+  assert.ok(contentSource.includes('researchOnly=true'), 'pack tab shows the declaration check')
+  for (const tab of ["roles: '角色'", "custom: '自定义'", "packs: '内容包'", "market: '市场'"]) assert.ok(contentSource.includes(tab), 'four first-level tabs: ' + tab)
   assert.equal(/location\.(?:reload|href|assign|replace)\s*[=(]/.test(clientSource), false, 'content switches never reload or navigate')
-  assert.equal(clientSource.includes('.innerHTML ='), false, 'no innerHTML injection')
-  assert.equal(/\beval\s*\(|new Function\s*\(/.test(clientSource), false, 'no eval/Function in the client')
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource]]) {
+    assert.equal(source.includes('.innerHTML ='), false, name + ': no innerHTML injection')
+    assert.equal(/\beval\s*\(|new Function\s*\(/.test(source), false, name + ': no eval/Function')
+    assert.equal(/(?:src|href)\s*[:=]\s*['"]https?:\/\//.test(source), false, name + ': no external asset URL')
+  }
+  assert.equal(/(?:^|[^.\w])fetch\s*\(/.test(contentSource), false, 'content chunk never calls fetch')
+  assert.equal(/(?:fetch|import)\s*\(\s*['"]https?:\/\//.test(contentSource), false, 'content chunk never fetches a URL')
 })
 
-test('content center persists dialogue/theme/background/font choices and only the human gets browser voices', () => {
-  assert.ok(clientSource.includes("const DIALOGUE_KEY = 'dsh-famling/dialogue'"), 'dialogue storage key')
-  assert.ok(clientSource.includes('localStorage.setItem(DIALOGUE_KEY, dialogueMode)'), 'dialogue mode persisted')
-  assert.ok(clientSource.includes("const THEME_KEY = 'dsh-famling/theme'"), 'theme storage key')
-  assert.ok(clientSource.includes('localStorage.setItem(THEME_KEY, themeId)'), 'theme persisted')
-  assert.ok(clientSource.includes('function availableVoices()'), 'browser voice lister exists')
-  assert.ok(clientSource.includes('getVoices()'), 'speechSynthesis.getVoices() is used')
-  assert.ok(clientSource.includes("canTts ? h('label', { key: 'sound'"), 'TTS toggle only renders when the character can speak')
-  assert.ok(clientSource.includes('L.voiceSilent'), 'cat/dog show the silent thought-bubble policy')
-  assert.ok(clientSource.includes('maxChars: 90') && clientSource.includes('bubbleChance: 0.35'), 'brief/quiet modes have bounded, documented effects')
+test('role bundles persist every component in the existing keys and record dsh-famling/role', () => {
+  assert.ok(clientSource.includes('const ROLE_BUNDLES = {'), 'role bundle catalog exists')
+  assert.ok(clientSource.includes("const ROLE_KEY = 'dsh-famling/role'"), 'role storage key is unified')
+  assert.ok(clientSource.includes('localStorage.setItem(ROLE_KEY, roleId)'), 'active role persisted')
+  assert.ok(clientSource.includes('function applyRole(nextRole)'), 'one-click role application exists')
+  assert.ok(clientSource.includes('function restoreRole()'), 'restore-role-defaults exists')
+  assert.ok(clientSource.includes("const ROLE_IDS = ['human', 'cat', 'dog']"), 'three available role cards')
+  assert.ok(clientSource.includes('origami: { character: \'origami\''), 'origami bundle is reserved in data')
+  for (const component of ["character: 'human'", 'voicePolicy: {', "dialogue: 'standard'", "theme: 'default'", "background: 'transparent'", "font: { family: 'system'"]) {
+    assert.ok(clientSource.includes(component), 'role bundle component: ' + component)
+  }
+  for (const key of ["const DIALOGUE_KEY = 'dsh-famling/dialogue'", "const THEME_KEY = 'dsh-famling/theme'", "const BACKGROUND_KEY = 'dsh-famling/background'", "const FONT_KEY = 'dsh-famling/font'"]) {
+    assert.ok(clientSource.includes(key), 'existing component storage key kept: ' + key)
+  }
+  assert.ok(clientSource.includes('loadRoleId()'), 'role id is loaded on first render')
+  assert.ok(clientSource.includes('requestCharacterChunk(character'), 'character sprite chunks stay lazy')
+  assert.ok(clientSource.includes('canTts && settings.sound && ttsConsent'), 'TTS guard tied to character policy')
   assert.ok(clientSource.includes("source !== 'direct' && dialogue.bubbleChance < 1"), 'quiet mode lowers ambient bubble probability')
   assert.ok(clientSource.includes("line.slice(0, dialogue.maxChars - 1)"), 'brief mode filters over-long replies')
   assert.ok(clientSource.includes('utterance.voice = voice'), 'the selected browser voice is applied to speech')
-  assert.ok(clientSource.includes("const BACKGROUND_KEY = 'dsh-famling/background'") && clientSource.includes('localStorage.setItem(BACKGROUND_KEY, backgroundId)'), 'background persisted')
-  assert.ok(clientSource.includes("const FONT_KEY = 'dsh-famling/font'") && clientSource.includes('localStorage.setItem(FONT_KEY, JSON.stringify(fontChoice))'), 'font choice persisted as bounded JSON')
-  assert.ok(clientSource.includes('var(--dsh-famling-widget-bg, transparent)') && clientSource.includes('var(--dsh-famling-font-family, inherit)'), 'background/font applied through widget CSS variables')
   assert.ok(clientSource.includes('FONT_SIZES = [11, 12, 14]') && clientSource.includes('FONT_LINE_HEIGHTS = [1.4, 1.5, 1.8]'), 'font size/line height presets are bounded')
-  assert.ok(clientSource.includes('fonts.googleapis') === false && clientSource.includes('@import') === false, 'no web fonts or CSS imports')
+  assert.ok(contentSource.includes("canTts ? h('label'"), 'TTS toggle only renders when the character can speak')
+  assert.ok(contentSource.includes('T.voiceSilent'), 'cat/dog show the silent thought-bubble policy')
+  assert.equal(clientSource.includes('fonts.googleapis') || contentSource.includes('fonts.googleapis'), false, 'no web fonts')
+  assert.equal(clientSource.includes('@import') || contentSource.includes('@import'), false, 'no CSS imports')
 })
 
-test('content extension points publish the reserved pure-data pack contract', () => {
-  assert.equal(CONTENT_EXTENSION_POINTS.version, 2)
+test('client role bundles match the v3 contract ids, components and declaration tokens', () => {
+  const begin = '// <dsh-famling:content:begin>'
+  const end = '// <dsh-famling:content:end>'
+  const start = clientSource.indexOf(begin)
+  const stop = clientSource.indexOf(end)
+  assert.ok(start >= 0 && stop > start, 'client content block markers exist')
+  const block = clientSource.slice(start + begin.length, stop)
+  const data = new Function(block + '\nreturn { ROLE_BUNDLES, ROLE_IDS, USAGE_DECLARATION, MARKET_CONFIG }')()
+  assert.deepEqual(Object.keys(data.ROLE_BUNDLES), [...ROLE_BUNDLE_IDS], 'client role ids match content-extension ROLE_BUNDLE_IDS')
+  for (const role of ROLE_BUNDLE_IDS) {
+    for (const component of ['character', 'voicePolicy', 'dialogue', 'theme', 'background', 'font']) {
+      assert.ok(Object.prototype.hasOwnProperty.call(data.ROLE_BUNDLES[role], component), role + ': bundle component ' + component)
+    }
+  }
+  assert.deepEqual([...data.ROLE_IDS], ['human', 'cat', 'dog'], 'three roles are available in the UI')
+  assert.equal(data.ROLE_BUNDLES.origami.available, false, 'origami is data-only reserved')
+  assert.equal(data.ROLE_BUNDLES.human.available, true)
+  assert.equal(data.USAGE_DECLARATION.researchOnly, true)
+  assert.deepEqual([...data.USAGE_DECLARATION.prohibitedUses], [...PROHIBITED_USES], 'client declaration tokens match the v3 contract')
+  assert.equal(data.MARKET_CONFIG.status, 'reserved')
+  assert.equal(data.MARKET_CONFIG.catalogUrl, null)
+  assert.equal(data.MARKET_CONFIG.catalogUrlKey, 'dsh-famling/market/catalog')
+})
+test('content extension points publish the reserved v3 role/pack contract', () => {
+  assert.equal(CONTENT_EXTENSION_POINTS.version, 3)
   assert.equal(CONTENT_EXTENSION_POINTS.status, 'reserved')
-  assert.deepEqual({ ...CONTENT_EXTENSION_POINTS.transport }, { network: false, execute: false, innerHTML: false, worker: false })
-  assert.deepEqual([...CONTENT_EXTENSION_POINTS.entry.kinds], ['character', 'voice', 'dialogue', 'theme', 'background', 'font'])
+  assert.deepEqual({ ...CONTENT_EXTENSION_POINTS.transport }, { network: false, execute: false, innerHTML: false, worker: false, assets: false })
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.entry.kinds], ['role', 'character', 'voice', 'dialogue', 'theme', 'background', 'font'])
   for (const field of ['kind', 'id', 'name', 'preview', 'apply', 'source', 'permissions', 'version']) assert.ok(CONTENT_EXTENSION_POINTS.entry.fields.includes(field), 'entry field: ' + field)
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.entry.roleFields], ['compatibility'])
   assert.deepEqual([...CONTENT_EXTENSION_POINTS.pack.sources], ['bundled', 'local', 'remote'])
-  assert.ok(Number.isFinite(CONTENT_EXTENSION_POINTS.pack.limits.maxBytes) && CONTENT_EXTENSION_POINTS.pack.limits.maxBytes > 0)
-  assert.ok(Array.isArray(CONTENT_EXTENSION_POINTS.entry.permissions) && CONTENT_EXTENSION_POINTS.entry.permissions.includes('apply:theme'))
-  for (const permission of ['apply:background', 'apply:font']) assert.ok(CONTENT_EXTENSION_POINTS.entry.permissions.includes(permission), 'new permission: ' + permission)
-  assert.equal(CONTENT_EXTENSION_POINTS.pack.schemaVersion, 2, 'pack schema version 2 adds background/font kinds')
+  assert.ok(CONTENT_EXTENSION_POINTS.pack.fields.includes('usageDeclaration'), 'usageDeclaration is a required pack field')
+  assert.ok(CONTENT_EXTENSION_POINTS.pack.optionalFields.includes('assets'), 'assets manifest is reserved')
+  assert.ok(CONTENT_EXTENSION_POINTS.pack.optionalFields.includes('remoteCatalog'), 'remote catalog is reserved')
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.usageDeclaration.required, true)
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.usageDeclaration.researchOnly, true)
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.pack.usageDeclaration.prohibitedUses], [...PROHIBITED_USES], 'six prohibited uses')
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.assets.loaded, false, 'asset manifests are never loaded')
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.assets.supported, true)
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.remoteCatalog.status, 'reserved')
+  assert.equal(CONTENT_EXTENSION_POINTS.pack.remoteCatalog.fetched, false)
+  assert.equal(CONTENT_EXTENSION_POINTS.remoteCatalog.status, 'reserved', 'top-level remote catalog alias is reserved')
+  assert.deepEqual([...CONTENT_EXTENSION_POINTS.roleBundles], [...ROLE_BUNDLE_IDS], 'top-level role bundle ids are reserved')
+  assert.ok(CONTENT_EXTENSION_POINTS.entry.permissions.includes('apply:role'), 'role permission')
+  for (const permission of ['apply:theme', 'apply:background', 'apply:font']) assert.ok(CONTENT_EXTENSION_POINTS.entry.permissions.includes(permission), 'permission: ' + permission)
   for (const kind of CONTENT_EXTENSION_POINTS.entry.kinds) assert.ok(CONTENT_EXTENSION_POINTS.entry.schemas[kind].apply, kind + ': apply schema')
-  assert.equal(validateContentPack(JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))).ok, true, 'example pack is schema-valid')
+  assert.ok(CONTENT_EXTENSION_POINTS.entry.schemas.role.compatibility, 'role compatibility schema')
+  const example = JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
+  assert.equal(validateContentPack(example).ok, true, 'example pack is schema-valid')
+  assert.equal(example.schemaVersion, 3)
+  assert.equal(example.usageDeclaration.researchOnly, true)
+  assert.deepEqual(example.usageDeclaration.prohibitedUses, [...USAGE_DECLARATION_TEMPLATE.prohibitedUses])
+  const roleEntry = example.entries.find((entry) => entry.kind === 'role')
+  assert.ok(roleEntry, 'example includes a role bundle entry')
+  for (const component of ['character', 'voicePolicy', 'dialogue', 'theme', 'background', 'font']) assert.ok(roleEntry.apply[component], 'role bundle component: ' + component)
+  assert.ok(roleEntry.compatibility && roleEntry.compatibility.minPluginVersion)
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'contract is a package export')
 })
 
+test('every v3 pack must declare research use and all six prohibited uses', () => {
+  const clone = () => JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
+  const cases = []
+  let pack = clone(); delete pack.usageDeclaration; cases.push(['missing declaration', pack])
+  pack = clone(); pack.usageDeclaration.researchOnly = false; cases.push(['researchOnly false', pack])
+  pack = clone(); pack.usageDeclaration.prohibitedUses = [...PROHIBITED_USES.slice(0, 5)]; cases.push(['missing prohibited use', pack])
+  pack = clone(); pack.usageDeclaration.prohibitedUses = [...PROHIBITED_USES, 'extra-use']; cases.push(['unknown prohibited use', pack])
+  pack = clone(); pack.usageDeclaration.prohibitedUses = [PROHIBITED_USES[0], ...PROHIBITED_USES.slice(0, 5)]; cases.push(['duplicate prohibited use', pack])
+  pack = clone(); pack.usageDeclaration = { ...pack.usageDeclaration, statement: 'x' }; cases.push(['unknown declaration field', pack])
+  pack = clone(); pack.schemaVersion = 2; cases.push(['old schema version', pack])
+  for (const [name, value] of cases) {
+    const result = validateContentPack(value)
+    assert.equal(result.ok, false, name + ' must be rejected')
+    assert.ok(result.errors.length > 0, name + ': errors are reported')
+  }
+})
+
 test('third-party content packs with scripts, traversal, unknown enums or oversized payloads are rejected', () => {
   const example = () => JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
+  const roleEntry = (pack) => pack.entries.find((entry) => entry.kind === 'role')
+  const themeEntry = (pack) => pack.entries.find((entry) => entry.kind === 'theme')
   const cases = []
-  const withFunction = example()
-  withFunction.entries[0].apply.variables['--dsh-famling-bubble-bg'] = () => '#fff'
-  cases.push(['function payload', withFunction])
-  const withDate = example()
-  withDate.entries[0].apply.variables['--dsh-famling-bubble-bg'] = new Date()
-  cases.push(['non-plain value', withDate])
-  const unknownKind = example()
-  unknownKind.entries[0].kind = 'script'
-  cases.push(['unknown kind', unknownKind])
-  const pathLikeId = example()
-  pathLikeId.entries[0].id = '../evil'
-  cases.push(['path-like id', pathLikeId])
-  const traversal = example()
-  traversal.entries[0].preview = { kind: 'image', path: '../../secret.png' }
-  cases.push(['path traversal', traversal])
-  const remote = example()
-  remote.source = 'remote'
-  cases.push(['remote source without opt-in', remote])
-  const prototype = example()
-  prototype.entries[0].apply.variables = JSON.parse('{"__proto__": "#ffffff"}')
-  cases.push(['prototype key', prototype])
-  const unsafeCss = example()
-  unsafeCss.entries[0].apply.variables['--dsh-famling-bubble-bg'] = 'url(https://evil.example/x.png)'
-  cases.push(['unsafe CSS value', unsafeCss])
-  const markup = example()
-  markup.entries[0].name = '<script>alert(1)</script>'
-  cases.push(['markup in text', markup])
-  const unknownPermission = example()
-  unknownPermission.entries[0].permissions = ['apply:theme', 'admin:root']
-  cases.push(['unknown permission', unknownPermission])
-  const unknownField = example()
-  unknownField.entries[0].onApply = 'alert(1)'
-  cases.push(['unknown field', unknownField])
-  const wrongSource = example()
-  wrongSource.entries[0].source = 'bundled'
-  cases.push(['entry source mismatch', wrongSource])
-  const tooMany = example()
-  tooMany.entries = Array.from({ length: 33 }, (_, index) => ({ ...example().entries[0], id: 'theme-' + index }))
-  cases.push(['too many entries', tooMany])
-  for (const [name, pack] of cases) {
-    const result = validateContentPack(pack)
+  let pack = example(); roleEntry(pack).apply.theme.variables['--dsh-famling-bubble-bg'] = () => '#fff'; cases.push(['function payload', pack])
+  pack = example(); roleEntry(pack).apply.theme.variables['--dsh-famling-bubble-bg'] = new Date(); cases.push(['non-plain value', pack])
+  pack = example(); roleEntry(pack).kind = 'script'; cases.push(['unknown kind', pack])
+  pack = example(); roleEntry(pack).id = '../evil'; cases.push(['path-like id', pack])
+  pack = example(); roleEntry(pack).preview = { kind: 'image', path: '../../secret.png' }; cases.push(['path traversal', pack])
+  pack = example(); pack.source = 'remote'; cases.push(['remote source without opt-in', pack])
+  pack = example(); themeEntry(pack).apply.variables = JSON.parse('{"__proto__": "#ffffff"}'); cases.push(['prototype key', pack])
+  pack = example(); themeEntry(pack).apply.variables['--dsh-famling-bubble-bg'] = 'url(https://evil.example/x.png)'; cases.push(['unsafe CSS value', pack])
+  pack = example(); roleEntry(pack).name = '<script>alert(1)</script>'; cases.push(['markup in text', pack])
+  pack = example(); roleEntry(pack).permissions = ['apply:theme', 'admin:root']; cases.push(['unknown permission', pack])
+  pack = example(); roleEntry(pack).onApply = 'alert(1)'; cases.push(['unknown field', pack])
+  pack = example(); roleEntry(pack).source = 'bundled'; cases.push(['entry source mismatch', pack])
+  pack = example(); pack.entries = Array.from({ length: 33 }, (_, index) => ({ ...themeEntry(example()), id: 'theme-' + index })); cases.push(['too many entries', pack])
+  for (const [name, value] of cases) {
+    const result = validateContentPack(value)
     assert.equal(result.ok, false, name + ' must be rejected')
     assert.ok(result.errors.length > 0, name + ': errors are reported')
   }
-  const backgroundPack = (apply) => {
-    const pack = example()
-    pack.permissions = ['apply:background']
-    pack.entries = [{ ...example().entries[0], kind: 'background', permissions: ['apply:background'], preview: { kind: 'color', value: '#ffffff' }, apply }]
-    return pack
+  const entryPack = (kind, permissions, preview, apply) => {
+    const value = example()
+    value.permissions = permissions
+    value.entries = [{ ...themeEntry(value), kind, id: kind + '-entry', permissions, preview, apply }]
+    return value
   }
-  const fontPack = (apply) => {
-    const pack = example()
-    pack.permissions = ['apply:font']
-    pack.entries = [{ ...example().entries[0], kind: 'font', permissions: ['apply:font'], preview: { kind: 'text', value: 'Aa' }, apply }]
-    return pack
-  }
-  cases.push(['background with url()', backgroundPack({ kind: 'color', value: 'url(https://evil.example/bg.png)' })])
-  cases.push(['unknown background kind', backgroundPack({ kind: 'image', value: '#ffffff' })])
-  cases.push(['font stack with quotes and declarations', fontPack({ family: "'Comic Sans'; background: url(x)" })])
-  cases.push(['font stack with too many families', fontPack({ family: Array.from({ length: 9 }, () => 'serif').join(', ') })])
-  cases.push(['font size out of range', fontPack({ family: 'Georgia, serif', size: 99 })])
-  cases.push(['font line height out of range', fontPack({ family: 'Georgia, serif', lineHeight: 0.5 })])
-  cases.push(['font with unknown apply field', fontPack({ family: 'serif', weight: 700 })])
-  for (const [name, pack] of cases) {
-    const result = validateContentPack(pack)
+  cases.length = 0
+  cases.push(['background with url()', entryPack('background', ['apply:background'], { kind: 'color', value: '#ffffff' }, { kind: 'color', value: 'url(https://evil.example/bg.png)' })])
+  cases.push(['unknown background kind', entryPack('background', ['apply:background'], { kind: 'color', value: '#ffffff' }, { kind: 'image', value: '#ffffff' })])
+  cases.push(['font stack with quotes and declarations', entryPack('font', ['apply:font'], { kind: 'text', value: 'Aa' }, { family: "'Comic Sans'; background: url(x)" })])
+  cases.push(['font stack with too many families', entryPack('font', ['apply:font'], { kind: 'text', value: 'Aa' }, { family: Array.from({ length: 9 }, () => 'serif').join(', ') })])
+  cases.push(['font size out of range', entryPack('font', ['apply:font'], { kind: 'text', value: 'Aa' }, { family: 'Georgia, serif', size: 99 })])
+  cases.push(['font line height out of range', entryPack('font', ['apply:font'], { kind: 'text', value: 'Aa' }, { family: 'Georgia, serif', lineHeight: 0.5 })])
+  cases.push(['font with unknown apply field', entryPack('font', ['apply:font'], { kind: 'text', value: 'Aa' }, { family: 'serif', weight: 700 })])
+  for (const [name, value] of cases) {
+    const result = validateContentPack(value)
     assert.equal(result.ok, false, name + ' must be rejected')
     assert.ok(result.errors.length > 0, name + ': errors are reported')
   }
-  assert.equal(validateContentPack(backgroundPack({ kind: 'transparent' })).ok, true, 'plain transparent background pack is valid')
-  assert.equal(validateContentPack(backgroundPack({ kind: 'color', value: 'rgb(20, 22, 26)' })).ok, true, 'safe color background pack is valid')
-  assert.equal(validateContentPack(fontPack({ family: 'Georgia, serif', size: 14, lineHeight: 1.6 })).ok, true, 'local font stack pack is valid')
+  assert.equal(validateContentPack(entryPack('background', ['apply:background'], { kind: 'color', value: '#ffffff' }, { kind: 'transparent' })).ok, true, 'plain transparent background pack is valid')
+  assert.equal(validateContentPack(entryPack('background', ['apply:background'], { kind: 'color', value: '#ffffff' }, { kind: 'color', value: 'rgb(20, 22, 26)' })).ok, true, 'safe color background pack is valid')
+  assert.equal(validateContentPack(entryPack('font', ['apply:font'], { kind: 'text', value: 'Aa' }, { family: 'Georgia, serif', size: 14, lineHeight: 1.6 })).ok, true, 'local font stack pack is valid')
   const allowedRemote = example()
   allowedRemote.source = 'remote'
-  allowedRemote.entries[0].source = 'remote'
+  for (const entry of allowedRemote.entries) entry.source = 'remote'
   assert.equal(validateContentPack(allowedRemote, { allowRemote: true }).ok, true, 'remote stays reserved but schema-valid behind an explicit future opt-in')
   const oversized = example()
   const key = '--dsh-famling-' + 'a'.repeat(28)
   const value = 'rgb(' + '1,'.repeat(23) + '1)'
   const variables = {}
   for (let index = 0; index < 24; index += 1) variables[key + index] = value
-  oversized.entries = Array.from({ length: 32 }, (_, index) => ({ ...example().entries[0], id: 'big-' + index, apply: { variables } }))
+  oversized.entries = Array.from({ length: 32 }, (_, index) => ({ ...themeEntry(example()), id: 'big-' + index, apply: { variables } }))
   const oversizedResult = validateContentPack(oversized)
   assert.equal(oversizedResult.ok, false, 'oversized pack is rejected')
   assert.ok(oversizedResult.errors.some((error) => /JSON size|exceeds/.test(error)), 'size limit error is reported: ' + oversizedResult.errors.join('; '))
+})
+
+test('v3 role bundles, asset manifests and remote catalog are pure metadata and malformed values are rejected', () => {
+  const clone = () => JSON.parse(JSON.stringify(CONTENT_PACK_EXAMPLE))
+  const roleEntry = (pack) => pack.entries.find((entry) => entry.kind === 'role')
+  const withAssets = () => {
+    const pack = clone()
+    pack.assets = { format: 'zip', files: [{ path: 'art/human/idle-0.png', sha256: 'a'.repeat(64), bytes: 1024 }], totalBytes: 1024 }
+    return pack
+  }
+  assert.equal(validateContentPack(withAssets()).ok, true, 'valid asset manifest metadata is accepted (and never loaded)')
+  const withCatalog = () => {
+    const pack = clone()
+    pack.remoteCatalog = { status: 'reserved', url: 'https://catalog.example/packs.json' }
+    return pack
+  }
+  assert.equal(validateContentPack(withCatalog()).ok, true, 'valid reserved remote catalog metadata is accepted (and never fetched)')
+  const cases = []
+  let pack = withAssets(); pack.assets.format = 'rar'; cases.push(['unknown asset format', pack])
+  pack = withAssets(); pack.assets.files[0].path = '../../evil.png'; cases.push(['asset path traversal', pack])
+  pack = withAssets(); pack.assets.files[0].sha256 = 'abc'; cases.push(['bad asset hash', pack])
+  pack = withAssets(); pack.assets.files = Array.from({ length: 33 }, (_, index) => ({ path: 'art/' + index + '.png', sha256: 'a'.repeat(64) })); cases.push(['too many asset files', pack])
+  pack = withAssets(); pack.assets.files.push({ ...pack.assets.files[0] }); cases.push(['duplicate asset path', pack])
+  pack = withAssets(); pack.assets.totalBytes = 1; cases.push(['asset total bytes too small', pack])
+  pack = withCatalog(); pack.remoteCatalog.url = 'http://catalog.example/packs.json'; cases.push(['non-https catalog', pack])
+  pack = withCatalog(); pack.remoteCatalog.status = 'active'; cases.push(['non-reserved catalog status', pack])
+  pack = clone(); roleEntry(pack).compatibility = { minPluginVersion: '0.10.0', maxPluginVersion: '0.9.0' }; cases.push(['role compatibility range inverted', pack])
+  pack = clone(); delete roleEntry(pack).apply.font; cases.push(['role missing font component', pack])
+  pack = clone(); roleEntry(pack).apply.voicePolicy = { canTts: true, mode: 'thought' }; cases.push(['role voice policy mismatch', pack])
+  pack = clone(); delete roleEntry(pack).compatibility; cases.push(['role missing compatibility', pack])
+  pack = clone(); roleEntry(pack).compatibility = { minPluginVersion: 'latest' }; cases.push(['role bad compatibility version', pack])
+  pack = clone(); roleEntry(pack).permissions = ['apply:theme']; cases.push(['role missing apply:role permission', pack])
+  pack = clone(); roleEntry(pack).usageDeclaration = { researchOnly: false, prohibitedUses: [...PROHIBITED_USES] }; cases.push(['invalid per-role declaration restatement', pack])
+  for (const [name, value] of cases) {
+    const result = validateContentPack(value)
+    assert.equal(result.ok, false, name + ' must be rejected')
+    assert.ok(result.errors.length > 0, name + ': errors are reported')
+  }
+  assert.equal(validateContentPack(clone()).ok, true, 'valid six-component role bundle is accepted')
 })

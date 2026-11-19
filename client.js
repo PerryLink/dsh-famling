@@ -61,12 +61,18 @@ window.__ModuleLoader__.load({
     }
     // <dsh-famling:actions:end>
     // <dsh-famling:content:begin>
-    // Content center catalog (characters / voices / dialogue / themes). The
-    // third-party pack contract is exported by content-extension.mjs; this block
-    // only holds the local built-in catalog and its persistence helpers.
-    const CONTENT_AVATARS = { human: '🧑', cat: '🐱', dog: '🐶' }
+    // Role = theme bundle catalog. Applying a role writes character + voice
+    // policy + dialogue + theme + background + font in one step; individual
+    // settings can override any component afterwards. The content-center UI is
+    // a lazy package-local chunk (client.content.js) requested only when the
+    // panel opens, so this block keeps the first-screen entry compact. The
+    // third-party pack contract is content-extension.mjs (CONTENT_EXTENSION_POINTS, v3).
+    const CONTENT_AVATARS = { human: '🧑', cat: '🐱', dog: '🐶', origami: '🎋' }
     const DIALOGUE_KEY = 'dsh-famling/dialogue'
+    const ROLE_KEY = 'dsh-famling/role'
     const THEME_KEY = 'dsh-famling/theme'
+    const BACKGROUND_KEY = 'dsh-famling/background'
+    const FONT_KEY = 'dsh-famling/font'
     const DIALOGUE_MODE_IDS = ['standard', 'brief', 'quiet']
     // brief filters over-long replies; quiet keeps only ~35% of ambient bubbles.
     const DIALOGUE_MODES = {
@@ -99,8 +105,6 @@ window.__ModuleLoader__.load({
         '--dsh-famling-panel-border': '#35415a', '--dsh-famling-accent': '#7aa2ff',
       } },
     }
-    const BACKGROUND_KEY = 'dsh-famling/background'
-    const FONT_KEY = 'dsh-famling/font'
     const BACKGROUND_IDS = ['transparent', 'paper', 'dark']
     // Backgrounds only recolor the widget backdrop (no images/gradients/network);
     // bubble and panel popups get the same --dsh-famling-widget-bg ring so they
@@ -120,6 +124,61 @@ window.__ModuleLoader__.load({
     const FONT_SIZES = [11, 12, 14]
     const FONT_LINE_HEIGHTS = [1.4, 1.5, 1.8]
     const DEFAULT_FONT = { family: 'system', size: 12, lineHeight: 1.5 }
+    // One role bundle per character; origami is reserved until its art chunk exists.
+    const ROLE_IDS = ['human', 'cat', 'dog']
+    const ROLE_BUNDLES = {
+      human: { character: 'human', voicePolicy: { canTts: true, mode: 'speech', sound: true }, dialogue: 'standard', theme: 'default', background: 'transparent', font: { family: 'system', size: 12, lineHeight: 1.5 }, available: true },
+      cat: { character: 'cat', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'brief', theme: 'paper', background: 'paper', font: { family: 'serif', size: 12, lineHeight: 1.5 }, available: true },
+      dog: { character: 'dog', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'standard', theme: 'night', background: 'dark', font: { family: 'mono', size: 12, lineHeight: 1.5 }, available: true },
+      origami: { character: 'origami', voicePolicy: { canTts: false, mode: 'thought', sound: false }, dialogue: 'quiet', theme: 'paper', background: 'transparent', font: { family: 'serif', size: 12, lineHeight: 1.5 }, available: false },
+    }
+    // Pack declaration status shown in the content-pack tab; external packs are
+    // validated by content-extension.mjs v3 against the same six prohibitions.
+    const USAGE_DECLARATION = { researchOnly: true, prohibitedUses: [
+      'emotional-companionship', 'virtual-partner', 'professional-advice',
+      'minor-intimacy', 'impersonation', 'illegal-use',
+    ] }
+    // Remote market is reserved: catalog fields exist for a future Host
+    // integration, but no URL is configured here and the client never fetches one.
+    const MARKET_CONFIG = { status: 'reserved', configured: false, catalogUrl: null, catalogUrlKey: 'dsh-famling/market/catalog', configKey: 'dsh-famling.market' }
+    const CONTENT_CATALOG = { ROLE_IDS, ROLE_BUNDLES, THEMES, BACKGROUNDS, FONTS, DIALOGUE_MODE_IDS, THEME_IDS, BACKGROUND_IDS, FONT_IDS, FONT_SIZES, FONT_LINE_HEIGHTS, CONTENT_AVATARS, USAGE_DECLARATION, MARKET_CONFIG }
+    function loadStoredCharacter() {
+      try { const stored = localStorage.getItem(CHARACTER_KEY); if (stored && CHARACTER_IDS.includes(stored)) return stored } catch {}
+      return ''
+    }
+    function roleForCharacter(character) {
+      for (const roleId of ROLE_IDS) if (ROLE_BUNDLES[roleId].character === character) return roleId
+      return ''
+    }
+    function loadRoleId() {
+      const character = loadStoredCharacter()
+      try {
+        const stored = localStorage.getItem(ROLE_KEY)
+        if (stored && ROLE_BUNDLES[stored] && ROLE_BUNDLES[stored].available !== false && (!character || ROLE_BUNDLES[stored].character === character)) return stored
+      } catch {}
+      return roleForCharacter(character) || 'human'
+    }
+    function bundleOf(roleId) { return ROLE_BUNDLES[roleId] || ROLE_BUNDLES.human }
+    function loadDialogueMode() {
+      try { const stored = localStorage.getItem(DIALOGUE_KEY); if (stored && DIALOGUE_MODES[stored]) return stored } catch {}
+      return bundleOf(loadRoleId()).dialogue
+    }
+    function loadThemeId() {
+      try { const stored = localStorage.getItem(THEME_KEY); if (THEME_IDS.includes(stored)) return stored } catch {}
+      return bundleOf(loadRoleId()).theme
+    }
+    function loadBackgroundId() {
+      try { const stored = localStorage.getItem(BACKGROUND_KEY); if (BACKGROUND_IDS.includes(stored)) return stored } catch {}
+      return bundleOf(loadRoleId()).background
+    }
+    function loadFontChoice() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(FONT_KEY) || 'null')
+        if (stored && FONT_IDS.includes(stored.family) && FONT_SIZES.includes(stored.size) && FONT_LINE_HEIGHTS.includes(stored.lineHeight)) return { family: stored.family, size: stored.size, lineHeight: stored.lineHeight }
+      } catch {}
+      const font = bundleOf(loadRoleId()).font
+      return FONT_IDS.includes(font.family) && FONT_SIZES.includes(font.size) && FONT_LINE_HEIGHTS.includes(font.lineHeight) ? { ...font } : { ...DEFAULT_FONT }
+    }
     /** Browser speech voices, bounded and defensive against a hostile vendor API. */
     function availableVoices() {
       try {
@@ -130,24 +189,24 @@ window.__ModuleLoader__.load({
         return list.filter((voice) => voice && typeof voice.voiceURI === 'string' && voice.voiceURI.length > 0 && voice.voiceURI.length <= 240 && typeof voice.name === 'string' && voice.name.length <= 80).slice(0, 64)
       } catch { return [] }
     }
-    function loadDialogueMode() {
-      try { const stored = localStorage.getItem(DIALOGUE_KEY); if (stored && DIALOGUE_MODES[stored]) return stored } catch {}
-      return 'standard'
-    }
-    function loadThemeId() {
-      try { const stored = localStorage.getItem(THEME_KEY); if (THEME_IDS.includes(stored)) return stored } catch {}
-      return 'default'
-    }
-    function loadBackgroundId() {
-      try { const stored = localStorage.getItem(BACKGROUND_KEY); if (BACKGROUND_IDS.includes(stored)) return stored } catch {}
-      return 'transparent'
-    }
-    function loadFontChoice() {
-      try {
-        const stored = JSON.parse(localStorage.getItem(FONT_KEY) || 'null')
-        if (stored && FONT_IDS.includes(stored.family) && FONT_SIZES.includes(stored.size) && FONT_LINE_HEIGHTS.includes(stored.lineHeight)) return { family: stored.family, size: stored.size, lineHeight: stored.lineHeight }
-      } catch {}
-      return { ...DEFAULT_FONT }
+    // Content-center UI chunk: package-local, loaded only when the panel opens.
+    // Nothing here fetches the network; a failure degrades to a local message.
+    const contentChunk = { module: null, waiting: [] }
+    function requestContentChunk(onSettled) {
+      if (contentChunk.module) { onSettled(contentChunk.module); return }
+      contentChunk.waiting.push(onSettled)
+      if (contentChunk.waiting.length > 1) return
+      const settle = (module) => {
+        contentChunk.module = module
+        for (const waiter of contentChunk.waiting.splice(0)) waiter(module)
+      }
+      let asyncRequire = null
+      try { asyncRequire = require && typeof require.async === 'function' ? require.async : null } catch {}
+      if (!asyncRequire) { settle(null); return }
+      asyncRequire('./client.content.js').then(
+        (module) => settle(module && typeof module.createContentCenter === 'function' ? module : null),
+        () => settle(null),
+      )
     }
     // <dsh-famling:content:end>
     // <dsh-famling:lazy:begin>
@@ -273,13 +332,9 @@ window.__ModuleLoader__.load({
       return { x: artX, y: artY }
     }
     function loadCharacter() {
-      try {
-        const stored = localStorage.getItem(CHARACTER_KEY)
-        // Validate against the fixed character ids, not ANIMS: sprite chunks are
-        // lazy, and a stored prototype key ("__proto__") must fall back to human.
-        if (stored && CHARACTER_IDS.includes(stored)) return stored
-      } catch {}
-      return 'human'
+      // Validate against the fixed character ids, not ANIMS: sprite chunks are
+      // lazy, and a stored prototype key ("__proto__") must fall back to human.
+      return loadStoredCharacter() || CHARACTER_IDS.find((id) => id === bundleOf(loadRoleId()).character) || 'human'
     }
     // The Host switches its chat persona by this id. Unknown/missing values are
     // normalized to the human Tinglan persona, matching the Host-side fallback.
@@ -288,20 +343,11 @@ window.__ModuleLoader__.load({
     }
     const L = {
       zh: {
+        lang: 'zh',
         pet: '汀岚', title: 'Famling · {pet}', close: '关闭',
         character: '形象', characters: { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛' },
         content: '内容', contentTitle: '内容中心', contentEntry: '内容与角色…',
-        contentTabs: { characters: '角色', voices: '声音', dialogue: '对话', themes: '主题', backgrounds: '背景', fonts: '字体' },
-        backgrounds: { transparent: '透明', paper: '纸张', dark: '暗色' }, backgroundDescriptions: { transparent: '透明，不画背板', paper: '暖白纸张背板', dark: '深色背板' },
-        fonts: { system: '系统', serif: '衬线', mono: '等宽' }, fontDescriptions: { system: '系统 UI 本地字体栈', serif: '衬线本地字体栈', mono: '等宽本地字体栈' },
-        fontSize: '字号', lineHeight: '行高',
-        characterDescriptions: { human: '安静简洁的工作搭子', cat: '懒散高冷的卷毛灰白猫', dog: '友善热情的金毛寻回犬' },
-        current: '当前', contentHint: '切换即时生效，无需刷新页面。',
-        contentExtension: '扩展接口已预留（CONTENT_EXTENSION_POINTS，见 docs/DETAIL.md 与 content-extension.mjs）：未来本地/远程内容包只做纯数据校验，不联网、不执行脚本、不注入 HTML。',
-        voiceList: '声音（系统）', voiceSystem: '系统默认声音', voiceEmpty: '浏览器暂未提供声音列表。',
-        voiceSilent: '塞尔凯克卷毛猫 / 金毛只用「心里话」思考气泡，没有语音（不会调用浏览器 TTS）。',
-        dialogueModes: { standard: { name: '标准', desc: '完整回话与气泡' }, brief: { name: '简短', desc: '过滤过长回话' }, quiet: { name: '安静', desc: '降低气泡出现频率' } },
-        themes: { default: { name: '默认', desc: '白底深色字' }, paper: { name: '纸张', desc: '暖米色纸感气泡' }, night: { name: '夜间', desc: '深色气泡与面板' } },
+        contentLoading: '正在加载内容中心…', contentFailed: '内容中心加载失败，角色与外观设置仍可继续使用。',
         input: '输入', interact: '互动', settings: '设置',
         inputTitle: '和{pet}说话', placeholder: '对{pet}说点什么…',
         mic: '语音输入', send: '发送', speaking: '正在听…',
@@ -321,20 +367,11 @@ window.__ModuleLoader__.load({
         thought: '（心里话）',
       },
       en: {
+        lang: 'en',
         pet: 'Tinglan', title: 'Famling · {pet}', close: 'Close',
         character: 'Character', characters: { human: 'Tinglan', cat: 'Selkirk Rex', dog: 'Golden Retriever' },
         content: 'Content', contentTitle: 'Content Center', contentEntry: 'Content & characters…',
-        contentTabs: { characters: 'Characters', voices: 'Voices', dialogue: 'Dialogue', themes: 'Themes', backgrounds: 'Background', fonts: 'Fonts' },
-        backgrounds: { transparent: 'Transparent', paper: 'Paper', dark: 'Dark' }, backgroundDescriptions: { transparent: 'Transparent backdrop', paper: 'Warm paper backdrop', dark: 'Dark backdrop' },
-        fonts: { system: 'System', serif: 'Serif', mono: 'Mono' }, fontDescriptions: { system: 'System UI local font stack', serif: 'Serif local font stack', mono: 'Monospace local font stack' },
-        fontSize: 'Size', lineHeight: 'Line height',
-        characterDescriptions: { human: 'Quiet, concise work companion', cat: 'Laid-back, aloof curly grey-white cat', dog: 'Friendly, enthusiastic Golden Retriever' },
-        current: 'Current', contentHint: 'Changes apply instantly, no page reload.',
-        contentExtension: 'Extension points are reserved (CONTENT_EXTENSION_POINTS, see docs/DETAIL.md and content-extension.mjs): future local/remote packs are validated as pure data - no network, no pack scripts, no HTML injection.',
-        voiceList: 'Voice (system)', voiceSystem: 'System default voice', voiceEmpty: 'The browser exposes no voices yet.',
-        voiceSilent: 'The Selkirk Rex cat and Golden Retriever only use silent thought bubbles; browser TTS is never called for them.',
-        dialogueModes: { standard: { name: 'Standard', desc: 'Full replies and bubbles' }, brief: { name: 'Brief', desc: 'Filters over-long replies' }, quiet: { name: 'Quiet', desc: 'Fewer ambient bubbles' } },
-        themes: { default: { name: 'Default', desc: 'White bubble with dark text' }, paper: { name: 'Paper', desc: 'Warm paper-toned bubbles' }, night: { name: 'Night', desc: 'Dark bubbles and panels' } },
+        contentLoading: 'Loading content center…', contentFailed: 'The content center failed to load; character and appearance settings still work.',
         input: 'Input', interact: 'Play', settings: 'Settings',
         inputTitle: 'Talk to {pet}', placeholder: 'Say something to {pet}…',
         mic: 'Voice input', send: 'Send', speaking: 'Listening…',
@@ -380,6 +417,7 @@ window.__ModuleLoader__.load({
       const [blink, setBlink] = useState(false)
       const [blinkStep, setBlinkStep] = useState(0)
       const [character, setCharacter] = useState(loadCharacter)
+      const [roleId, setRoleId] = useState(loadRoleId)
       const [bubble, setBubble] = useState('')
       const [bubbleKind, setBubbleKind] = useState('speech')
       const [input, setInput] = useState('')
@@ -396,7 +434,9 @@ window.__ModuleLoader__.load({
       const [animDataVersion, setAnimDataVersion] = useState(0)
       const [dialogueMode, setDialogueMode] = useState(loadDialogueMode)
       const [themeId, setThemeId] = useState(loadThemeId)
-      const [contentTab, setContentTab] = useState('characters')
+      const [contentTab, setContentTab] = useState('roles')
+      // idle -> ready/failed once the lazy content chunk settles.
+      const [contentState, setContentState] = useState('idle')
       const [voices, setVoices] = useState(availableVoices)
       const [backgroundId, setBackgroundId] = useState(loadBackgroundId)
       const [fontChoice, setFontChoice] = useState(loadFontChoice)
@@ -424,6 +464,11 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         try { localStorage.setItem(CHARACTER_KEY, character) } catch {}
       }, [character])
+      // dsh-famling/role records the active role bundle; a fresh load backfills
+      // it from the stored character so 0.9.x users get a role on first render.
+      useEffect(() => {
+        try { localStorage.setItem(ROLE_KEY, roleId) } catch {}
+      }, [roleId])
       useEffect(() => {
         try { localStorage.setItem(DIALOGUE_KEY, dialogueMode) } catch {}
       }, [dialogueMode])
@@ -437,7 +482,7 @@ window.__ModuleLoader__.load({
         try { localStorage.setItem(FONT_KEY, JSON.stringify(fontChoice)) } catch {}
       }, [fontChoice])
       useEffect(() => {
-        if (mode !== 'content' || contentTab !== 'voices') return undefined
+        if (mode !== 'content' || contentTab !== 'custom') return undefined
         const load = () => setVoices(availableVoices())
         load()
         const synthesis = typeof window !== 'undefined' ? window.speechSynthesis : null
@@ -540,6 +585,14 @@ window.__ModuleLoader__.load({
         requestCharacterChunk(character, () => { if (alive) setAnimDataVersion((value) => value + 1) })
         return () => { alive = false }
       }, [character])
+      // The content-center UI is a package-local lazy chunk: load it only when
+      // the panel opens, so the first-screen entry stays within its budget.
+      useEffect(() => {
+        if (mode !== 'content' || contentState !== 'idle') return undefined
+        let alive = true
+        requestContentChunk((module) => { if (alive) setContentState(module ? 'ready' : 'failed') })
+        return () => { alive = false }
+      }, [mode, contentState])
       useEffect(() => {
         if (mode === null) return undefined
         const onKey = (event) => { if (event.key === 'Escape') setMode(null) }
@@ -666,20 +719,46 @@ window.__ModuleLoader__.load({
           if (line) say(line, 'speech')
         }
       }
-      function selectCharacter(next) {
-        // Sprite chunks are lazy, so validity comes from the fixed id list; the
-        // selected character's chunk is requested by the loader effect below.
-        if (!CHARACTER_IDS.includes(next) || next === character) return
-        clearFollowUp()
-        setCharacter(next)
-        characterRef.current = next
-        setAnim('idle')
-        setFrameIndex(0)
-        setBlink(false)
-        setBlinkStep(0)
+      function setActiveCharacter(next) {
+        // Sprite chunks stay lazy: a role click requests only that role's chunk.
+        if (!CHARACTER_IDS.includes(next)) return
+        if (next !== characterRef.current) {
+          clearFollowUp()
+          setCharacter(next)
+          characterRef.current = next
+          setAnim('idle')
+          setFrameIndex(0)
+          setBlink(false)
+          setBlinkStep(0)
+        }
         if (!characterCanTts(next) && typeof window !== 'undefined' && 'speechSynthesis' in window) {
           try { window.speechSynthesis.cancel() } catch {}
         }
+      }
+      /** Apply one role bundle: character + voice policy + dialogue + look in one step. */
+      function applyRole(nextRole) {
+        const bundle = ROLE_BUNDLES[nextRole]
+        if (!bundle || bundle.available === false) return
+        setRoleId(nextRole)
+        setActiveCharacter(bundle.character)
+        setDialogueMode(bundle.dialogue)
+        setThemeId(bundle.theme)
+        setBackgroundId(bundle.background)
+        setFontChoice({ ...bundle.font })
+        const policy = bundle.voicePolicy
+        setSettings((value) => ({ ...value, sound: policy.canTts === true && policy.sound === true && ttsConsent, voiceURI: policy.voiceURI || '' }))
+      }
+      /** Restore the current role's preset for every overridable component. */
+      function restoreRole() {
+        const bundle = ROLE_BUNDLES[roleId]
+        if (!bundle) return
+        setActiveCharacter(bundle.character)
+        setDialogueMode(bundle.dialogue)
+        setThemeId(bundle.theme)
+        setBackgroundId(bundle.background)
+        setFontChoice({ ...bundle.font })
+        const policy = bundle.voicePolicy
+        setSettings((value) => ({ ...value, sound: policy.canTts === true && policy.sound === true && ttsConsent, voiceURI: policy.voiceURI || '' }))
       }
       function updateSetting(key) {
         if (key === 'sound' && !characterCanTts(character)) return
@@ -880,80 +959,30 @@ window.__ModuleLoader__.load({
           briefError ? h('div', { key: 'err', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, briefError) : null,
         ]),
       ]) : null
-      // Content center: the single UI entry for characters / voices / dialogue /
-      // themes. Every switch is local React state + localStorage - no page reload.
-      const contentCard = (key, active, onClick, children) => h('button', {
-        key, type: 'button', 'aria-pressed': active, onClick,
-        style: { ...buttonBase, display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 8px', marginBottom: 5, textAlign: 'left', border: active ? '1px solid var(--dsh-famling-accent, #7aa2ff)' : buttonBase.border },
-      }, children)
-      const currentMark = (active) => (active ? h('span', { key: 'mark', style: { flex: 'none', fontSize: 10, color: 'var(--dsh-famling-accent, #7aa2ff)' } }, '✓ ' + L.current) : null)
-      const cardText = (name, desc) => h('span', { key: 'text', style: { flex: 1, minWidth: 0 } }, [
-        h('strong', { key: 'name', style: { display: 'block' } }, name),
-        h('span', { key: 'desc', style: { display: 'block', fontSize: 11, lineHeight: 1.4, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, desc),
-      ])
-      const contentCards = {
-        characters: CHARACTER_IDS.map((id) => contentCard('character-' + id, character === id, () => selectCharacter(id), [
-          h('span', { key: 'avatar', 'aria-hidden': true, style: { flex: 'none', width: 24, textAlign: 'center', fontSize: 18 } }, CONTENT_AVATARS[id] || '•'),
-          cardText(L.characters[id] || id, (L.characterDescriptions || {})[id] || ''),
-          currentMark(character === id),
-        ])),
-        voices: [
-          canTts ? h('label', { key: 'sound', style: { display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer' } }, [
-            h('input', { type: 'checkbox', checked: settings.sound, onChange: () => updateSetting('sound') }),
-            h('span', null, L.sound),
-          ]) : h('p', { key: 'silent', style: { margin: '0 0 8px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.voiceSilent),
-          canTts && !ttsConsent ? h('p', { key: 'consent', style: { margin: '0 0 8px', fontSize: 11, lineHeight: 1.45, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.consentTts) : null,
-          canTts ? h('div', { key: 'list' }, [
-            h('div', { key: 'label', style: { marginBottom: 4 } }, L.voiceList),
-            voices.length > 0 ? h('select', {
-              key: 'select', value: settings.voiceURI || '', onChange: (event) => setSettings((value) => ({ ...value, voiceURI: event.target.value })),
-              style: { width: '100%', background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 5, font: 'inherit' },
-            }, [h('option', { key: 'auto', value: '' }, L.voiceSystem), ...voices.map((voice) => h('option', { key: voice.voiceURI, value: voice.voiceURI }, (voice.name || voice.voiceURI) + (voice.lang ? ' · ' + voice.lang : '')))]) : h('p', { key: 'empty', style: { margin: 0, fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.voiceEmpty),
-          ]) : null,
-        ],
-        dialogue: DIALOGUE_MODE_IDS.map((id) => contentCard('dialogue-' + id, dialogueMode === id, () => setDialogueMode(id), [
-          cardText(L.dialogueModes[id].name, L.dialogueModes[id].desc),
-          currentMark(dialogueMode === id),
-        ])),
-        themes: THEME_IDS.map((id) => contentCard('theme-' + id, themeId === id, () => setThemeId(id), [
-          h('span', { key: 'swatch', 'aria-hidden': true, style: { flex: 'none', width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(127,127,127,.55)', background: THEMES[id].vars['--dsh-famling-bubble-bg'] } }),
-          cardText(L.themes[id].name, L.themes[id].desc),
-          currentMark(themeId === id),
-        ])),
-        backgrounds: BACKGROUND_IDS.map((id) => contentCard('background-' + id, backgroundId === id, () => setBackgroundId(id), [
-          h('span', { key: 'swatch', 'aria-hidden': true, style: { flex: 'none', width: 18, height: 18, borderRadius: 4, border: '1px solid rgba(127,127,127,.55)', background: BACKGROUNDS[id].vars['--dsh-famling-widget-bg'] === 'transparent' ? 'repeating-linear-gradient(45deg, rgba(127,127,127,.4) 0 2px, transparent 2px 6px)' : BACKGROUNDS[id].vars['--dsh-famling-widget-bg'] } }),
-          cardText(L.backgrounds[id], (L.backgroundDescriptions || {})[id] || ''),
-          currentMark(backgroundId === id),
-        ])),
-        fonts: [
-          ...FONT_IDS.map((id) => contentCard('font-' + id, fontChoice.family === id, () => setFontChoice((value) => ({ ...value, family: id })), [
-            h('span', { key: 'aa', 'aria-hidden': true, style: { flex: 'none', width: 24, textAlign: 'center', fontFamily: FONTS[id].family, fontSize: 16 } }, 'Aa'),
-            cardText(L.fonts[id], (L.fontDescriptions || {})[id] || ''),
-            currentMark(fontChoice.family === id),
-          ])),
-          h('div', { key: 'size', style: { marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-            h('span', { key: 'label', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.fontSize),
-            ...FONT_SIZES.map((size) => h('button', { key: 'size-' + size, type: 'button', 'aria-pressed': fontChoice.size === size, onClick: () => setFontChoice((value) => ({ ...value, size })), style: { ...buttonBase, padding: '2px 7px', fontSize: 11, fontWeight: fontChoice.size === size ? 600 : 400 } }, size + 'px')),
-          ]),
-          h('div', { key: 'line', style: { marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-            h('span', { key: 'label', style: { fontSize: 11, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.lineHeight),
-            ...FONT_LINE_HEIGHTS.map((lineHeight) => h('button', { key: 'line-' + lineHeight, type: 'button', 'aria-pressed': fontChoice.lineHeight === lineHeight, onClick: () => setFontChoice((value) => ({ ...value, lineHeight })), style: { ...buttonBase, padding: '2px 7px', fontSize: 11, fontWeight: fontChoice.lineHeight === lineHeight ? 600 : 400 } }, String(lineHeight))),
-          ]),
-        ],
-      }
-      const contentPanel = mode === 'content' ? h('div', { role: 'dialog', 'aria-label': L.contentTitle, style: { ...panelStyle, width: 340, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(70vh, 560px)', overflowY: 'auto' } }, [
-        h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
-          h('strong', { key: 't', style: { flex: 1 } }, L.contentTitle),
-          h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
-        ]),
-        h('div', { key: 'tabs', role: 'tablist', style: { display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' } }, ['characters', 'voices', 'dialogue', 'themes', 'backgrounds', 'fonts'].map((id) => h('button', {
-          key: id, type: 'button', role: 'tab', 'aria-selected': contentTab === id, onClick: () => setContentTab(id),
-          style: { ...buttonBase, padding: '4px 8px', fontWeight: contentTab === id ? 600 : 400 },
-        }, L.contentTabs[id]))),
-        h('div', { key: 'body' }, contentCards[contentTab] || contentCards.characters),
-        h('p', { key: 'hint', style: { margin: '4px 0 0', fontSize: 10, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.contentHint),
-        h('p', { key: 'ext', style: { margin: '6px 0 0', paddingTop: 6, borderTop: '1px dashed var(--dsh-famling-panel-border, rgba(255,255,255,.22))', fontSize: 10, lineHeight: 1.45, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.contentExtension),
-      ]) : null
+      // Content center: the single UI entry for the four tabs (roles / customize /
+      // packs / market). Role application, persistence and all setters live here;
+      // the visual panel itself is the lazy client.content.js chunk.
+      const contentPanel = mode === 'content'
+        ? contentState === 'ready' && contentChunk.module
+          ? contentChunk.module.createContentCenter({
+              lang: L.lang,
+              tab: contentTab, setTab: setContentTab,
+              character, roleId, canTts, ttsConsent, voices, settings,
+              dialogueMode, themeId, backgroundId, fontChoice,
+              setSettings, setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
+              onToggleSound: () => updateSetting('sound'),
+              onApplyRole: applyRole, onRestoreRole: restoreRole,
+              onClose: () => setMode(null),
+              panelStyle, buttonBase, catalog: CONTENT_CATALOG,
+            })
+          : h('div', { role: 'dialog', 'aria-label': L.contentTitle, style: { ...panelStyle, width: 300 } }, [
+              h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
+                h('strong', { key: 't', style: { flex: 1 } }, L.contentTitle),
+                h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
+              ]),
+              h('p', { key: 'state', style: { margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, contentState === 'failed' ? L.contentFailed : L.contentLoading),
+            ])
+        : null
       const consentNode = consentKind ? h('div', {
         role: 'dialog', 'aria-modal': true, 'aria-label': consentKind === 'tts' ? L.sound : L.mic,
         style: {

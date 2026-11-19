@@ -10,10 +10,11 @@
  * require.async only when that character is displayed.
  *
  * This script prints raw/gzip/brotli bytes for the entry and every chunk plus the
- * three payload shapes that matter:
+ * payload shapes that matter:
  *   - initial:    client.js alone (what boot downloads before any pet render);
  *   - first paint: client.js + the default character chunk (usually human);
- *   - all lazy:   client.js + all three chunks (only after switching to every character).
+ *   - all lazy:   client.js + all three character chunks;
+ *   - content UI: client.content.js (role/customize/packs/market panel, only on open).
  *
  * Usage:
  *   node scripts/measure-bundle.mjs
@@ -58,10 +59,13 @@ export function measureBundle(pluginRoot = PLUGIN_ROOT, defaultCharacter = 'huma
   }
   const defaultChunk = chunks[defaultCharacter] || chunks[CHARACTERS[0]]
   const sum = (key) => entry[key] + CHARACTERS.reduce((total, kind) => total + chunks[kind][key], 0)
+  let content = null
+  try { content = { file: 'client.content.js', ...measureBytes(readFileSync(join(pluginRoot, 'client.content.js'))) } } catch {}
   return {
     pluginRoot,
     defaultCharacter,
     entry,
+    contentChunk: content,
     chunks,
     initial: entry,
     firstPaint: {
@@ -129,6 +133,7 @@ export function main(argv = process.argv.slice(2)) {
   console.log('[measure-bundle] pre-split baseline: ' + baseline.toLocaleString('en-US') + ' B (audit P1-2 snapshot)')
   console.log(row('client.js entry (initial payload)', measured.entry) + formatSavings(measured.entry.raw, baseline))
   for (const kind of CHARACTERS) console.log(row('lazy chunk ' + CHUNK_NAMES[kind], measured.chunks[kind]))
+  if (measured.contentChunk) console.log(row('lazy content UI chunk (on first open)', measured.contentChunk))
   console.log(row('first paint (+' + measured.defaultCharacter + ' chunk)', measured.firstPaint) + formatSavings(measured.firstPaint.raw, baseline))
   console.log(row('all three chunks loaded', measured.allLazy) + formatSavings(measured.allLazy.raw, baseline))
   console.log('[measure-bundle] chunk bytes are downloaded only when that character is shown; the entry no longer carries any base64 sprite payload')

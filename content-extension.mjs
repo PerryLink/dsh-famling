@@ -1,13 +1,17 @@
 /**
- * dsh-famling content extension points (reserved, schema version 2).
+ * dsh-famling content extension points (reserved, schema version 3).
  *
- * The content center ships bundled characters, browser voices, dialogue modes,
- * local CSS-variable themes, plain-CSS backgrounds and local font stacks. This
- * module is the public contract for a future local/remote content pack: it defines the entry schema for each kind and a
- * pure-data validator. Nothing here touches the network, the DOM, the file
- * system or any host API - callers own transport, storage and UI.
+ * The content center ships built-in role bundles (a role IS the theme bundle:
+ * character + voice policy + dialogue mode + theme + background + font). This
+ * module is the public, pure-data contract for a future local/remote content
+ * pack. It defines the pack/entry schema and a validator; nothing here touches
+ * the network, the DOM, the file system or any host API - callers own
+ * transport, storage and UI.
  *
  * Hard constraints (enforced by validateContentPack):
+ *   - every v3 pack must carry a usageDeclaration: researchOnly=true plus all
+ *     six prohibited-use tokens (emotional companionship / virtual partner /
+ *     professional advice / minor intimacy / impersonation / illegal use);
  *   - pure data: functions, symbols, bigints, undefined, non-finite numbers and
  *     non-plain objects are rejected;
  *   - length limits: pack <= 64 KiB of JSON, entries <= 32 (<= 16 per kind),
@@ -15,12 +19,13 @@
  *   - enums: kind/source/permission/preview/dialogue-mode values are closed
  *     sets; unknown fields are rejected in packs, entries, previews and apply;
  *   - path limits: image preview paths are relative, at most 3 segments, no
- *     "..", no absolute paths, no scheme, no backslashes, <= 160 chars, and
- *     must end in .png/.webp/.jpg;
+ *     '..', no absolute paths, no scheme, no backslashes, <= 160 chars, and
+ *     must end in .png/.webp/.jpg; asset-pack paths are relative, at most 6
+ *     segments, safe chars, <= 160 chars, and carry a sha256 hash;
  *   - CSS limits: theme variables must be named --dsh-famling-* and their
  *     values must be safe colors (hex / rgb()/hsl() / keyword) - no url(),
  *     @import, expression(), markup or control characters;
- *   - backgrounds: only { kind: "transparent" } or solid safe colors, never
+ *   - backgrounds: only { kind: 'transparent' } or solid safe colors, never
  *     images/gradients/URLs;
  *   - fonts: 1..8 unquoted local family names (letters/digits/space/dot/_/-),
  *     bounded size (10..24) / lineHeight (1..2.5); no quotes, url(), var(),
@@ -28,32 +33,53 @@
  *   - prototype-pollution guard: __proto__ / constructor / prototype keys are
  *     rejected anywhere in the tree;
  *   - remote packs stay disabled unless a future network-enabled host passes
- *     { allowRemote: true } explicitly. This package never fetches a pack URL.
- *
- * Applying a valid entry is always a data-only operation in the host UI: the
- * contract has no callbacks, no code strings and no HTML. A future loader must
- * resolve an entry's data itself and must not evaluate pack output.
+ *     { allowRemote: true } explicitly. This package never fetches a pack URL,
+ *     never loads an asset archive and never executes pack output. The
+ *     remoteCatalog field is metadata only and is reserved for a future host
+ *     catalog; the loader/UI is not implemented in this package.
  *
  * Import (Node / tooling):
  *   import { CONTENT_EXTENSION_POINTS, validateContentPack } from 'dsh-famling/content-extension'
  */
 
 /** Schema version of the pack document itself. */
-export const CONTENT_PACK_SCHEMA_VERSION = 2
+export const CONTENT_PACK_SCHEMA_VERSION = 3
 
-/** Closed entry-kind set shared with the bundled content center. */
-export const CONTENT_KINDS = ['character', 'voice', 'dialogue', 'theme', 'background', 'font']
+/** Closed entry-kind set shared with the bundled content center. Role is the
+ * bundle kind added by v3: its apply payload carries the six role components. */
+export const CONTENT_KINDS = ['role', 'character', 'voice', 'dialogue', 'theme', 'background', 'font']
 /** Entry sources. "remote" is reserved and rejected by default (see validator). */
 export const CONTENT_SOURCES = ['bundled', 'local', 'remote']
 /** Dialogue modes implemented by the bundled content center. */
 export const DIALOGUE_MODE_IDS = ['standard', 'brief', 'quiet']
 /** Local theme ids implemented by the bundled content center. */
 export const THEME_IDS = ['default', 'paper', 'night']
-/** Built-in character ids a character entry may select in this version. */
-export const CHARACTER_IDS = ['human', 'cat', 'dog']
+/** Built-in character/role bundle ids; origami is reserved until its art pack lands. */
+export const CHARACTER_IDS = ['human', 'cat', 'dog', 'origami']
+export const ROLE_BUNDLE_IDS = ['human', 'cat', 'dog', 'origami']
+/** Asset-pack container formats reserved by v3; they are never opened here. */
+export const ASSET_FORMATS = ['zip', 'folder']
+
+/**
+ * The six prohibited-use tokens every v3 pack must declare. A pack may order
+ * them freely, but it must list each token exactly once and may not add others.
+ */
+export const PROHIBITED_USES = Object.freeze([
+  'emotional-companionship',
+  'virtual-partner',
+  'professional-advice',
+  'minor-intimacy',
+  'impersonation',
+  'illegal-use',
+])
+export const USAGE_DECLARATION_TEMPLATE = Object.freeze({
+  researchOnly: true,
+  prohibitedUses: PROHIBITED_USES,
+})
 
 /** Permission tokens a pack/entry may declare. */
 export const CONTENT_PERMISSIONS = {
+  role: 'apply:role',
   character: 'select:character',
   voice: 'select:voice',
   dialogue: 'select:dialogue',
@@ -62,6 +88,7 @@ export const CONTENT_PERMISSIONS = {
   font: 'apply:font',
 }
 export const CONTENT_ENTRY_PERMISSIONS = [
+  'apply:role',
   'select:character',
   'select:voice',
   'select:dialogue',
@@ -82,6 +109,10 @@ export const CONTENT_LIMITS = Object.freeze({
   maxDescriptionChars: 240,
   maxTextChars: 280,
   maxPathChars: 160,
+  maxAssetPathChars: 160,
+  maxAssetFiles: 32,
+  maxAssetTotalBytes: 268435456,
+  maxCatalogUrlChars: 240,
   maxPermissions: 8,
   maxVars: 24,
   maxVarValueChars: 80,
@@ -97,33 +128,71 @@ const BAD_TEXT_RE = /[<>\u0000-\u001f\u007f]/
 const VAR_KEY_RE = /^--dsh-famling-[a-z0-9-]{1,32}$/
 const COLOR_RE = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla)\(\s*[0-9.%\s,\/-]{1,48}\)|[a-zA-Z]{2,24})$/
 const PATH_RE = /^[A-Za-z0-9_-][A-Za-z0-9_.\/-]{0,158}$/
+const SHA256_RE = /^[0-9a-f]{64}$/
+const ASSET_FILE_RE = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}\.[A-Za-z0-9]{1,8}$/
 const IMAGE_EXTENSIONS = ['.png', '.webp', '.jpg']
 
 /**
  * The extension-point document. Treat it as read-only: it is frozen at every
  * level that a pack author needs to introspect (version, transport flags, pack
- * schema, entry schema, validation rules).
+ * schema, entry schema, validation rules, reserved remote catalog).
  */
 export const CONTENT_EXTENSION_POINTS = Object.freeze({
   /** Contract revision; bump only with a documented migration. */
-  version: 2,
+  version: 3,
   /** "reserved" = schema published, no pack loader ships in this package yet. */
   status: 'reserved',
-  /** What the runtime guarantees. All flags are false by design. */
-  transport: Object.freeze({ network: false, execute: false, innerHTML: false, worker: false }),
+  /** What the runtime guarantees. Every flag is false by design. */
+  transport: Object.freeze({ network: false, execute: false, innerHTML: false, worker: false, assets: false }),
+  /** Built-in role bundle ids; origami is reserved until its art pack lands. */
+  roleBundles: ROLE_BUNDLE_IDS,
+  /** Top-level alias of pack.remoteCatalog: reserved metadata, never fetched. */
+  remoteCatalog: Object.freeze({
+    status: 'reserved',
+    fetched: false,
+    fields: ['status', 'url?'],
+    configKeys: ['dsh-famling/market/catalog', 'dsh-famling.market.catalogUrl'],
+  }),
   pack: Object.freeze({
     schemaVersion: CONTENT_PACK_SCHEMA_VERSION,
-    fields: ['schemaVersion', 'id', 'name', 'version', 'source', 'permissions', 'entries'],
+    fields: ['schemaVersion', 'id', 'name', 'version', 'source', 'usageDeclaration', 'entries'],
+    optionalFields: ['permissions', 'assets', 'remoteCatalog'],
     sources: CONTENT_SOURCES,
     limits: CONTENT_LIMITS,
     idPattern: PACK_ID_RE.source,
     versionPattern: VERSION_RE.source,
     idExample: 'com.example.warm-pack',
+    usageDeclaration: Object.freeze({
+      required: true,
+      researchOnly: true,
+      prohibitedUses: PROHIBITED_USES,
+      note: 'every pack (bundled/local/remote) must declare researchOnly=true and all six prohibited uses; a missing or mutated declaration is rejected',
+    }),
+    assets: Object.freeze({
+      supported: true,
+      loaded: false,
+      formats: ASSET_FORMATS,
+      fields: ['format', 'files', 'totalBytes?'],
+      fileFields: ['path', 'sha256', 'bytes?'],
+      hash: 'lower-case sha256 hex (64 chars)',
+      pathPolicy: 'relative only: at most 6 segments, no "..", no leading "/", no scheme/colon/backslash, <= ' + CONTENT_LIMITS.maxAssetPathChars + ' chars, file extension required',
+      note: 'asset archives are listed as data only; this package never opens, copies or executes them',
+    }),
+    remoteCatalog: Object.freeze({
+      status: 'reserved',
+      fetched: false,
+      fields: ['status', 'url?'],
+      statusValues: ['reserved'],
+      urlPolicy: 'https only, <= ' + CONTENT_LIMITS.maxCatalogUrlChars + ' chars, metadata only; never fetched by this package',
+      configKeys: ['dsh-famling/market/catalog', 'dsh-famling.market.catalogUrl'],
+    }),
   }),
   entry: Object.freeze({
     kinds: CONTENT_KINDS,
-    /** kind, id, name, preview, apply, source, permissions and version are required; description is optional. */
+    /** kind, id, name, preview, apply, source, permissions and version are required; description is optional; role entries also require compatibility. */
     fields: ['kind', 'id', 'name', 'description', 'preview', 'apply', 'source', 'permissions', 'version'],
+    roleFields: ['compatibility'],
+    optionalRoleFields: ['usageDeclaration'],
     idPattern: ENTRY_ID_RE.source,
     versionPattern: VERSION_RE.source,
     preview: Object.freeze({
@@ -134,6 +203,19 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
     permissions: CONTENT_ENTRY_PERMISSIONS,
     /** Per-kind data-only apply payloads. */
     schemas: Object.freeze({
+      role: Object.freeze({
+        apply: Object.freeze({
+          character: CHARACTER_IDS,
+          voicePolicy: Object.freeze({ canTts: 'boolean', mode: ['speech', 'thought'], optional: ['sound', 'voiceURI'] }),
+          dialogue: Object.freeze({ mode: DIALOGUE_MODE_IDS, optional: ['maxChars', 'bubbleChance'] }),
+          theme: '1..' + CONTENT_LIMITS.maxVars + ' safe --dsh-famling-* CSS color variables',
+          background: 'transparent or a safe solid color',
+          font: 'local font stack plus optional size 10..24 / lineHeight 1..2.5',
+        }),
+        compatibility: Object.freeze({ minPluginVersion: 'x.y.z', optional: ['maxPluginVersion'] }),
+        bundle: 'one role bundle = character + voicePolicy + dialogue + theme + background + font, applied atomically by the UI',
+        usageDeclaration: 'required at pack level; an optional per-role restatement is validated when present',
+      }),
       character: Object.freeze({ apply: Object.freeze({ character: CHARACTER_IDS }) }),
       voice: Object.freeze({ apply: Object.freeze({ voiceURI: '1..240 plain chars' }) }),
       dialogue: Object.freeze({
@@ -159,17 +241,21 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
     function: 'validateContentPack',
     pureData: true,
     allowRemoteByDefault: false,
+    loadsAssets: false,
+    fetchesCatalog: false,
     rejects: [
+      'missing/mutated usageDeclaration (researchOnly must be true; all six prohibited uses required)',
       'functions / symbols / bigints / undefined',
       'non-finite numbers',
       'unknown fields, kinds or permissions',
       'overlong strings, arrays or packs',
       'prototype keys (__proto__ / constructor / prototype)',
-      'path traversal, absolute paths and URLs',
+      'path traversal, absolute paths and URLs in previews/assets',
       'markup and control characters',
       'unsafe CSS values (url()/expression()/@import/...)',
       'remote sources without an explicit future opt-in',
-      'duplicate entry ids',
+      'duplicate entry ids or asset paths',
+      'invalid role bundles (missing component, mismatched voice policy, bad compatibility)',
     ],
   }),
 })
@@ -188,6 +274,25 @@ export function isSafeContentPath(value) {
   if (!PATH_RE.test(value) || value.startsWith('/') || value.includes('..') || value.includes('\\') || value.includes(':')) return false
   if (value.split('/').length > 3) return false
   return IMAGE_EXTENSIONS.some((extension) => value.toLowerCase().endsWith(extension))
+}
+
+/** Relative asset-pack path: data only, broader than an image preview. */
+export function isSafeAssetPath(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > CONTENT_LIMITS.maxAssetPathChars) return false
+  if (!PATH_RE.test(value) || value.startsWith('/') || value.includes('..') || value.includes('\\') || value.includes(':')) return false
+  const segments = value.split('/')
+  if (segments.length > 6) return false
+  return ASSET_FILE_RE.test(segments[segments.length - 1])
+}
+
+/** Reserved remote-catalog URL: absolute https only, metadata only, never fetched. */
+export function isSafeHttpsUrl(value) {
+  if (typeof value !== 'string' || value.length < 9 || value.length > CONTENT_LIMITS.maxCatalogUrlChars || BAD_TEXT_RE.test(value)) return false
+  if (!value.startsWith('https://')) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.username === '' && url.password === '' && url.hostname.includes('.')
+  } catch { return false }
 }
 
 /**
@@ -223,6 +328,7 @@ function scanData(value, depth, where, errors) {
     if (!Number.isFinite(value)) errors.push(where + ': non-finite number')
     return
   }
+  if (typeof value === 'boolean') return
   if (Array.isArray(value)) {
     if (value.length > CONTENT_LIMITS.maxArrayItems) errors.push(where + ': array longer than ' + CONTENT_LIMITS.maxArrayItems)
     value.forEach((item, index) => scanData(item, depth + 1, where + '[' + index + ']', errors))
@@ -251,6 +357,106 @@ function exactKeys(value, required, optional, where, errors) {
   const known = required.concat(optional)
   for (const key of Object.keys(value)) if (!known.includes(key)) errors.push(where + ': unknown field "' + key + '"')
   for (const key of required) if (!Object.prototype.hasOwnProperty.call(value, key)) errors.push(where + ': missing field "' + key + '"')
+}
+
+function versionTuple(value) {
+  const parts = value.split('.').map((part) => Number(part))
+  return parts.length === 3 && parts.every((part) => Number.isInteger(part)) ? parts : null
+}
+
+function versionLessOrEqual(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] < right[index]
+  }
+  return true
+}
+
+/** v3 pack-wide declaration: researchOnly plus every prohibited-use token. */
+function validateUsageDeclaration(value, where, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(where + ': must be a plain object')
+    return
+  }
+  exactKeys(value, ['researchOnly', 'prohibitedUses'], [], where, errors)
+  if (value.researchOnly !== true) errors.push(where + '.researchOnly: must be true (research/prototype use only)')
+  const uses = value.prohibitedUses
+  if (!Array.isArray(uses) || uses.length !== PROHIBITED_USES.length) {
+    errors.push(where + '.prohibitedUses: must list all ' + PROHIBITED_USES.length + ' prohibited uses exactly once')
+    return
+  }
+  const seen = new Set()
+  for (const token of uses) {
+    if (typeof token !== 'string' || !PROHIBITED_USES.includes(token)) {
+      errors.push(where + '.prohibitedUses: unknown token "' + String(token) + '"')
+      continue
+    }
+    if (seen.has(token)) errors.push(where + '.prohibitedUses: duplicate token "' + token + '"')
+    seen.add(token)
+  }
+  for (const token of PROHIBITED_USES) if (!seen.has(token)) errors.push(where + '.prohibitedUses: missing "' + token + '"')
+}
+
+/** Optional asset-pack manifest: listed and hashed, never opened by this package. */
+function validateAssets(value, where, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(where + ': must be a plain object')
+    return
+  }
+  exactKeys(value, ['format', 'files'], ['totalBytes'], where, errors)
+  if (!ASSET_FORMATS.includes(value.format)) errors.push(where + '.format: must be one of ' + ASSET_FORMATS.join('/'))
+  if (value.totalBytes !== undefined && (!Number.isInteger(value.totalBytes) || value.totalBytes < 0 || value.totalBytes > CONTENT_LIMITS.maxAssetTotalBytes)) {
+    errors.push(where + '.totalBytes: integer 0..' + CONTENT_LIMITS.maxAssetTotalBytes)
+  }
+  const files = value.files
+  if (!Array.isArray(files) || files.length === 0 || files.length > CONTENT_LIMITS.maxAssetFiles) {
+    errors.push(where + '.files: 1..' + CONTENT_LIMITS.maxAssetFiles + ' files')
+    return
+  }
+  const seen = new Set()
+  let sum = 0
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index]
+    const fileWhere = where + '.files[' + index + ']'
+    if (!isPlainObject(file)) {
+      errors.push(fileWhere + ': must be a plain object')
+      continue
+    }
+    exactKeys(file, ['path', 'sha256'], ['bytes'], fileWhere, errors)
+    if (!isSafeAssetPath(file.path)) errors.push(fileWhere + '.path: relative asset path with a file extension, no traversal/scheme/absolute path')
+    else if (seen.has(file.path)) errors.push(fileWhere + '.path: duplicate asset path "' + file.path + '"')
+    else seen.add(file.path)
+    if (typeof file.sha256 !== 'string' || !SHA256_RE.test(file.sha256)) errors.push(fileWhere + '.sha256: lower-case sha256 hex (64 chars)')
+    if (file.bytes !== undefined) {
+      if (!Number.isInteger(file.bytes) || file.bytes < 0 || file.bytes > CONTENT_LIMITS.maxAssetTotalBytes) errors.push(fileWhere + '.bytes: integer 0..' + CONTENT_LIMITS.maxAssetTotalBytes)
+      else sum += file.bytes
+    }
+  }
+  if (value.totalBytes !== undefined && sum > value.totalBytes) errors.push(where + '.totalBytes: smaller than the sum of file bytes')
+}
+
+/** Reserved remote catalog metadata. URLs are stored/validated, never fetched. */
+function validateRemoteCatalog(value, where, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(where + ': must be a plain object')
+    return
+  }
+  exactKeys(value, ['status'], ['url'], where, errors)
+  if (value.status !== 'reserved') errors.push(where + '.status: must be "reserved" in this version')
+  if (value.url !== undefined && !isSafeHttpsUrl(value.url)) errors.push(where + '.url: absolute https URL, metadata only (never fetched)')
+}
+
+/** Role bundle compatibility metadata (v0.10 role kind). */
+function validateCompatibility(value, where, errors) {
+  if (!isPlainObject(value)) {
+    errors.push(where + ': must be a plain object')
+    return
+  }
+  exactKeys(value, ['minPluginVersion'], ['maxPluginVersion'], where, errors)
+  const min = typeof value.minPluginVersion === 'string' && VERSION_RE.test(value.minPluginVersion) ? versionTuple(value.minPluginVersion) : null
+  const max = value.maxPluginVersion === undefined ? null : (typeof value.maxPluginVersion === 'string' && VERSION_RE.test(value.maxPluginVersion) ? versionTuple(value.maxPluginVersion) : undefined)
+  if (min === null) errors.push(where + '.minPluginVersion: semver x.y.z')
+  if (max === undefined || (value.maxPluginVersion !== undefined && max === null)) errors.push(where + '.maxPluginVersion: semver x.y.z')
+  if (min && max && !versionLessOrEqual(min, max)) errors.push(where + ': minPluginVersion must be <= maxPluginVersion')
 }
 
 /** Validate the data-only apply payload of one entry kind. */
@@ -303,6 +509,38 @@ function validateApply(kind, apply, where, errors) {
   }
 }
 
+/** Role kind: one atomic bundle = character + voicePolicy + dialogue + theme + background + font. */
+function validateRoleApply(apply, where, errors) {
+  exactKeys(apply, ['character', 'voicePolicy', 'dialogue', 'theme', 'background', 'font'], [], where, errors)
+  if (!CHARACTER_IDS.includes(apply.character)) errors.push(where + '.character: must be one of ' + CHARACTER_IDS.join('/'))
+  const voice = apply.voicePolicy
+  if (!isPlainObject(voice)) {
+    errors.push(where + '.voicePolicy: must be a plain object')
+  } else {
+    exactKeys(voice, ['canTts', 'mode'], ['sound', 'voiceURI'], where + '.voicePolicy', errors)
+    if (typeof voice.canTts !== 'boolean') errors.push(where + '.voicePolicy.canTts: boolean')
+    if (!['speech', 'thought'].includes(voice.mode)) errors.push(where + '.voicePolicy.mode: speech/thought')
+    if (typeof voice.canTts === 'boolean' && ['speech', 'thought'].includes(voice.mode) && voice.canTts !== (voice.mode === 'speech')) {
+      errors.push(where + '.voicePolicy: canTts must match mode (speech => true, thought => false)')
+    }
+    if (voice.sound !== undefined && typeof voice.sound !== 'boolean') errors.push(where + '.voicePolicy.sound: boolean')
+    if (voice.sound === true && voice.canTts !== true) errors.push(where + '.voicePolicy.sound: only allowed when canTts=true')
+    if (voice.voiceURI !== undefined && !isBoundedText(voice.voiceURI, 240)) errors.push(where + '.voicePolicy.voiceURI: 1..240 plain chars')
+  }
+  const dialogue = apply.dialogue
+  if (!isPlainObject(dialogue)) errors.push(where + '.dialogue: must be a plain object')
+  else validateApply('dialogue', dialogue, where + '.dialogue', errors)
+  const theme = apply.theme
+  if (!isPlainObject(theme)) errors.push(where + '.theme: must be a plain object')
+  else validateApply('theme', theme, where + '.theme', errors)
+  const background = apply.background
+  if (!isPlainObject(background)) errors.push(where + '.background: must be a plain object')
+  else validateApply('background', background, where + '.background', errors)
+  const font = apply.font
+  if (!isPlainObject(font)) errors.push(where + '.font: must be a plain object')
+  else validateApply('font', font, where + '.font', errors)
+}
+
 /** Validate one entry (schema fields + per-kind apply payload). */
 function validateEntry(entry, index, packSource, errors) {
   const where = 'entries[' + index + ']'
@@ -310,7 +548,13 @@ function validateEntry(entry, index, packSource, errors) {
     errors.push(where + ': must be a plain object')
     return
   }
-  exactKeys(entry, ['kind', 'id', 'name', 'preview', 'apply', 'source', 'permissions', 'version'], ['description'], where, errors)
+  const required = ['kind', 'id', 'name', 'preview', 'apply', 'source', 'permissions', 'version']
+  const optional = ['description']
+  if (entry.kind === 'role') {
+    required.push('compatibility')
+    optional.push('usageDeclaration')
+  }
+  exactKeys(entry, required, optional, where, errors)
   const kind = entry.kind
   if (!CONTENT_KINDS.includes(kind)) {
     errors.push(where + '.kind: must be one of ' + CONTENT_KINDS.join('/'))
@@ -332,6 +576,10 @@ function validateEntry(entry, index, packSource, errors) {
       if (!CONTENT_ENTRY_PERMISSIONS.includes(permission)) errors.push(where + '.permissions: unknown permission "' + String(permission) + '"')
     }
   }
+  if (kind === 'role') {
+    validateCompatibility(entry.compatibility, where + '.compatibility', errors)
+    if (entry.usageDeclaration !== undefined) validateUsageDeclaration(entry.usageDeclaration, where + '.usageDeclaration', errors)
+  }
   const preview = entry.preview
   if (!isPlainObject(preview)) errors.push(where + '.preview: must be a plain object')
   else if (!['glyph', 'text', 'color', 'image'].includes(preview.kind)) errors.push(where + '.preview.kind: unsupported preview kind')
@@ -351,12 +599,14 @@ function validateEntry(entry, index, packSource, errors) {
     errors.push(where + '.apply: must be a plain object')
     return
   }
-  validateApply(kind, apply, where + '.apply', errors)
+  if (kind === 'role') validateRoleApply(apply, where + '.apply', errors)
+  else validateApply(kind, apply, where + '.apply', errors)
 }
 
 /**
  * Validate a future content pack. Pure data in, error list out - never throws
- * for malformed input, never executes or resolves anything.
+ * for malformed input, never executes or resolves anything, never fetches the
+ * remote catalog and never opens an asset archive.
  *
  * @param {unknown} pack Candidate pack document (see CONTENT_EXTENSION_POINTS.pack).
  * @param {{ allowRemote?: boolean }} [options] Remote sources are rejected by default.
@@ -366,13 +616,16 @@ export function validateContentPack(pack, options = {}) {
   const errors = []
   scanData(pack, 0, 'pack', errors)
   if (!isPlainObject(pack)) return { ok: false, errors: errors.length > 0 ? errors : ['pack: must be a plain object'] }
-  exactKeys(pack, ['schemaVersion', 'id', 'name', 'version', 'source', 'entries'], ['permissions'], 'pack', errors)
+  exactKeys(pack, ['schemaVersion', 'id', 'name', 'version', 'source', 'usageDeclaration', 'entries'], ['permissions', 'assets', 'remoteCatalog'], 'pack', errors)
   if (pack.schemaVersion !== CONTENT_PACK_SCHEMA_VERSION) errors.push('pack.schemaVersion: must be ' + CONTENT_PACK_SCHEMA_VERSION)
   if (typeof pack.id !== 'string' || !PACK_ID_RE.test(pack.id)) errors.push('pack.id: must match the pack id pattern')
   if (!isBoundedText(pack.name, CONTENT_LIMITS.maxNameChars)) errors.push('pack.name: 1..' + CONTENT_LIMITS.maxNameChars + ' plain chars')
   if (typeof pack.version !== 'string' || !VERSION_RE.test(pack.version)) errors.push('pack.version: semver x.y.z')
   if (!CONTENT_SOURCES.includes(pack.source)) errors.push('pack.source: must be one of ' + CONTENT_SOURCES.join('/'))
   else if (pack.source === 'remote' && options.allowRemote !== true) errors.push('pack.source: remote packs are reserved; a future host must opt in with { allowRemote: true }')
+  validateUsageDeclaration(pack.usageDeclaration, 'pack.usageDeclaration', errors)
+  if (pack.assets !== undefined) validateAssets(pack.assets, 'pack.assets', errors)
+  if (pack.remoteCatalog !== undefined) validateRemoteCatalog(pack.remoteCatalog, 'pack.remoteCatalog', errors)
   if (pack.permissions !== undefined) {
     if (!Array.isArray(pack.permissions) || pack.permissions.length > CONTENT_LIMITS.maxPermissions) errors.push('pack.permissions: array of at most ' + CONTENT_LIMITS.maxPermissions)
     else for (const permission of pack.permissions) if (!CONTENT_ENTRY_PERMISSIONS.includes(permission)) errors.push('pack.permissions: unknown permission "' + String(permission) + '"')
@@ -403,8 +656,9 @@ export function validateContentPack(pack, options = {}) {
 }
 
 /**
- * A valid minimal pack (useful for docs/tests and as a starting point for a
- * future local pack). It declares one theme entry and never gets auto-loaded.
+ * A valid minimal v3 pack (useful for docs/tests and as a starting point for a
+ * future local pack). It declares one role bundle and one theme entry, a
+ * complete usageDeclaration, and never gets auto-loaded.
  */
 export const CONTENT_PACK_EXAMPLE = Object.freeze({
   schemaVersion: CONTENT_PACK_SCHEMA_VERSION,
@@ -412,8 +666,29 @@ export const CONTENT_PACK_EXAMPLE = Object.freeze({
   name: 'Warm Example',
   version: '1.0.0',
   source: 'local',
-  permissions: ['apply:theme', 'store:selection'],
+  usageDeclaration: Object.freeze({ researchOnly: true, prohibitedUses: PROHIBITED_USES }),
+  permissions: ['apply:role', 'apply:theme', 'store:selection'],
   entries: [
+    {
+      kind: 'role',
+      id: 'warm-human',
+      name: 'Warm Human',
+      description: 'Example role bundle: six components applied atomically',
+      version: '1.0.0',
+      source: 'local',
+      preview: { kind: 'glyph', value: '🧑' },
+      permissions: ['apply:role', 'store:selection'],
+      compatibility: { minPluginVersion: '0.10.0' },
+      usageDeclaration: { researchOnly: true, prohibitedUses: PROHIBITED_USES },
+      apply: {
+        character: 'human',
+        voicePolicy: { canTts: true, mode: 'speech', sound: true },
+        dialogue: { mode: 'standard' },
+        theme: { variables: { '--dsh-famling-bubble-bg': '#fff3cd', '--dsh-famling-bubble-text': '#3b2f24' } },
+        background: { kind: 'transparent' },
+        font: { family: 'system-ui, sans-serif', size: 12, lineHeight: 1.5 },
+      },
+    },
     {
       kind: 'theme',
       id: 'warm',

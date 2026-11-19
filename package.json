@@ -1,17 +1,19 @@
 {
   "name": "dsh-famling",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "private": false,
   "type": "module",
   "scripts": {
     "test": "node --test test/*.test.js",
+    "check": "node scripts/embed-anims.mjs --check",
+    "verify": "node scripts/verify-anims.mjs",
     "embed:anims": "node scripts/embed-anims.mjs",
     "check:anims": "node scripts/embed-anims.mjs --check",
     "verify:anims": "node scripts/verify-anims.mjs",
     "measure:bundle": "node scripts/measure-bundle.mjs",
     "qa:anims": "node scripts/embed-anims.mjs --qa"
   },
-  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations, a content center (characters / voices / dialogue / themes / backgrounds / fonts), region-aware interactions, chat personas, and a reserved third-party content-pack contract.",
+  "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Selkirk Rex cat / Golden Retriever pixel animations, a role-as-theme content center (roles / customize / packs / market), region-aware interactions, chat personas, and a reserved v3 third-party content-pack contract with a mandatory research-only usage declaration.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "exports": {
     ".": "./index.js",
@@ -26,6 +28,7 @@
     "client.anims.human.js",
     "client.anims.cat.js",
     "client.anims.dog.js",
+    "client.content.js",
     "content-extension.mjs",
     "cordis.patch.yml",
     "locale/*.json",

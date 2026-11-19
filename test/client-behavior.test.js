@@ -172,6 +172,7 @@ function createHarness(options = {}) {
   storage.set('dsh-famling/settings', JSON.stringify({ sound: true, motion: false, bubble: true, ...(options.settings || {}) }))
   storage.set('dsh-famling/consent/v1', JSON.stringify({ tts: true, asr: false, ...(options.consent || {}) }))
   if (options.character) storage.set('dsh-famling/character', options.character)
+  if (options.role) storage.set('dsh-famling/role', options.role)
   if (options.dialogue) storage.set('dsh-famling/dialogue', options.dialogue)
   if (options.theme) storage.set('dsh-famling/theme', options.theme)
   if (options.background) storage.set('dsh-famling/background', options.background)
@@ -246,8 +247,22 @@ function createHarness(options = {}) {
     if (name !== 'react') throw new Error('unexpected require: ' + name)
     return React.api
   }
+  const asyncCalls = []
   requireModule.async = (spec) => {
     const fileName = String(spec).replace(/^\.\//, '')
+    asyncCalls.push(fileName)
+    if (fileName === 'client.content.js') {
+      if (options.failContentChunk) {
+        return { then(resolve, reject) { reject(new Error('simulated missing content chunk: ' + fileName)) } }
+      }
+      if (!chunkDefinitions.has(fileName)) {
+        const chunkSource = readFileSync(join(dirname(CLIENT_PATH), fileName), 'utf8')
+        vm.runInContext(chunkSource, sandbox, { filename: fileName })
+      }
+      const contentRegistration = chunkDefinitions.get(fileName)
+      assert.ok(contentRegistration, 'content chunk registered: ' + fileName)
+      return { then(resolve) { resolve(contentRegistration.factory(requireModule)) } }
+    }
     if (!/^client\.anims\.(human|cat|dog)\.js$/.test(fileName)) throw new Error('unexpected async chunk: ' + spec)
     if (Array.isArray(options.failChunks) && options.failChunks.includes(fileName)) {
       return { then(resolve, reject) { reject(new Error('simulated missing lazy chunk: ' + fileName)) } }
@@ -274,7 +289,7 @@ function createHarness(options = {}) {
   assert.equal(typeof Component, 'function', 'FamlingFooter is registered into the sidebar footer slot')
   const ui = createUi(Component, React)
   ui.render()
-  return { ui, speech, fetchCalls, storage, timers, module: moduleObject, setRandom(fn) { random.fn = fn } }
+  return { ui, speech, fetchCalls, storage, timers, asyncCalls, module: moduleObject, setRandom(fn) { random.fn = fn } }
 }
 
 function idleSrc(kind) {
@@ -389,25 +404,86 @@ test('settings only links to the content center and keeps the other toggles', ()
   assert.ok(contentDialog(ui), 'content center opens from the settings entry')
 })
 
-test('content center cards switch the Selkirk Rex cat instantly with a current marker', () => {
+test('content center exposes exactly four first-level tabs: roles / customize / packs / market', () => {
+  const { ui } = createHarness()
+  openContent(ui, '角色')
+  const tabs = ui.findAll((node) => node.type === 'button' && node.props.role === 'tab').map((node) => ui.text(node))
+  assert.deepEqual(tabs, ['角色', '自定义', '内容包', '市场'], 'four first-level tabs only')
+  assert.ok(ui.text(contentDialog(ui)).includes('角色就是主题'), 'the role-is-theme model is explained')
+  assert.ok(ui.text(contentDialog(ui)).includes('声音: 浏览器 TTS'), 'role card shows the voice summary')
+  assert.ok(ui.text(contentDialog(ui)).includes('外观: 默认 / 透明 / 系统'), 'role card shows the appearance summary')
+  for (const oldTab of ['声音', '对话', '主题', '背景', '字体']) {
+    const row = ui.findAll((node) => node.type === 'button' && node.props.role === 'tab' && ui.text(node) === oldTab)
+    assert.equal(row.length, 0, 'old six-category tab is gone: ' + oldTab)
+  }
+})
+
+test('English content center localizes the four tabs, role apply action and market placeholder', () => {
+  const { ui } = createHarness({ language: 'en-US' })
+  ui.clickExact('Content')
+  ui.render()
+  const tabs = ui.findAll((node) => node.type === 'button' && node.props.role === 'tab').map((node) => ui.text(node))
+  assert.deepEqual(tabs, ['Roles', 'Customize', 'Packs', 'Market'], 'English first-level tabs')
+  assert.ok(ui.findButtonByAria('Apply role Tinglan'), 'English one-click apply label')
+  ui.clickExact('Market')
+  ui.render()
+  const dialog = ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === 'Content Center')[0]
+  assert.ok(dialog, 'English content panel is open')
+  assert.ok(ui.text(dialog).includes('remote market interface is reserved'), 'English market placeholder')
+  assert.ok(ui.text(dialog).includes('catalogUrl'), 'English catalog field remains reserved')
+})
+test('one-click role applies character + voice policy + dialogue + theme/background/font together', () => {
   const { ui, speech, storage } = createHarness()
   openContent(ui, '角色')
-  const dialog = contentDialog(ui)
-  assert.ok(dialog, 'content center panel is open')
-  for (const tab of ['角色', '声音', '对话', '主题', '背景', '字体']) assert.ok(ui.findButtonExact(tab), 'category tab: ' + tab)
-  assert.ok(ui.text(dialog).includes('CONTENT_EXTENSION_POINTS'), 'extension contract is named in the panel')
-  assert.equal(ui.findButton('汀岚').props['aria-pressed'], true, 'current character card is marked')
-  assert.equal(ui.findButton('塞尔凯克卷毛猫').props['aria-pressed'], false)
-  ui.click(ui.findButton('塞尔凯克卷毛猫'))
+  assert.ok(ui.text(contentDialog(ui)).includes('✓ 当前'), 'the current role is marked')
+  assert.equal(ui.findButtonByAria('一键应用 汀岚').props['aria-pressed'] === undefined, true, 'apply buttons carry a stable aria label')
+  ui.click(ui.findButtonByAria('一键应用 塞尔凯克卷毛猫'))
   ui.render()
-  assert.equal(ui.tree.props['data-character'], 'cat')
-  assert.equal(ui.findPetButton().props['aria-label'], '塞尔凯克卷毛猫', 'pet aria-label uses the Selkirk Rex name')
-  assert.equal(petImage(ui).props.src, idleSrc('cat'))
+  assert.equal(ui.tree.props['data-character'], 'cat', 'character component applied')
+  assert.equal(storage.get('dsh-famling/role'), 'cat', 'role bundle persisted')
   assert.equal(storage.get('dsh-famling/character'), 'cat')
-  assert.equal(ui.findButton('塞尔凯克卷毛猫').props['aria-pressed'], true, 'current marker moved to the cat')
-  assert.equal(speech.speak.length, 0)
-  assert.ok(speech.cancel >= 1, 'switching to a silent character cancels browser speech')
-  assert.ok(contentDialog(ui), 'panel stays open (state switch, no page reload)')
+  assert.equal(storage.get('dsh-famling/dialogue'), 'brief', 'dialogue component applied')
+  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'theme component applied')
+  assert.equal(storage.get('dsh-famling/background'), 'paper', 'background component applied')
+  assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'serif', size: 12, lineHeight: 1.5 }, 'font component applied')
+  assert.equal(ui.tree.props.style['--dsh-famling-bubble-bg'], '#fff8ec', 'paper bubble variable is live')
+  assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#f6f1e7', 'paper backdrop variable is live')
+  assert.match(ui.tree.props.style['--dsh-famling-font-family'], /Georgia/, 'serif font variable is live')
+  assert.equal(ui.findPetButton().props['aria-label'], '塞尔凯克卷毛猫')
+  assert.equal(petImage(ui).props.src, idleSrc('cat'))
+  assert.equal(speech.speak.length, 0, 'a silent role policy never speaks')
+  assert.ok(speech.cancel >= 1, 'switching to a silent role cancels browser speech')
+  assert.ok(ui.text(contentDialog(ui)).includes('✓ 当前'), 'the current marker moves with the bundle')
+})
+
+test('one-click role applies the voice policy without bypassing the TTS consent gate', () => {
+  const consented = createHarness()
+  openContent(consented.ui, '角色')
+  consented.ui.click(consented.ui.findButtonByAria('一键应用 塞尔凯克卷毛猫'))
+  consented.ui.render()
+  assert.equal(JSON.parse(consented.storage.get('dsh-famling/settings')).sound, false, 'a silent role turns sound off')
+  consented.ui.click(consented.ui.findButtonByAria('一键应用 汀岚'))
+  consented.ui.render()
+  assert.equal(JSON.parse(consented.storage.get('dsh-famling/settings')).sound, true, 'a speech role turns sound on when TTS is consented')
+  const noConsent = createHarness({ consent: { tts: false } })
+  openContent(noConsent.ui, '角色')
+  noConsent.ui.click(noConsent.ui.findButtonByAria('一键应用 塞尔凯克卷毛猫'))
+  noConsent.ui.render()
+  noConsent.ui.click(noConsent.ui.findButtonByAria('一键应用 汀岚'))
+  noConsent.ui.render()
+  assert.equal(JSON.parse(noConsent.storage.get('dsh-famling/settings')).sound, false, 'the consent gate is never bypassed')
+})
+test('role cards keep glyph avatars and do not preload other animation chunks', () => {
+  const { ui, asyncCalls } = createHarness()
+  openContent(ui, '角色')
+  const animCalls = asyncCalls.filter((name) => name.startsWith('client.anims.'))
+  assert.deepEqual(animCalls, ['client.anims.human.js'], 'only the current role chunk is loaded before applying a role')
+  assert.ok(asyncCalls.includes('client.content.js'), 'the content-center UI chunk loads on first open')
+  assert.equal(ui.findAll((node) => node.type === 'span' && node.props['aria-hidden'] === true && ['🧑', '🐱', '🐶'].includes(ui.text(node))).length >= 3, true, 'role cards keep their glyph avatars')
+  ui.click(ui.findButtonByAria('一键应用 金毛'))
+  ui.render()
+  assert.ok(asyncCalls.includes('client.anims.dog.js'), 'the applied role chunk is lazy-loaded')
+  assert.equal(asyncCalls.includes('client.anims.cat.js'), false, 'unapplied role chunks stay unloaded')
 })
 
 test('cat menu is species-specific (no ball/fetch actions) and bubbles stay silent thoughts', () => {
@@ -513,7 +589,7 @@ test('chat bridge sends the active character so the Host can switch personas', a
     ui.render()
     ui.clickExact('角色')
     ui.render()
-    ui.click(ui.findButton(name))
+    ui.click(ui.findButtonByAria('一键应用 ' + name))
     ui.render()
     ui.clickExact('内容')
     ui.render()
@@ -724,7 +800,7 @@ test('content center voices tab lists speechSynthesis voices, persists the choic
     { voiceURI: 'voice-beta', name: 'Beta', lang: 'en-US' },
   ]
   const { ui, speech, storage } = createHarness({ voices })
-  openContent(ui, '声音')
+  openContent(ui, '自定义')
   const select = ui.findAll((node) => node.type === 'select')[0]
   assert.ok(select, 'voice select renders from speechSynthesis.getVoices()')
   assert.deepEqual(select.children.filter((node) => node && node.type === 'option').map((node) => node.props.value), ['', 'voice-alpha', 'voice-beta'])
@@ -743,7 +819,7 @@ test('content center voices tab lists speechSynthesis voices, persists the choic
 
 test('cat/dog content voices tab shows the thought-bubble policy instead of TTS controls', () => {
   const { ui } = createHarness({ character: 'cat', voices: [{ voiceURI: 'voice-alpha', name: 'Alpha', lang: 'zh-CN' }] })
-  openContent(ui, '声音')
+  openContent(ui, '自定义')
   assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 0, 'no TTS toggle for cat')
   assert.equal(ui.findAll((node) => node.type === 'select').length, 0, 'no voice list for cat')
   assert.ok(ui.findAll((node) => node.type === 'p').some((node) => ui.text(node).includes('没有语音')), 'silent policy note is shown')
@@ -751,12 +827,12 @@ test('cat/dog content voices tab shows the thought-bubble policy instead of TTS 
 
 test('brief dialogue mode filters over-long replies and persists the mode', async () => {
   const { ui, storage } = createHarness({ reply: '回'.repeat(150) })
-  openContent(ui, '对话')
-  assert.equal(ui.findButton('标准').props['aria-pressed'], true, 'standard is the default mode')
-  ui.click(ui.findButton('简短'))
+  openContent(ui, '自定义')
+  assert.equal(ui.findButtonByAria('对话 · 标准').props['aria-pressed'], true, 'standard is the default mode')
+  ui.click(ui.findButtonByAria('对话 · 简短'))
   ui.render()
   assert.equal(storage.get('dsh-famling/dialogue'), 'brief', 'dialogue mode persisted')
-  assert.equal(ui.findButton('简短').props['aria-pressed'], true, 'brief is marked as current')
+  assert.equal(ui.findButtonByAria('对话 · 简短').props['aria-pressed'], true, 'brief is marked as current')
   ui.clickExact('内容')
   ui.render()
   ui.clickText('输入')
@@ -796,17 +872,17 @@ test('quiet dialogue mode lowers ambient bubble probability while direct replies
 
 test('content center themes apply default/paper/night through widget CSS variables and persist', () => {
   const { ui, storage } = createHarness()
-  openContent(ui, '主题')
+  openContent(ui, '自定义')
   const rootStyle = () => ui.tree.props.style
   assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#ffffff', 'default white bubble variable')
   assert.equal(rootStyle()['--dsh-famling-bubble-text'], '#111111', 'default dark text variable')
-  assert.equal(ui.findButton('默认').props['aria-pressed'], true)
-  ui.click(ui.findButton('纸张'))
+  assert.equal(ui.findButtonByAria('气泡 / 面板主题 · 默认').props['aria-pressed'], true)
+  ui.click(ui.findButtonByAria('气泡 / 面板主题 · 纸张'))
   ui.render()
   assert.equal(storage.get('dsh-famling/theme'), 'paper', 'theme persisted')
   assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#fff8ec')
   assert.match(contentDialog(ui).props.style.background, /var\(--dsh-famling-panel-bg/, 'panel painted from the theme variable')
-  ui.click(ui.findButton('夜间'))
+  ui.click(ui.findButtonByAria('气泡 / 面板主题 · 夜间'))
   ui.render()
   assert.equal(storage.get('dsh-famling/theme'), 'night')
   assert.equal(rootStyle()['--dsh-famling-bubble-bg'], '#1b2433', 'night bubble variable')
@@ -822,10 +898,10 @@ test('content center themes apply default/paper/night through widget CSS variabl
 
 test('content center background tab applies a local CSS backdrop and persists it', () => {
   const { ui, storage } = createHarness()
-  openContent(ui, '背景')
-  assert.equal(ui.findButton('透明').props['aria-pressed'], true, 'transparent is the default backdrop')
+  openContent(ui, '自定义')
+  assert.equal(ui.findButtonByAria('背景 · 透明').props['aria-pressed'], true, 'transparent is the default backdrop')
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], 'transparent')
-  ui.click(ui.findButton('纸张'))
+  ui.click(ui.findButtonByAria('背景 · 纸张'))
   ui.render()
   assert.equal(storage.get('dsh-famling/background'), 'paper', 'background persisted')
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#f6f1e7')
@@ -840,28 +916,28 @@ test('content center background tab applies a local CSS backdrop and persists it
   assert.match(ui.findBubble().props.style.boxShadow, /var\(--dsh-famling-widget-bg/, 'bubble backdrop ring uses the background variable')
   ui.clickExact('内容')
   ui.render()
-  ui.click(ui.findButton('暗色'))
+  ui.click(ui.findButtonByAria('背景 · 暗色'))
   ui.render()
   assert.equal(storage.get('dsh-famling/background'), 'dark')
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#14161a')
   assert.equal(ui.tree.props.style['--dsh-famling-widget-fg'], '#e8eaf0')
-  ui.click(ui.findButton('透明'))
+  ui.click(ui.findButtonByAria('背景 · 透明'))
   ui.render()
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], 'transparent')
 })
 
 test('content center font tab applies local stacks, size and line height and persists them', () => {
   const { ui, storage } = createHarness()
-  openContent(ui, '字体')
-  assert.equal(ui.findButton('系统').props['aria-pressed'], true, 'system font stack by default')
+  openContent(ui, '自定义')
+  assert.equal(ui.findButtonByAria('字体 · 系统').props['aria-pressed'], true, 'system font stack by default')
   assert.match(ui.tree.props.style['--dsh-famling-font-family'], /system-ui/)
-  ui.click(ui.findButton('衬线'))
+  ui.click(ui.findButtonByAria('字体 · 衬线'))
   ui.render()
   assert.equal(JSON.parse(storage.get('dsh-famling/font')).family, 'serif')
   assert.match(ui.tree.props.style['--dsh-famling-font-family'], /Georgia/)
-  ui.click(ui.findButtonExact('14px'))
+  ui.click(ui.findButtonByAria('字号 14px'))
   ui.render()
-  ui.click(ui.findButtonExact('1.8'))
+  ui.click(ui.findButtonByAria('行高 1.8'))
   ui.render()
   assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'serif', size: 14, lineHeight: 1.8 })
   assert.equal(ui.tree.props.style['--dsh-famling-font-size'], '14px')
@@ -879,6 +955,84 @@ test('content center font tab applies local stacks, size and line height and per
   assert.match(bubble.props.style.lineHeight, /var\(--dsh-famling-line-height/)
 })
 
+test('custom controls override only the current role combination and restore the role preset', () => {
+  const { ui, storage } = createHarness()
+  openContent(ui, '角色')
+  ui.click(ui.findButtonByAria('一键应用 金毛'))
+  ui.render()
+  assert.equal(storage.get('dsh-famling/role'), 'dog')
+  ui.clickExact('自定义')
+  ui.render()
+  assert.ok(ui.text(contentDialog(ui)).includes('仅修改当前角色的搭配'), 'custom tab explains component-only overrides')
+  assert.ok(ui.text(contentDialog(ui)).includes('角色预设'), 'the current combination starts as the role preset')
+  ui.click(ui.findButtonByAria('气泡 / 面板主题 · 纸张'))
+  ui.render()
+  assert.equal(storage.get('dsh-famling/theme'), 'paper', 'component override persisted')
+  assert.equal(storage.get('dsh-famling/role'), 'dog', 'role id stays untouched by a component override')
+  assert.equal(ui.tree.props['data-character'], 'dog', 'character stays untouched by a component override')
+  assert.ok(ui.text(contentDialog(ui)).includes('已自定义'), 'customized state is shown')
+  ui.clickExact('恢复角色默认')
+  ui.render()
+  assert.equal(storage.get('dsh-famling/theme'), 'night', 'role theme preset restored')
+  assert.equal(storage.get('dsh-famling/background'), 'dark', 'role background preset restored')
+  assert.deepEqual(JSON.parse(storage.get('dsh-famling/font')), { family: 'mono', size: 12, lineHeight: 1.5 }, 'role font preset restored')
+  assert.ok(ui.text(contentDialog(ui)).includes('角色预设'), 'restored state is the role preset again')
+})
+
+test('dsh-famling/role backfills the bundle on load while explicit component keys still win', () => {
+  const legacy = createHarness({ character: 'dog' })
+  assert.equal(legacy.ui.tree.props['data-character'], 'dog')
+  assert.equal(legacy.storage.get('dsh-famling/role'), 'dog', 'role key backfilled from an existing character key')
+  assert.equal(legacy.storage.get('dsh-famling/dialogue'), 'standard')
+  assert.equal(legacy.storage.get('dsh-famling/theme'), 'night')
+  assert.equal(legacy.storage.get('dsh-famling/background'), 'dark')
+  assert.deepEqual(JSON.parse(legacy.storage.get('dsh-famling/font')), { family: 'mono', size: 12, lineHeight: 1.5 })
+  const roleOnly = createHarness({ role: 'cat' })
+  assert.equal(roleOnly.ui.tree.props['data-character'], 'cat', 'character backfilled from the role bundle')
+  assert.equal(roleOnly.storage.get('dsh-famling/character'), 'cat', 'character key persisted from the bundle')
+  assert.equal(roleOnly.storage.get('dsh-famling/dialogue'), 'brief')
+  assert.equal(roleOnly.storage.get('dsh-famling/theme'), 'paper')
+  assert.equal(roleOnly.storage.get('dsh-famling/background'), 'paper')
+  const overridden = createHarness({ role: 'cat', theme: 'night' })
+  assert.equal(overridden.ui.tree.props.style['--dsh-famling-bubble-bg'], '#1b2433', 'an explicit component key wins over the role bundle')
+  assert.equal(overridden.storage.get('dsh-famling/role'), 'cat', 'the role id is preserved')
+})
+
+test('content pack tab shows the built-in pack, declaration check and reserved asset import without network', () => {
+  const { ui, fetchCalls } = createHarness()
+  openContent(ui, '内容包')
+  const text = ui.text(contentDialog(ui))
+  assert.ok(text.includes('内置角色主题包'), 'bundled content pack is listed')
+  assert.ok(text.includes('没有导入的外部内容包'), 'no fabricated external packs')
+  assert.ok(text.includes('researchOnly=true'), 'the declaration check is shown')
+  assert.ok(text.includes('六项禁止用途全部声明'), 'the six prohibited uses are checked')
+  const importButton = ui.findButtonExact('导入内容包（需 Host 支持）')
+  assert.ok(importButton, 'asset-pack import entry is present')
+  assert.equal(importButton.props.disabled, true, 'asset import stays disabled without Host support')
+  assert.ok(text.includes('不读取文件'), 'asset-pack interface is explicitly reserved')
+  assert.ok(text.includes('不联网'), 'pack tab states no network')
+  assert.equal(fetchCalls.length, 0, 'opening the pack tab never calls fetch')
+})
+
+test('market tab is a reserved placeholder with catalog fields and never sends a network request', () => {
+  const { ui, fetchCalls } = createHarness()
+  openContent(ui, '市场')
+  const text = ui.text(contentDialog(ui))
+  assert.ok(text.includes('远程市场接口已预留，服务器未配置'), 'market status is explicit')
+  assert.ok(text.includes('catalogUrl'), 'catalog URL field is reserved')
+  assert.ok(text.includes('dsh-famling.market'), 'market config field is reserved')
+  assert.ok(text.includes('不会发起任何网络请求'), 'no-network promise is shown')
+  assert.ok(text.includes('未配置'), 'no fake catalog is configured')
+  assert.equal(fetchCalls.length, 0, 'market tab never calls fetch')
+})
+
+test('a missing content-center chunk degrades to a local message without breaking the widget', () => {
+  const { ui } = createHarness({ failContentChunk: true })
+  ui.clickExact('内容')
+  ui.render()
+  assert.ok(ui.text(ui.tree).includes('内容中心加载失败'), 'a local failure message is shown')
+  assert.ok(ui.findButtonExact('设置'), 'core sidebar buttons stay available')
+})
 test('stored background and font choices are restored on the next render', () => {
   const { ui } = createHarness({ background: 'dark', font: { family: 'mono', size: 11, lineHeight: 1.4 } })
   assert.equal(ui.tree.props.style['--dsh-famling-widget-bg'], '#14161a')

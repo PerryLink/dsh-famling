@@ -15,31 +15,31 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 > `famling` 是独立应用；`dsh-famling` 是放在 DSH 里的轻量伴随入口。两者共享角色/品牌，不共享运行时代码。
 
-## 当前实现
+## 当前实现（0.10.0）
 
 - slot：`sidebar.footer.action`（DSH 侧栏账号信息下方的 footer 区域）。
-- 最终交互结构：人物右侧竖排 **输入 / 互动 / 设置 / 内容** 四个按钮；点击人物的头/身体/尾巴分别触发按区域反应（0.8.2），互动菜单按当前形象渲染物种专属动作并随机挑一句回话（0.8.3，见下）；「内容」打开内容中心（0.9.1，见下）。
+- 最终交互结构：人物右侧竖排 **输入 / 互动 / 设置 / 内容** 四个按钮；点击人物的头/身体/尾巴分别触发按区域反应（0.8.2），互动菜单按当前形象渲染物种专属动作并随机挑一句回话（0.8.3，见下）。第 4 个「内容」按钮打开**角色 = 主题**的内容中心（0.10.0，四个一级分类：角色 / 自定义 / 内容包 / 市场）。
 - **72px 像素桌宠**（96×96 帧按 `image-rendering: pixelated` 显示为 72px），可切换 **汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛** 三个形象；点击头部/身体/尾巴分别触发摸头/摇尾/追尾，点击透明或未声明区域不动作。
 - 待机是真正的帧动画：3 个角色各 12 clip（帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）；`idle` 循环 + `idle_blink` 眨眼替换 + 随机微动作（`paw_face` / `scratch` / `stand_wag` / `chase_tail`）；每帧时长读 manifest 的 `holdMs`（缺省 1000/fps），非循环 clip 按 `durationMs`/hold 总和结束（0.8.4）。
 - 输入面板：人物右侧展开文本框 + 语音输入按钮（浏览器 SpeechRecognition），预留 `window.__DSH_FAMLING_BRIDGE__` 给 DSH/Advisers Host。
 - 互动面板（0.8.3）：直接读嵌入的 `ANIMS[character].actions`（来自与独立 famling 共用的 `regions.json`），按形象渲染物种专属动作——汀岚：摸头 / 递纸 / 挥手 / 整理蝴蝶结 / 聊两句；塞尔凯克卷毛猫：摸头 / 伸懒腰 / 洗脸 / 追尾巴 / 跑一跑；金毛：摸头 / 丢球·捡球 / 捡球 / 追尾巴 / 跑一跑（丢球后 500ms 自动接追球）。猫和人没有球类/捡球动作，绝不会把 A 角色的动作放到 B 角色身上。
-- 设置（0.9.1）：只保留一行 **内容与角色…** 入口（打开内容中心）以及帧动画、说话气泡、Advisers 摘要等其它设置；形象/语音/对话模式/主题/背景/字体全部移入内容中心，各存本机 localStorage（`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`，默认汀岚 / 标准 / 默认主题 / 透明背景 / 系统字体）。
-- 气泡（0.8.3）：点击区域或动作时，从该区域/动作自己的 `says` 数组随机挑一句（同一位置连续点击不会重复同一句）；**汀岚**的台词是实心 speech 气泡，可配合浏览器 TTS（保留原有独立同意）；**塞尔凯克卷毛猫（卷毛灰白）/金毛**只用空心 thought 气泡，永不调用 `speechSynthesis`，内容中心的声音页对它们只显示「思考气泡，无语音」；切到猫/狗时若正在朗读会立即停止。气泡默认白底 `#ffffff`、深色 `#111111` 字、灰色实线/虚线边框（内容中心可切 paper / night 主题），不常驻、不遮挡人物。
-- 内容中心（0.9.1）：角色 / 声音 / 对话 / 主题 / 背景 / 字体六类内置内容集中在一个面板（与设置同级），切换即时生效、不刷新页面；第三方内容包契约 `content-extension.mjs` v2（`CONTENT_EXTENSION_POINTS` + 纯数据 `validateContentPack`）已预留但不加载任何 pack（见下）。
+- 内容中心（0.10.0）：**角色就是主题**。一级 tabs 只有 **角色 / 自定义 / 内容包 / 市场**；角色卡展示角色名、一句说明、声音 / 对话 / 外观摘要，点击「一键应用」同时设置 character、voice(TTS 策略)、dialogue mode、theme/background/font，并写入 `dsh-famling/role`；自定义页在选中角色基础上逐项覆盖并支持「恢复角色默认」；内容包页只展示内置内容、声明检查与预留导入接口；市场页只显示「远程市场接口已预留，服务器未配置」，不联网、不伪造商品。内容中心 UI 本身是懒加载的包内 chunk `client.content.js`（首次打开才下载，不预加载任何角色动画 chunk）。
+- 设置（0.10.0）：只保留一行 **内容与角色…** 入口（打开内容中心）以及帧动画、说话气泡、Advisers 摘要等其它设置；角色/声音/对话/主题/背景/字体全部移入内容中心。持久化沿用旧键：`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`，并新增 `dsh-famling/role` 记录当前角色主题；加载时用角色 bundle 回填缺失组件，显式组件键优先。
+- 气泡（0.8.3）：点击区域或动作时，从该区域/动作自己的 `says` 数组随机挑一句（同一位置连续点击不会重复同一句）；**汀岚**的台词是实心 speech 气泡，可配合浏览器 TTS（保留原有独立同意）；**塞尔凯克卷毛猫（卷毛灰白）/金毛**只用空心 thought 气泡，永不调用 `speechSynthesis`，内容中心的声音区对它们只显示「思考气泡，无语音」；切到猫/狗时若正在朗读会立即停止。气泡默认白底 `#ffffff`、深色 `#111111` 字、灰色实线/虚线边框（内容中心可切 paper / night 主题），不常驻、不遮挡人物。
 - 聊天人格随形象切换（0.8.1）：输入面板的聊天请求会带当前形象（`human`/`cat`/`dog`，缺省 `human`）；Host 按形象选择 system prompt，切猫/狗后回复语气随之变化。
 - 输入面板的 LLM/TTS/ASR/记忆需要 Host 桥接；未接入时如实提示，不伪造回复。
 - 不宣传 roleplay；不包含完整桌宠/游戏基座。
-- 无 roleplay 公开入口；网络请求仅限同源 `/api/famling/bridge`（DSH Host 路由）。
+- 无 roleplay 公开入口；网络请求仅限同源 `/api/famling/bridge`（DSH Host 路由）。内容包/资产包/远程市场均不加载、不联网。
 
 ## 多角色动画数据（0.8.0）
 
-三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` 约 69.0 KiB（0.9.1 内容中心六分类 UI 加入后；gzip 19.6 KiB），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 130.7 KiB，全部角色加载后才约 316.3 KiB。首屏预算在 0.9.1 由 64 KiB 调到 72 KiB（仍 < 拆分前审计基线的 25%）。旧的“base64 全量嵌在 client.js”结构已移除：
+三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **66.1 KiB**（0.10.0 实测；gzip 18.9 KiB，仍 < 72 KiB 首屏预算，也远低于拆分前 314.8 KiB 基线），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 127.9 KiB，全部角色加载后才约 313.5 KiB。0.10.0 新增的 `client.content.js` 内容中心 UI 也只在首次打开「内容」时下载（24.3 KiB，gzip 7.7 KiB）：
 
 - 数据源：私有仓 `desktop-games/public/assets/pet/anim/{human,cat,dog}/`（`manifest.json` + 帧 PNG）。
 - 生成器：`scripts/embed-anims.mjs` —— 读取 manifest/PNG、校验三套 clip 契约、把 RGBA 帧**无损**重编码为最小位深索引 PNG（硬 alpha 保留，体积约减半），再按 marker 注入 `client.js`。**禁止手改生成块**，改数据重跑脚本即可。
-- 体积（0.9.1 实测）：源 351.6 KiB → 入口 `client.js` 69.0 KiB（gzip 19.6 KiB），3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB），全量按需加载；首屏仍远小于拆分前 314.8 KiB 基线（入口 -77.6%，首帧 -57.5%）。
+- 体积（0.10.0 实测）：源 351.6 KiB → 入口 `client.js` 66.1 KiB（gzip 18.9 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 chunk 24.3 KiB 按需加载。首屏预算仍为 72 KiB（0.9.1 由 64 KiB 调到 72 KiB），0.10.0 未再上调。
 - 重新生成：`npm run embed:anims`；只校验不写：`node scripts/embed-anims.mjs --check`；`npm run verify:anims`；量化：`npm run measure:bundle`。
-- 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并在私有资产可用时逐字节比对嵌入块是否过期。
+- 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并检查 `client.content.js` 存在、四个一级 tabs、无 fetch/外部 URL，并在私有资产可用时逐字节比对嵌入块是否过期。
 - 静态 QA：`node scripts/embed-anims.mjs --qa` 生成 `scripts/qa/anim-data.js`，浏览器直接打开 `scripts/qa/index.html` 可切角色、播 12 个 clip、看实心/空心气泡并跑数据自检，不需要重启 DSH。
 
 ## 点击区域反应（0.8.2）
@@ -63,30 +63,93 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `client.js` 播放改为逐帧 `setTimeout`：第 n 帧停留 `holdMs[n] ?? round(1000/fps)` 毫秒；非循环 clip 播完最后一帧回到 `idle`，若 manifest 的 `durationMs` 大于 hold 总和则延长最后一帧。cat 伸懒腰 = 300+300+300+350+400+400+400+350+250+150 = **3200ms**（10 帧），不再被固定 `setInterval(1000/fps)` 播快；攻击帧也按 attack 的 holdMs（83/83/63/42/42/63/63）播放。
 - `holdMs`/`durationMs` 进入 `source-sha256` 与 `--check`：只改 timing 的 manifest 变更同样会让嵌入块变旧；`verify-anims.mjs` 校验 holdMs 逐帧覆盖、总和等于 durationMs。
 
-## 内容中心与内容扩展接口（0.9.1）
+## 内容中心：角色就是主题（0.10.0）
 
-角色、声音、对话模式、气泡主题、背景与字体不再散落在设置页：人物右侧新增第 4 个按钮 **内容 / Content**，打开与设置同级的「内容中心」面板；设置页只保留一行「内容与角色…」入口（以及帧动画 / 说话气泡 / Advisers 摘要等其它设置）。所有切换都是本地 React state + localStorage，**不刷新页面**；不改 DSH 全局主题。
+内容中心不再把「主题 / 背景 / 字体」当作并列的一级主视觉。**角色就是主题 bundle**：一个角色 = character + voicePolicy + dialogue + theme + background + font 六个组件；点一次「一键应用」= 原子地应用整包。之后用户可以在「自定义」里改任意组件（覆盖角色预设），或一键「恢复角色默认」。
 
-面板分类（tabs）：
+### 四个一级 tabs
 
-- **角色**：汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛三张卡片（紧凑 glyph 头像 + 名称 + 一句说明 + 当前标记）。点击立即切换 72px 形象、气泡/TTS 策略与聊天人格（`op:"chat"` 继续携带 `character`）。卡片不预加载另外两个角色的动画 chunk，角色仍按需懒加载（入口 + 当前角色 chunk 才下载）。
-- **声音**：仅 **human** 显示浏览器 TTS 开关（沿用独立 TTS 同意）与 `speechSynthesis.getVoices()` 声音列表；选中 `voiceURI` 持久化在 `dsh-famling/settings`，朗读时作为 `SpeechSynthesisUtterance.voice`（无效/未选回退浏览器默认）。塞尔凯克卷毛猫/金毛只显示「思考气泡，无语音」。
-- **对话**：`standard` / `brief` / `quiet` 三档，持久化到 `dsh-famling/dialogue`。`brief` 把超过 90 字的回话截断并以 `…` 结尾；`quiet` 只显示约 35% 的 ambient（区域点击/动作/微动作）气泡，用户主动聊天与系统错误的回话始终显示。区域与动作的 `says` 仍全部来自嵌入的 `regions.json` 数据。
-- **主题**：`default` / `paper` / `night` 三套本地气泡+面板主题，持久化到 `dsh-famling/theme`。主题以 widget 根节点的 CSS 变量（`--dsh-famling-bubble-bg` / `-bubble-text` / `-bubble-border` / `-bubble-thought-border` / `-panel-bg` / `-panel-text` / `-panel-border` / `-accent`）应用，气泡与所有面板读取 `var(...)`；默认主题仍是白底 `#ffffff` + 深色字 `#111111`。不使用网络字体、不加载远程资源。
-- **背景**：`transparent` / `paper` / `dark` 三套本地纯 CSS 背板（无图片、渐变或网络资源），持久化到 `dsh-famling/background`。背景只给 widget 背板着色，并给气泡/面板加同色 `--dsh-famling-widget-bg` 外圈，**不修改 DSH 全局主题**；默认透明保持原外观。
-- **字体**：`system` / `serif` / `mono` 三套本地安全字体栈，另有字号（11/12/14px）与行高（1.4/1.5/1.8）预设，持久化到 `dsh-famling/font`（JSON）。字体、字号与行高通过 widget 根节点 CSS 变量应用到面板与气泡，**不加载网络字体**。
+| Tab | 内容 | 行为 / 持久化 |
+|---|---|---|
+| **角色** | 汀岚 / 塞尔凯克卷毛猫 / 金毛（origami bundle 数据预留，素材未安装，不提供卡片） | 每卡展示 glyph 头像、角色名、一句说明、声音 / 对话 / 外观摘要和「一键应用」按钮；当前角色有 ✓ 标记。应用 = 同时写 character、voicePolicy、dialogue、theme/background/font 与 `dsh-famling/role`；不预加载其它角色动画 chunk。 |
+| **自定义** | 声音（TTS 策略）/ 对话 / 主题 / 背景 / 字体（保留 0.9.1 能力） | 顶部说明「仅修改当前角色的搭配，不改变角色预设」并显示「角色预设 / 已自定义」；每个组件改动只写对应旧键，角色 id 不变；「恢复角色默认」按当前角色 bundle 重置全部组件。 |
+| **内容包** | 当前只有内置包（4 个角色 bundle），没有外部包 | 展示已安装列表、v3 强制 `usageDeclaration` 检查结果（researchOnly=true + 六项禁止用途）、资产包导入入口（**需 Host 支持**，zip/文件夹清单 + sha256 由 Host 解析；本版本不读取文件、不执行脚本、不加载素材、不联网）。 |
+| **市场** | 远程市场占位 | 固定显示「远程市场接口已预留，服务器未配置」；展示预留字段 `catalogUrl` / `configKey`（`dsh-famling/market/catalog`、`dsh-famling.market`）；不发网络请求、不展示伪造商品。 |
 
-### 内容扩展接口（预留，不联网）
+### 角色 bundle
 
-[`content-extension.mjs`](content-extension.mjs) 是给未来本地/远程内容包的公开契约（package export：`dsh-famling/content-extension`），导出：
+| role | character | 声音策略 | 对话 | 主题 / 背景 / 字体 |
+|---|---|---|---|---|
+| `human` | 汀岚 | speech，可浏览器 TTS（仍受独立同意门禁） | `standard` | `default` / `transparent` / `system` |
+| `cat` | 塞尔凯克卷毛猫 | thought，无 TTS | `brief` | `paper` / `paper` / `serif` |
+| `dog` | 金毛 | thought，无 TTS | `standard` | `night` / `dark` / `mono` |
+| `origami` | 预留 | thought，无 TTS | `quiet` | `paper` / `transparent` / `serif`（数据预留，不可应用） |
 
-- `CONTENT_EXTENSION_POINTS` — 版本 2（pack `schemaVersion: 2`）、`status: "reserved"`、`transport: { network: false, execute: false, innerHTML: false, worker: false }`、pack 字段/限制、entry schema（`kind / id / name / description / preview / apply / source / permissions / version`）、**六类 kind**（character / voice / dialogue / theme / background / font）各自的 `apply` 数据形状、预览类型（`glyph` / `text` / `color` / `image`）与权限枚举（`select:character` / `select:voice` / `select:dialogue` / `apply:theme` / `apply:background` / `apply:font` / `store:selection`）。
-- `validateContentPack(pack, { allowRemote? })` — **纯数据**校验：拒绝函数 / symbol / 非有限数、未知字段与枚举、超长字符串/数组、超过 64 KiB 的 JSON、原型链键（`__proto__` / `constructor` / `prototype`）、路径穿越/绝对路径/URL、`<` 与控制字符、`url()` / `expression()` / `@import` 等危险 CSS 值；主题变量必须 `--dsh-famling-*` 且值为安全颜色（hex / `rgb()` / `hsl()` / 关键字），预览图片路径必须相对、≤3 段、无 `..`、限定 `.png/.webp/.jpg`；background 的 apply 只允许 `{ kind: "transparent" }` 或 `{ kind: "color", value: 安全颜色 }`；font 的 apply 只允许 `{ family: 本地字体栈, size?: 10..24, lineHeight?: 1..2.5 }`，family 必须是 1..8 个不带引号的字体名（字母/数字/空格/点/下划线/连字符），拒绝引号、`url()`、`var()`、分号、花括号与 @ 规则。`source: "remote"` 默认被拒绝，只有未来启用网络的 Host 显式传 `{ allowRemote: true }` 才通过 schema 校验。
-- `CONTENT_PACK_EXAMPLE` — 一份合法的示例 pack（仅数据，不会被自动加载）。
+一键应用会把 TTS 开关改成 bundle 的声音策略；若用户尚未同意 TTS，则保持关闭（不会绕过同意门禁）。切到猫/狗会取消正在进行的浏览器朗读。
 
-本版本**不加载任何 pack**：没有网络请求、没有 pack 脚本执行、没有 `innerHTML`；内容中心只展示内置目录与预留说明。未来接入加载器时也必须是「纯数据 + 在 Host 侧解析/校验 + UI 只渲染数据」。完整 schema、限制与示例见 [docs/DETAIL.md](docs/DETAIL.md)。
+### 持久化与回填
 
-> 与独立 famling 的共享内容模型 `famling.content/0.1`（characters / voices / dialoguePacks / themes / backgrounds / fonts）是**目标超集关系**，不是同一份 schema：六类可与插件六种 kind 一一映射（`builtin` ≡ `bundled`），插件契约把“选择/应用”建模为 `apply` + permissions，共享模型是目录条目 + 解析函数；主题 CSS 前缀、语音来源（浏览器 speechSynthesis vs DeepSeek stella/tide）与校验返回结构仍不同。两套契约并存、各自 fail-closed，收敛通过适配层（content-extension 后续 MAJOR），详见 [docs/DETAIL.md](docs/DETAIL.md)。
+- 新键 `dsh-famling/role` 记录当前角色主题（primary）；旧键继续使用：`dsh-famling/character`、`dsh-famling/settings`（`sound` / `voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`。
+- 应用角色 = 写入全部六个组件对应的键 + `dsh-famling/role`；自定义 = 只覆盖被点的那一个组件键，角色 id 不变。
+- 加载：先读 `dsh-famling/role`；没有该键时从已存 `character` 反推角色；缺失的组件键用该角色 bundle 回填，已显式保存的组件键优先。0.9.x 用户升级后首次渲染即获得角色回填。
+- 内容中心 UI chunk `client.content.js` 在首次打开面板时才通过 `require.async('./client.content.js')` 下载；失败时本地面板显示加载失败，核心互动不受影响。
+
+## 内容扩展接口 v3（预留，不联网）
+
+[`content-extension.mjs`](content-extension.mjs) 是给未来本地/远程内容包的公开契约（package export：`dsh-famling/content-extension`）：
+
+- `CONTENT_EXTENSION_POINTS` — **version 3**（pack `schemaVersion: 3`）、`status: "reserved"`、`transport: { network: false, execute: false, innerHTML: false, worker: false, assets: false }`。
+- `CONTENT_KINDS` — **七类**：`role` / `character` / `voice` / `dialogue` / `theme` / `background` / `font`。`role` 是 v3 新增的 bundle kind：apply 必须包含 `character / voicePolicy / dialogue / theme / background / font` 六个组件，entry 还必须带 `compatibility`（`minPluginVersion`，可选 `maxPluginVersion`）。
+- **所有 pack 必须含 `usageDeclaration`**：`{ researchOnly: true, prohibitedUses: [六项] }`；六项固定为 `emotional-companionship` / `virtual-partner` / `professional-advice` / `minor-intimacy` / `impersonation` / `illegal-use`。缺失、`researchOnly !== true`、少一项、多一项、重复项或未知字段一律拒绝。role entry 不豁免 pack 级声明；role entry 可选地重复一份 `usageDeclaration`，出现时按同一规则校验。声明模板导出为 `USAGE_DECLARATION_TEMPLATE`。
+- **`assets` 预留**：pack 可带 `{ format: "zip" | "folder", files: [{ path, sha256, bytes? }], totalBytes? }`；path 必须是安全相对路径（≤6 段、无 `..`、无 scheme、≤160 字符、带扩展名），sha256 为 64 位小写 hex；**只做数据校验/清单，不读取、不打开、不执行、不加载任何资产**。
+- **`remoteCatalog` 预留**：可选 `{ status: "reserved", url?: "https://..." }`；仅作为元数据校验，**不 fetch、不预热、不加载远程目录**。远程 source（`source: "remote"`）默认拒绝，未来 Host 必须显式 `{ allowRemote: true }` 才通过 schema 校验。
+- `validateContentPack(pack, { allowRemote? }) → { ok, errors }` — **纯数据**校验，不抛异常、不执行、不联网、不读文件。
+- `CONTENT_PACK_EXAMPLE` — 一份合法的 v3 示例 pack（含完整 usageDeclaration、一个 role bundle、一个 theme entry），不会被自动加载。
+
+最小声明与 role 片段：
+
+```json
+{
+  "schemaVersion": 3,
+  "id": "com.example.warm-pack",
+  "name": "Warm Example",
+  "version": "1.0.0",
+  "source": "local",
+  "usageDeclaration": {
+    "researchOnly": true,
+    "prohibitedUses": [
+      "emotional-companionship", "virtual-partner", "professional-advice",
+      "minor-intimacy", "impersonation", "illegal-use"
+    ]
+  },
+  "entries": [
+    {
+      "kind": "role",
+      "id": "warm-human",
+      "name": "Warm Human",
+      "version": "1.0.0",
+      "source": "local",
+      "preview": { "kind": "glyph", "value": "🧑" },
+      "permissions": ["apply:role", "store:selection"],
+      "compatibility": { "minPluginVersion": "0.10.0" },
+      "apply": {
+        "character": "human",
+        "voicePolicy": { "canTts": true, "mode": "speech", "sound": true },
+        "dialogue": { "mode": "standard" },
+        "theme": { "variables": { "--dsh-famling-bubble-bg": "#fff3cd", "--dsh-famling-bubble-text": "#3b2f24" } },
+        "background": { "kind": "transparent" },
+        "font": { "family": "system-ui, sans-serif", "size": 12, "lineHeight": 1.5 }
+      }
+    }
+  ]
+}
+```
+
+其它校验（与 v2 一致并延续）：纯数据（拒绝函数 / symbol / bigint / 非有限数 / 非 plain object）、未知字段/枚举、超长字符串/数组、JSON ≤ 64 KiB、entries ≤ 32（每 kind ≤ 16）、id/name/description 限制、原型链键（`__proto__` / `constructor` / `prototype`）、图片预览路径穿越/绝对路径/URL、`<` 与控制字符、`url()` / `expression()` / `@import` 等危险 CSS；theme 变量必须 `--dsh-famling-*` 且值为安全颜色；background 只允许 transparent/安全纯色；font 只允许 1..8 个不带引号的本地字体名（拒绝引号、`url()`、`var()`、分号、花括号、`@` 规则）。重复 entry id / 重复 asset path / role 兼容范围倒置都会拒绝。
+
+本版本**不加载任何 pack**：没有网络请求、没有 pack 脚本执行、没有 `innerHTML`、没有资产解包；内容中心只展示内置目录、声明检查与预留说明。未来接入加载器时也必须是「纯数据 + 在 Host 侧解析/校验 + UI 只渲染数据」。完整 schema、限制与示例见 [docs/DETAIL.md](docs/DETAIL.md)。
+
+> 与独立 famling 的共享内容模型 `famling.content/0.1`（characters / voices / dialoguePacks / themes / backgrounds / fonts）是**目标超集关系**：六类仍可与插件 kind 一一映射（`builtin` ≡ `bundled`），v3 的 `role` 是把六类组合成的角色主题 bundle；插件契约把“选择/应用”建模为 `apply` + permissions，共享模型是目录条目 + 解析函数；主题 CSS 前缀、语音来源（浏览器 speechSynthesis vs DeepSeek stella/tide）与校验返回结构仍不同。两套契约并存、各自 fail-closed，收敛通过适配层（content-extension 后续 MAJOR），详见 [docs/DETAIL.md](docs/DETAIL.md)。
 
 ## Host bridge（P0/P1/P2/P4 已实现）
 
@@ -142,11 +205,13 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 ## 验证
 
 - `node --check client.js`
+- `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + 客户端生成块/多角色行为测试 + 内容中心/内容扩展契约测试，64 项，不调用真实模型）
-- `npm run check:anims`（嵌入块与私有动画包一致）
-- `npm run verify:anims`（3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + 客户端生成块/多角色行为测试 + 内容中心四分类/角色 bundle/内容扩展 v3 契约测试，**76 项**，不调用真实模型）
+- `npm run check`（= `check:anims`：嵌入块与私有动画包一致）
+- `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁）
+- `npm run measure:bundle`（入口 66.1 KiB / 内容 chunk 24.3 KiB 等实测）
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`
 - 本版本已用 DSH 0.2.2-rc.3 的 `sidebar.footer.action` slot 编写；实际渲染需在 DSH Web UI 验证。
@@ -157,6 +222,9 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 ## 限制
 
 - 仅本地小 widget，不是完整 famling；完整应用见 `PerryLink/famling`。
+- 内容中心是**角色主题 + 组件覆盖**，不是可编程主题引擎；不加载 pack、不加载资产、不联网。
+- 远程市场只有占位 UI 与预留字段，没有服务器、没有商品、没有网络请求；不要把它当作已上线市场。
+- `origami` 角色 bundle 仅是数据预留（无动画/素材 chunk），UI 不提供一键应用。
 - Host 聊天人格随形象切换（0.8.1）：人格差异只体现在 system prompt，安全边界与 AI 声明不变；切换形象只影响之后的聊天请求，不会改写正在进行或已生成的回复。模型选择仍由 DSH 默认模型选择/插件 Config 决定。
 - 动画包标注为 placeholder（非最终美术，非商业授权），与插件整体 PolyForm Noncommercial 许可一致。
 - 不是官方 DeepSeek 项目；不使用 DeepSeek 官方 logo/字标。
