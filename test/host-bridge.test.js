@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { apply } from '../index.js'
+import { CRISIS_KEYWORDS, apply, crisisKeyword } from '../index.js'
 
 const BRIDGE_PATH = '/api/famling/bridge'
 
@@ -271,4 +271,62 @@ test('rejects malformed requests without touching services', async () => {
   assert.equal(get.status, 405)
   assert.equal(env.calls.llm.length, 0)
   assert.equal(env.calls.schedule.length, 0)
+})
+
+/* ---------- MB-020 / E3-T1: local crisis short-circuit ---------- */
+
+test('crisis input is answered locally with 12356/110/120 and never calls the model', async () => {
+  const cases = [
+    { text: '我想自杀', marker: '不是诊断' },
+    { text: 'I want to kill myself', marker: 'not a diagnosis' },
+    { text: '我活不下去了，家里还发生了家暴', marker: '12356' },
+    { text: '胸痛而且呼吸困难', marker: '120' },
+  ]
+  for (const item of cases) {
+    const env = makeContext()
+    apply(env.ctx)
+    const res = await post(env.route(), { v: 1, op: 'chat', text: item.text, character: 'cat' })
+    assert.equal(res.status, 200, item.text + ': status')
+    const body = await res.json()
+    assert.equal(body.ok, true, item.text + ': ok')
+    assert.equal(body.meta.safety, 'crisis-local-resource', item.text + ': local safety route')
+    assert.equal(body.meta.llmCalls, 0, item.text + ': reported model calls')
+    assert.equal(env.calls.llm.length, 0, item.text + ': the model is never called')
+    for (const resource of ['12356', '110', '120']) assert.ok(body.reply.includes(resource), item.text + ': resource ' + resource)
+    assert.ok(body.reply.includes(item.marker), item.text + ': fixed reply is explicitly not a diagnosis')
+    assert.equal(body.reply.includes(item.text), false, item.text + ': the raw input is not echoed back')
+  }
+})
+
+test('the crisis reply also works when no model selection exists', async () => {
+  const env = makeContext({ selection: null })
+  apply(env.ctx)
+  const res = await post(env.route(), { v: 1, op: 'chat', text: '我想轻生' })
+  assert.equal(res.status, 200, 'crisis resources do not depend on a configured model')
+  const body = await res.json()
+  assert.equal(body.meta.safety, 'crisis-local-resource')
+  assert.equal(env.calls.llm.length, 0)
+})
+
+test('ordinary messages are not routed to the crisis floor and still reach the model', async () => {
+  const ordinary = ['帮我写周报', '我笑死了', 'scraped my knee', 'I had a stroke of luck', '今天好累', 'kill the process 怎么说']
+  for (const text of ordinary) {
+    const env = makeContext()
+    apply(env.ctx)
+    const body = await (await post(env.route(), { v: 1, op: 'chat', text })).json()
+    assert.equal(body.ok, true, text + ': ok')
+    assert.equal(body.meta.safety, undefined, text + ': no crisis route')
+    assert.equal(env.calls.llm.length, 1, text + ': exactly one model call')
+  }
+})
+
+test('crisisKeyword matches specific phrases and documents its public list', () => {
+  for (const text of ['我想自杀', 'I feel suicidal', '想杀了他', '我被性侵了', 'chest pain']) {
+    assert.equal(typeof crisisKeyword(text), 'string', text + ': matched')
+  }
+  for (const text of ['笑死了', '累死了', 'scraped my knee', 'a stroke of luck', 'kill the process', '', null, 42]) {
+    assert.equal(crisisKeyword(text), null, JSON.stringify(text) + ': not matched')
+  }
+  assert.ok(Array.isArray(CRISIS_KEYWORDS) && CRISIS_KEYWORDS.length >= 30, 'public keyword list is readable for tests/audit')
+  assert.equal(Object.isFrozen(CRISIS_KEYWORDS), true, 'the keyword list cannot be mutated at runtime')
 })

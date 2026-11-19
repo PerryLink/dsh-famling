@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.10.2",
+  "version": "0.10.4",
   "private": false,
   "type": "module",
   "scripts": {
@@ -64,6 +64,6 @@
     }
   },
   "engines": {
-    "dsh": ">=0.2.1-rc.5 <0.3.0"
+    "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
   }
 }

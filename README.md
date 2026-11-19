@@ -14,14 +14,22 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 | **dsh-famling** | 本仓 | **DSH 客户端插件**；只提供左下角小型汀岚入口与本地小互动，不替代独立 app |
 
 > `famling` 是独立应用；`dsh-famling` 是放在 DSH 里的轻量伴随入口。两者共享角色/品牌，不共享运行时代码。
+>
+> **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
-## 当前实现（0.10.1）
+## 当前实现（0.10.4）
 
+- 0.10.4 四层缩放（MB-053）：设置内新增**整体缩放**（第一层，50%–200%，角色图像 + UI/文本 + 气泡 + 菜单/面板一起缩放）、**UI + 文本 / 图像** 独立轴（第二层，100% = 跟随整体，可单独解耦或一键「跟随整体」）、**组件缩放**（第三层，折叠在「高级 / 调试」内，气泡 / 右键菜单 / 面板 / 内容中心 / 设置弹窗默认全部继承 UI + 文本，可覆盖 75%–150% 或恢复继承）。只作用于本插件 widget 的内联样式与私有 CSS 变量，**不改 DSH 全局主题/宿主缩放**；持久化 `dsh-famling/scale/*`（model/global/ui-text/image/component/*），旧绝对倍率 `dsh-famling/scale` / `dsh-famling/text-scale` 一次性迁移（版本标记后失效但保留备份）；气泡 ≤ 240px 且不溢出视口，菜单/面板按缩放后尺寸夹取，默认值不写键；原生 range 滑块 + `aria-valuetext`/`aria-expanded` 键盘可达。详见「四层缩放（0.10.4）」与 `test/client-scale.test.js`。
+- 0.10.3 发布准备：相对 0.10.2 **聊天/UI 行为无变化**；提升版本真值（`package.json` 为源，同步 `client.js`/`client.content.js`/README/LEGAL-NOTICE/locale，`node test/version-truth.test.js --write` 幂等重生成），并修正 `engines.dsh` 允许 0.2.2 预发布宿主（`|| >=0.2.2-0 <0.3.0`，否则 0.2.2-rc.x 会被引擎范围拒绝）；本版本是插件安全地板的对外发布版本。
 - slot：`sidebar.footer.action`（DSH 侧栏账号信息下方的 footer 区域）。
 - 最终交互结构（0.10.1）：**默认只渲染角色，角色以外零常驻按钮**。右键角色（或 Shift+F10 / ContextMenu 键）打开自绘分级菜单，`fixed` 定位并按视口夹取；键盘 ↑/↓、Home/End、←/→、Enter、Escape、Tab 全部可用，菜单外点或窗口失焦即关闭。一级只有 5 项：**聊两句… / 互动 ▸ / 内容与角色… / 设置… / 更多 ▸**；互动与更多是带「« 返回」的二级页面；复杂内容（内容中心 / 设置 / 提醒 / 使用限制）一律进独立弹窗。点击人物的头/身体/尾巴分别触发按区域反应（0.8.2），互动页按当前形象渲染物种专属动作并随机挑一句回话（0.8.3，见下）。
 - **72px 像素桌宠**（96×96 帧按 `image-rendering: pixelated` 显示为 72px），可切换 **汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛** 三个形象；点击头部/身体/尾巴分别触发摸头/摇尾/追尾，点击透明或未声明区域不动作。
 - 待机是真正的帧动画：3 个角色各 12 clip（帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）；`idle` 循环 + `idle_blink` 眨眼替换 + 随机微动作（`paw_face` / `scratch` / `stand_wag` / `chase_tail`）；每帧时长读 manifest 的 `holdMs`（缺省 1000/fps），非循环 clip 按 `durationMs`/hold 总和结束（0.8.4）。
-- 输入面板：人物右侧展开文本框 + 语音输入按钮（浏览器 SpeechRecognition），预留 `window.__DSH_FAMLING_BRIDGE__` 给 DSH/Advisers Host。
+- 输入面板：人物右侧展开文本框 + 语音输入按钮（浏览器 SpeechRecognition），预留 `window.__DSH_FAMLING_BRIDGE__` 给 DSH/Advisers Host。面板内常驻 AI 声明 + 发送去向 + 危机资源三行说明（0.10.2，见「聊天安全地板」）。
+- 聊天安全地板（0.10.2 / E3）：Host `op:"chat"` 在**任何模型调用之前**做本地危机关键词短路（自伤/自杀、伤害他人、家暴/性侵、急症）；命中返回固定资源文案（12356 心理援助 / 110 报警 / 120 急救 / 信任的人与专业机构），**不调用 `ctx.llm.stream`、不回显原文、不落盘**，固定文案明确「不是诊断」，误报可忽略。实现与可审计导出：`index.js` 的 `CRISIS_KEYWORDS` / `crisisKeyword`；响应 `meta.safety = "crisis-local-resource"`、`llmCalls: 0`。
+- 发送去向与首启告知（0.10.2 / MB-021）：输入面板 AI 声明与设置「数据与边界」明确「聊天为工作助手型 AI 回复，文本经 DSH Host 发给 DSH 中配置的模型供应商；勿发密码/隐私/客户资料」；首次安装显示**一次性、可关闭、非阻断**卡片（只写本地 `dsh-famling/first-run/v1`，不联网），卡片 UI 放在懒加载 `client.content.js`，不进首屏预算。
+- 清除与撤回（0.10.2 / MB-022）：设置 →「数据与边界」→「清除本机设置与同意」只删除本插件在浏览器 `localStorage` 的 `dsh-famling/*` 键（设置、形象、外观、同意记录；等同撤回 TTS/ASR 同意）；**不改** DSH 宿主数据、会话与供应商侧数据，同处展示与 DSH 的边界说明。
+- AI 聊天开关（0.10.2 / MB-024）：设置内可关闭聊天；关闭后输入面板不发送任何聊天文本（提醒创建仍可用），状态持久化在 `dsh-famling/settings.chat`（默认开启，开启即披露发送去向）。
 - 互动面板（0.8.3）：直接读嵌入的 `ANIMS[character].actions`（来自与独立 famling 共用的 `regions.json`），按形象渲染物种专属动作——汀岚：摸头 / 递纸 / 挥手 / 整理蝴蝶结 / 聊两句；塞尔凯克卷毛猫：摸头 / 伸懒腰 / 洗脸 / 追尾巴 / 跑一跑；金毛：摸头 / 丢球·捡球 / 捡球 / 追尾巴 / 跑一跑（丢球后 500ms 自动接追球）。猫和人没有球类/捡球动作，绝不会把 A 角色的动作放到 B 角色身上。
 - 内容中心（0.10.0）：**角色就是主题**。一级 tabs 只有 **角色 / 自定义 / 内容包 / 市场**；角色卡展示角色名、一句说明、声音 / 对话 / 外观摘要，点击「一键应用」同时设置 character、voice(TTS 策略)、dialogue mode、theme/background/font，并写入 `dsh-famling/role`；自定义页在选中角色基础上逐项覆盖并支持「恢复角色默认」；内容包页只展示内置内容、声明检查与预留导入接口；市场页只显示「远程市场接口已预留，服务器未配置」，不联网、不伪造商品。内容中心 UI 本身是懒加载的包内 chunk `client.content.js`（与统一设置弹窗共用，首次打开才下载，不预加载任何角色动画 chunk）。
 - 设置（0.10.1）：统一的**设置弹窗**集中所有可调项——语音朗读（仅汀岚；首次开启仍走独立同意弹窗）、帧动画、说话气泡、**显示菜单按钮**（默认关闭，开启后角色旁出现「⋯」触发器）、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口与「恢复角色默认」；底部「高级 / 调试」折叠分组显示版本、当前状态与本地存储键。菜单按钮偏好持久化到 `dsh-famling/menu`（只存开关；菜单展开与子页是临时状态，每次打开都从一级开始）。其余持久化沿用旧键：`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`，并新增 `dsh-famling/role` 记录当前角色主题；加载时用角色 bundle 回填缺失组件，显式组件键优先。
@@ -31,13 +39,29 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 不宣传 roleplay；不包含完整桌宠/游戏基座。
 - 无 roleplay 公开入口；网络请求仅限同源 `/api/famling/bridge`（DSH Host 路由）。内容包/资产包/远程市场均不加载、不联网。
 
+## 四层缩放（0.10.4，MB-053）
+
+设置弹窗按 famling `src/pet/scaling.ts` 的同一语义分四层，全部只作用于本插件 widget 的内联样式与 widget 私有 CSS 变量（`--dsh-famling-ui-scale` / `--dsh-famling-bubble-zoom`、组件 `transform`），**从不写 `document.documentElement`、不改 DSH 全局主题或宿主缩放**：
+
+| 层级 | 位置 | 控件 | 语义 |
+|---|---|---|---|
+| 1 整体缩放 | 常用 · 第一个控件 | 原生 range 50%–200%（step 5%） | 所有内容一并缩放：角色图像、UI/文本、气泡、菜单、面板 |
+| 2 UI + 文本 | 缩放（独立轴） | range 40%–150%，100% = 跟随整体 | 只改文本/控件；「跟随整体」一键复位 |
+| 2 图像 | 缩放（独立轴） | range 50%–200%，100% = 跟随整体 | 只改角色/预览图；窗口放不下时自动贴合 |
+| 3 组件缩放 | 高级 / 调试（默认折叠） | 每个组件：继承（默认）/ 75% / 125% / 150% | 气泡 / 右键菜单 / 面板 / 内容中心 / 设置弹窗；覆盖值 = 继承的 UI 倍率 × 覆盖倍率，可随时恢复继承 |
+
+- 生效值 = `global × axis` 后按可读性/安全上限 clamp：UI 文本 0.6×–2.5×、图像 0.5×–2×（72px → 36–144px，仍在 240px 侧栏内）、组件 0.5×–2×。气泡宽度硬上限 240px 并按视口夹取左边界，不会溢出侧栏/窗口；菜单与面板用「布局尺寸 ÷ zoom + `transform: scale(zoom)`」在缩放后仍夹在视口内（左/底锚点、`transform-origin` 对齐锚点），内容不裁切。
+- 持久化：`dsh-famling/scale/model`（版本标记）+ `dsh-famling/scale/global`、`/ui-text`、`/image`、`/component/<id>`；跟随/默认值不写轴键（恢复跟随 = 删键），恢复默认缩放只写 `global=1` 与版本标记。首次加载若没有版本标记且存在旧绝对倍率键 `dsh-famling/scale`（数字或 `{pet,text}` JSON）或 `dsh-famling/text-scale`，一次性迁移为 `image`/`uiText`（global=100%，等效值不变）；迁移后旧键保留原处但被标记失效，不会重复应用。清除本机设置会删除 `dsh-famling/*` 下全部缩放键。
+- 键盘 / ARIA：所有缩放滑块是原生 `<input type="range">`（方向键可用），带 `aria-label` 与 `aria-valuetext`（如「150% · 独立」）；高级组按钮带 `aria-expanded`；组件下拉带 `aria-label`；跟随时「跟随整体」按钮 `disabled`；重置按钮有可读名称；设置弹窗仍是 `role="dialog"`。
+- 测试：`test/client-scale.test.js` 覆盖纯模型（clamp/解析/持久化/迁移/上限）+ fake React 行为（三层 IA、整体/独立轴、组件覆盖与继承、持久化/恢复、240px 气泡与视口夹取、菜单缩放夹取、键盘/ARIA、无 fetch）+ 静态门禁（widget 私有样式、无 `document.documentElement`、无外部 URL）。`npm test` 合计 134 项全绿。
+
 ## 多角色动画数据（0.8.0）
 
-三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **75.1 KiB**（0.10.1 实测；gzip 21.1 KiB，< 78 KiB 首屏预算——0.10.1 为右键分级菜单由 72 KiB 上调，仍远低于拆分前 314.8 KiB 基线），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 136.8 KiB，全部角色加载后才约 322.4 KiB。`client.content.js`（内容中心 + 统一设置弹窗）也只在首次打开这两个弹窗时下载（34.5 KiB，gzip 9.8 KiB）：
+三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **93.2 KiB**（0.10.4 实测；gzip 25.8 KiB，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.7%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 155.0 KiB，全部角色加载后才约 340.6 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件）只在首次安装或首次打开弹窗时下载（47.6 KiB，gzip 13.6 KiB）：
 
 - 数据源：私有仓 `desktop-games/public/assets/pet/anim/{human,cat,dog}/`（`manifest.json` + 帧 PNG）。
 - 生成器：`scripts/embed-anims.mjs` —— 读取 manifest/PNG、校验三套 clip 契约、把 RGBA 帧**无损**重编码为最小位深索引 PNG（硬 alpha 保留，体积约减半），再按 marker 注入 `client.js`。**禁止手改生成块**，改数据重跑脚本即可。
-- 体积（0.10.1 实测）：源 351.6 KiB → 入口 `client.js` 75.1 KiB（gzip 21.1 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 + 设置 chunk 34.5 KiB 按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用），仍 < 拆分前审计基线的 25%。
+- 体积（0.10.4 实测）：源 351.6 KiB → 入口 `client.js` 93.2 KiB（gzip 25.8 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 chunk 47.6 KiB 按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**；首启卡、设置内容与缩放控件仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.3%**（< 31% 门禁），首帧 155.0 KiB = 基线的 **49.6%**（< 52% 门禁）。
 - 重新生成：`npm run embed:anims`；只校验不写：`node scripts/embed-anims.mjs --check`；`npm run verify:anims`；量化：`npm run measure:bundle`。
 - 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并检查 `client.content.js` 存在、四个一级 tabs、无 fetch/外部 URL，并在私有资产可用时逐字节比对嵌入块是否过期。
 - 静态 QA：`node scripts/embed-anims.mjs --qa` 生成 `scripts/qa/anim-data.js`，浏览器直接打开 `scripts/qa/index.html` 可切角色、播 12 个 clip、看实心/空心气泡并跑数据自检，不需要重启 DSH。
@@ -172,7 +196,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `op:"task"` → `ctx.schedule.create` 一次性提醒（绝对时间；不自己实现定时器）
 - TTS/ASR 各自独立同意；默认关闭；浏览器语音会明确说明音频去向
 - **LLM 聊天已接入 Host bridge**（`op:"chat"` 经 DSH `ctx.llm.stream`，内容会发送给所配置的模型服务商）；TTS/ASR 是浏览器本地能力、各自独立同意；**记忆写入仍未实现**。下一步见 `docs/DSH-FAMLING-BRIDGE-2026-11-17.md`。
-- 数据流披露：聊天文本经 DSH Host 发往模型供应商；插件本身不接收、不存储 API Key；`brief` 只读本机 `~/.advisers`，不上传。
+- 数据流披露：聊天文本经 DSH Host 发往 DSH 中配置的模型供应商；插件本身不接收、不存储 API Key、不保存聊天记录；`brief` 只读本机 `~/.advisers`，不上传。**危机关键词命中时文本不会离开本机**（本地短路，不调模型）；设置内「AI 聊天」开关关闭后不发送任何聊天文本；「清除本机设置与同意」只删本插件浏览器键，DSH 宿主/会话/供应商数据不受影响。
 
 ### 模型选择（2026-11-18 起不再写死）
 
@@ -220,13 +244,14 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约测试，**90 项**，不调用真实模型）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试，**104 项**，不调用真实模型）
 - `npm run check`（= `check:anims`：嵌入块与私有动画包一致）
-- `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 78 KiB 预算）
-- `npm run measure:bundle`（入口 75.1 KiB / 内容+设置 chunk 34.5 KiB 等实测）
+- `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
+- `npm run measure:bundle`（入口 93.2 KiB / 内容+设置+首启卡+缩放控件 chunk 47.6 KiB 等实测）
+- 版本真值：`package.json` 是唯一来源；`node test/version-truth.test.js --write` 从 package.json 重新生成 `client.js`/`client.content.js` 版本串、README「当前实现」、LEGAL-NOTICE「适用插件版本」与 `locale/*.json` 的 `meta.version`，`npm test` 会校验它们全部一致（含安全地板文档真值）。
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`
-- 本版本已用 DSH 0.2.2-rc.3 的 `sidebar.footer.action` slot 编写；实际渲染需在 DSH Web UI 验证。
+- 本版本按 DSH 0.2.2-rc 线的 `sidebar.footer.action` slot 编写（本机 DSH checkout 为 `dsh-v0.2.2-rc.4`）；`package.json` 的 `engines.dsh` 同时覆盖 `>=0.2.1-rc.5 <0.3.0` 与 0.2.2 预发布线（`>=0.2.2-0 <0.3.0`）；slot 实际渲染仍需在 DSH Web UI 实测。
 - 代码：**PolyForm Noncommercial 1.0.0**（`LICENSE`）；
 - 头像/图标/汀岚美术：**CC BY-NC-SA 4.0**（`LICENSE-ART`）；
 - 非商业 + 同协议 + 署名；商业需书面许可。

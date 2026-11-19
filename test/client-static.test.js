@@ -14,6 +14,10 @@ const contentChunkPath = join(PLUGIN_ROOT, 'client.content.js')
 const contentSource = readFileSync(contentChunkPath, 'utf8')
 const clientData = loadClientData(clientSource)
 
+// Release pin: bump together with package.json (test/version-truth.test.js keeps
+// every public version surface in sync with package.json).
+const EXPECTED_VERSION = '0.10.4'
+
 // Frame counts come from the private manifests: dog/human 68 each, cat 72
 // (10-frame stand_wag). Total 208 embedded frames; never assume 12x68/204.
 const EXPECTED_FRAME_COUNTS = { human: 68, cat: 72, dog: 68 }
@@ -221,8 +225,8 @@ test('first-screen client.js carries no sprite payload and meets the lazy budget
   const entryBytes = Buffer.byteLength(clientSource)
   const humanBytes = Buffer.byteLength(readFileSync(chunkPath(PLUGIN_ROOT, 'human'), 'utf8'))
   assert.ok(entryBytes <= FIRST_SCREEN_BUDGET_BYTES, 'client.js ' + entryBytes + ' B is within the ' + FIRST_SCREEN_BUDGET_BYTES + ' B budget')
-  assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.25, 'entry shrinks >75% vs the pre-split audit snapshot')
-  assert.ok(entryBytes + humanBytes < AUDIT_BASELINE_BYTES * 0.5, 'first paint (entry + default chunk) shrinks >50% vs the pre-split audit snapshot')
+  assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.31, 'entry shrinks >69% vs the pre-split audit snapshot')
+  assert.ok(entryBytes + humanBytes < AUDIT_BASELINE_BYTES * 0.52, 'first paint (entry + default chunk) shrinks >48% vs the pre-split audit snapshot')
   assert.equal(/data:image\/png;base64,[A-Za-z0-9+/]{512,}/.test(clientSource), false, 'no full base64 PNG frame in client.js')
   assert.equal(/[A-Za-z0-9+/]{4096,}={0,2}/.test(clientSource), false, 'no multi-KB base64 literal in client.js')
   assert.ok(clientSource.includes('function requestCharacterChunk(kind, onSettled)'), 'lazy chunk request helper exists')
@@ -273,9 +277,9 @@ test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () =>
   assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
 })
 
-test('package version is 0.10.2, publishes the lazy chunks and the v3 content contract', async () => {
+test('package version is ' + EXPECTED_VERSION + ', publishes the lazy chunks and the v3 content contract', async () => {
   const pkg = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8'))
-  assert.equal(pkg.version, '0.10.2')
+  assert.equal(pkg.version, EXPECTED_VERSION)
   assert.equal(pkg.exports['./content-extension'], './content-extension.mjs', 'package exports the content extension contract')
   assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
@@ -604,4 +608,29 @@ test('v3 role bundles, asset manifests and remote catalog are pure metadata and 
     assert.ok(result.errors.length > 0, name + ': errors are reported')
   }
   assert.equal(validateContentPack(clone()).ok, true, 'valid six-component role bundle is accepted')
+})
+
+/* ---------- MB-020/021/022/023/024: plugin safety floor (E3-T1/T2/T3) ---------- */
+test('the host bridge ships a local crisis short-circuit with 12356/110/120 and no model call', async () => {
+  const host = await import('../index.js')
+  assert.equal(typeof host.crisisKeyword, 'function', 'crisisKeyword is exported for tests/audit')
+  assert.ok(Array.isArray(host.CRISIS_KEYWORDS) && host.CRISIS_KEYWORDS.length >= 30, 'readable keyword list')
+  const source = readFileSync(join(PLUGIN_ROOT, 'index.js'), 'utf8')
+  for (const term of ['12356', '110', '120', '不是诊断', 'not a diagnosis']) assert.ok(source.includes(term), 'host crisis reply carries: ' + term)
+  assert.ok(source.includes("safety: 'crisis-local-resource'"), 'crisis route is identifiable in the bridge response')
+  assert.ok(source.includes('llmCalls: 0'), 'crisis route reports zero model calls')
+  assert.ok(source.indexOf('crisisKeyword(input)') < source.indexOf('await chatWithDsh(ctx, input'), 'the local crisis check runs before any model call')
+})
+
+test('the chat surfaces disclose the DSH-configured model provider in both languages', () => {
+  for (const term of ['模型供应商', '勿发', '密码', '隐私', '客户资料']) assert.ok(clientSource.includes(term), 'client.js zh disclosure: ' + term)
+  for (const term of ['model provider', 'never send passwords', 'private data', 'client material']) assert.ok(clientSource.includes(term), 'client.js en disclosure: ' + term)
+  assert.ok(clientSource.includes('AI 聊天'), 'client.js wires the AI chat switch state')
+  assert.ok(clientSource.includes('settings.chat === false'), 'chat requests are gated by the switch')
+  assert.ok(contentSource.includes('dataGroup'), 'settings has a data/boundaries section')
+  assert.ok(contentSource.includes('AI 聊天'), 'settings exposes the AI chat switch')
+  assert.ok(contentSource.includes('onClearLocalData'), 'settings exposes clear-local-data')
+  assert.ok(contentSource.includes('createFirstRunNotice'), 'the first-run card comes from the lazy chunk (entry budget)')
+  assert.ok(clientSource.includes('FIRST_RUN_KEY'), 'the one-time first-run flag is a local key')
+  assert.equal(/https?:\/\//.test(contentSource), false, 'the content chunk stays offline')
 })

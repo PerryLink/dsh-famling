@@ -10,6 +10,8 @@ import { loadClientData } from '../scripts/verify-anims.mjs'
 
 const clientSource = readFileSync(CLIENT_PATH, 'utf8')
 const embedded = loadClientData(clientSource)
+// The shown version must follow package.json (the single version truth).
+const PLUGIN_VERSION = JSON.parse(readFileSync(join(dirname(CLIENT_PATH), 'package.json'), 'utf8')).version
 
 function flattenChildren(values, target) {
   for (const value of values) {
@@ -178,6 +180,9 @@ function createHarness(options = {}) {
   if (options.background) storage.set('dsh-famling/background', options.background)
   if (options.font) storage.set('dsh-famling/font', JSON.stringify(options.font))
   if (options.menu) storage.set('dsh-famling/menu', JSON.stringify(options.menu))
+  // Most tests start after the one-time first-run notice was acknowledged; the
+  // first-run tests opt out to exercise the fresh-install path.
+  if (!options.firstRun) storage.set('dsh-famling/first-run/v1', '1')
   const localStorage = {
     getItem(key) { return storage.has(key) ? storage.get(key) : null },
     setItem(key, value) { storage.set(key, String(value)) },
@@ -492,7 +497,7 @@ test('互动 and 更多 are second-level pages with a back item instead of crowd
   const notice = ui.findAll((item) => item.type === 'div' && item.props.role === 'dialog' && item.props['aria-label'] === '使用限制与版本')[0]
   assert.ok(notice, 'usage notice popup opens')
   assert.ok(ui.text(notice).includes('研究'), 'notice carries the research-only restriction')
-  assert.ok(ui.text(notice).includes('0.10.2'), 'notice shows the plugin version')
+  assert.ok(ui.text(notice).includes(PLUGIN_VERSION), 'notice shows the plugin version from package.json')
   closeActiveDialog(ui)
   openMenuAt(ui)
   clickMenu(ui, '更多')
@@ -577,11 +582,11 @@ test('settings popup centralizes every adjustable item and folds advanced/debug'
   const dialog = settingsDialog(ui)
   assert.ok(dialog, 'settings dialog renders from the lazy chunk')
   const full = ui.text(dialog)
-  for (const label of ['常用', '帧动画', '说话气泡', '显示菜单按钮', '声音', '读取 Advisers 摘要', '外观', '对话', '气泡 / 面板主题', '背景', '字体', '字号', '行高', '角色与内容', '内容与角色…', '恢复角色默认', '高级 / 调试']) {
+  for (const label of ['常用', '帧动画', '说话气泡', '显示菜单按钮', '数据与边界', 'AI 聊天', '清除本机设置与同意', '声音', '读取 Advisers 摘要', '外观', '对话', '气泡 / 面板主题', '背景', '字体', '字号', '行高', '角色与内容', '内容与角色…', '恢复角色默认', '高级 / 调试']) {
     assert.ok(full.includes(label), 'settings includes: ' + label)
   }
   assert.ok(full.includes('研究'), 'usage restriction stays visible')
-  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 1 + 1 + 1 + 1, 'sound + motion + bubble + menu button')
+  assert.equal(ui.findAll((node) => node.type === 'input' && node.props.type === 'checkbox').length, 1 + 1 + 1 + 1 + 1, 'sound + motion + bubble + menu button + AI chat')
   assert.ok(ui.findAll((node) => node.type === 'select')[0], 'voice list lives in settings')
   const advanced = ui.findAll((node) => node.type === 'button' && ui.text(node).includes('高级 / 调试'))[0]
   assert.equal(advanced.props['aria-expanded'], false, 'advanced group is folded by default')
@@ -591,7 +596,7 @@ test('settings popup centralizes every adjustable item and folds advanced/debug'
   const expanded = ui.text(settingsDialog(ui))
   assert.ok(expanded.includes('本地存储键'), 'advanced/debug group expands')
   assert.ok(expanded.includes('dsh-famling/menu'), 'debug lists the storage keys')
-  assert.ok(expanded.includes('0.10.2'), 'advanced shows the version')
+  assert.ok(expanded.includes(PLUGIN_VERSION), 'advanced shows the version from package.json')
 })
 
 test('settings toggles persist and the content entry opens the content center', () => {
@@ -1249,6 +1254,90 @@ test('a missing content/settings chunk degrades locally without breaking the wid
   ui.clickPetAt(51, 27)
   ui.render()
   assert.ok(petImage(ui).props.src.startsWith('data:image/png;base64,'), 'region interaction stays local')
+})
+
+
+/* ==================== plugin safety floor (MB-020/021/022/024) ==================== */
+function firstRunDialog(ui) {
+  return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '首次使用说明')[0]
+}
+function firstRunDialogEn(ui) {
+  return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === 'First-run notice')[0]
+}
+
+test('first run shows a dismissible safety card exactly once and keeps a local ack flag', () => {
+  const { ui, storage, fetchCalls } = createHarness({ firstRun: true })
+  const card = firstRunDialog(ui)
+  assert.ok(card, 'the one-time safety card is shown on a fresh install')
+  const text = ui.text(card)
+  assert.ok(text.includes('模型供应商'), 'card states where chat text goes')
+  assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'card lists crisis resources')
+  assert.ok(text.includes('请勿发送密码'), 'card warns against secrets/private data')
+  assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'nothing is acknowledged before the click')
+  assert.equal(fetchCalls.length, 0, 'the card makes no network request')
+  ui.clickText('我知道了')
+  ui.render()
+  assert.equal(firstRunDialog(ui), undefined, 'dismissing the card removes it')
+  assert.equal(storage.get('dsh-famling/first-run/v1'), '1', 'the ack flag is stored locally')
+  assert.equal(ui.findAll((node) => node.type === 'button').length, 1, 'only the pet button remains')
+  // A later render (same storage already acked) does not show it again.
+  const second = createHarness()
+  assert.equal(firstRunDialog(second.ui), undefined, 'an acked install does not show the card again')
+})
+
+test('the first-run card also exists in English with the same disclosure and resources', () => {
+  const { ui } = createHarness({ firstRun: true, language: 'en-US' })
+  const card = firstRunDialogEn(ui)
+  assert.ok(card, 'English first-run card')
+  const text = ui.text(card)
+  assert.ok(text.includes('model provider'), 'sending destination is disclosed')
+  assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'crisis resources are listed')
+})
+
+test('the chat input panel discloses the sending destination and crisis resources', () => {
+  const { ui } = createHarness()
+  openInputPanel(ui)
+  const text = ui.text(ui.tree)
+  assert.ok(text.includes('DSH'), 'disclosure names the DSH host path')
+  assert.ok(text.includes('模型供应商'), 'disclosure names the configured model provider')
+  assert.ok(text.includes('密码') && text.includes('隐私') && text.includes('客户资料'), 'disclosure warns about secrets/private data')
+  assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'crisis resources stay visible in the chat panel')
+  const english = createHarness({ language: 'en-US' })
+  openMenuAt(english.ui)
+  clickMenu(english.ui, 'Chat')
+  const enText = english.ui.text(english.ui.tree)
+  assert.ok(enText.includes('model provider'), 'English sending disclosure')
+  assert.ok(enText.includes('never send passwords'), 'English secrets warning')
+})
+
+test('turning AI chat off in settings blocks the bridge while reminders stay available', () => {
+  const { ui, storage, fetchCalls } = createHarness()
+  openSettings(ui)
+  const toggle = checkboxByLabel(ui, 'AI 聊天')
+  ui.change(toggle, false)
+  ui.render()
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).chat, false, 'chat switch persists in the plugin settings')
+  closeActiveDialog(ui)
+  openInputPanel(ui)
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  ui.change(textarea, '你好')
+  ui.render()
+  ui.clickExact('发送')
+  ui.render()
+  assert.equal(fetchCalls.length, 0, 'no chat request is sent while the switch is off')
+  assert.ok(ui.text(ui.findBubble()).includes('AI 聊天已关闭'), 'the local chat-off note is shown')
+})
+
+test('clearing local settings and consent empties only dsh-famling/* keys and withdraws consent', () => {
+  const { ui, storage } = createHarness()
+  assert.ok(storage.get('dsh-famling/consent/v1'), 'consent exists before the clear')
+  openSettings(ui)
+  ui.clickText('清除本机设置与同意')
+  ui.render()
+  const remaining = [...storage.keys()].filter((key) => key.startsWith('dsh-famling/'))
+  assert.deepEqual(remaining, [], 'every dsh-famling/* key is gone (settings + consent withdrawn)')
+  assert.ok(ui.text(settingsDialog(ui)).includes('已清除'), 'the settings panel reports the clear')
+  assert.ok(ui.text(settingsDialog(ui)).includes('DSH'), 'the DSH boundary note stays visible')
 })
 
 test('stored background and font choices are restored on the next render', () => {

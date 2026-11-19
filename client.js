@@ -60,6 +60,164 @@ window.__ModuleLoader__.load({
       return line
     }
     // <dsh-famling:actions:end>
+    // <dsh-famling:scale:begin>
+    // Four-level scale model (MB-053): the plugin-owned equivalent of famling
+    // src/pet/scaling.ts, scoped to this widget only (never the DSH global theme).
+    // 1. 整体缩放 scales ALL content together (常用, first level);
+    // 2. UI + 文本 / 图像 are independent axes relative to it (100% = follow);
+    // 3. 气泡 / 右键菜单 / 面板 / 内容中心 / 设置 live one level deeper (设置 → 高级)
+    //    and default to inherit. 100% = the shipped 72px pet + 12px text look.
+    // Pure and storage-injectable: Node tests cover clamps/persistence/migration.
+    const SCALE_MODEL_VERSION = 1
+    const SCALE_KEY = 'dsh-famling/scale'
+    const SCALE_MODEL_KEY = SCALE_KEY + '/model'
+    const SCALE_GLOBAL_KEY = SCALE_KEY + '/global'
+    const SCALE_UI_TEXT_KEY = SCALE_KEY + '/ui-text'
+    const SCALE_IMAGE_KEY = SCALE_KEY + '/image'
+    const SCALE_COMPONENT_PREFIX = SCALE_KEY + '/component/'
+    // Legacy absolute pet/text multipliers: read once, then inert (left as backup).
+    const LEGACY_SCALE_KEY = SCALE_KEY
+    const LEGACY_TEXT_KEY = 'dsh-famling/text-scale'
+    const GLOBAL_SCALE_MIN = 0.5, GLOBAL_SCALE_MAX = 2, GLOBAL_SCALE_DEFAULT = 1, GLOBAL_SCALE_STEP = 0.05
+    const UI_TEXT_SCALE_MIN = 0.4, UI_TEXT_SCALE_MAX = 1.5, UI_TEXT_SCALE_DEFAULT = 1
+    const IMAGE_SCALE_MIN = 0.5, IMAGE_SCALE_MAX = 2, IMAGE_SCALE_DEFAULT = 1
+    const AXIS_SCALE_STEP = 0.05
+    const COMPONENT_SCALE_MIN = 0.75, COMPONENT_SCALE_MAX = 1.5
+    // Effective caps: readable text, pet/bubble inside the 240px sidebar budget;
+    // panels are additionally viewport-fitted by the render code.
+    const UI_SCALE_MIN = 0.6, UI_SCALE_MAX = 2.5
+    const IMAGE_CAP_MIN = 0.5, IMAGE_CAP_MAX = 2
+    const COMPONENT_ZOOM_MIN = 0.5, COMPONENT_ZOOM_MAX = 2
+    const BUBBLE_MAX_WIDTH = 240
+    const SCALE_COMPONENTS = [
+      { id: 'bubble', zh: '气泡', en: 'Bubble' },
+      { id: 'menu', zh: '右键菜单', en: 'Context menu' },
+      { id: 'panel', zh: '面板', en: 'Panels' },
+      { id: 'contentHub', zh: '内容中心', en: 'Content center' },
+      { id: 'settings', zh: '设置弹窗', en: 'Settings dialog' },
+    ]
+    const SCALE_COMPONENT_IDS = SCALE_COMPONENTS.map((item) => item.id)
+    function defaultScaleSettings() { return { global: 1, uiText: 1, image: 1, components: {} } }
+    function scaleStorage() { try { return typeof localStorage === 'undefined' ? null : localStorage } catch { return null } }
+    function scaleGet(store, key) { try { return store && typeof store.getItem === 'function' ? store.getItem(key) : null } catch { return null } }
+    function scaleSet(store, key, value) { try { if (store && typeof store.setItem === 'function') store.setItem(key, value) } catch {} }
+    function scaleRemove(store, key) { try { if (store && typeof store.removeItem === 'function') store.removeItem(key) } catch {} }
+    function clampScale(value, min, max) { return Math.min(max, Math.max(min, value)) }
+    function scaleNumber(value, fallback) { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : fallback }
+    function normalizeScaleSettings(settings) {
+      const source = settings && typeof settings === 'object' ? settings : {}
+      const components = {}
+      const rawComponents = source.components && typeof source.components === 'object' ? source.components : {}
+      for (const id of SCALE_COMPONENT_IDS) {
+        const clamped = clampScale(scaleNumber(rawComponents[id], 1), COMPONENT_SCALE_MIN, COMPONENT_SCALE_MAX)
+        // Multiplier 1 is the inherited default, never an override.
+        if (Math.abs(clamped - 1) > 1e-9) components[id] = clamped
+      }
+      return {
+        global: clampScale(scaleNumber(source.global, 1), GLOBAL_SCALE_MIN, GLOBAL_SCALE_MAX),
+        uiText: clampScale(scaleNumber(source.uiText, 1), UI_TEXT_SCALE_MIN, UI_TEXT_SCALE_MAX),
+        image: clampScale(scaleNumber(source.image, 1), IMAGE_SCALE_MIN, IMAGE_SCALE_MAX),
+        components,
+      }
+    }
+    function readScaleNumber(store, key, fallback) {
+      const raw = scaleGet(store, key)
+      return raw === null || String(raw).trim() === '' ? fallback : scaleNumber(raw, fallback)
+    }
+    function readScaleSettings(store) {
+      const components = {}
+      for (const id of SCALE_COMPONENT_IDS) {
+        const raw = scaleGet(store, SCALE_COMPONENT_PREFIX + id)
+        if (raw !== null && String(raw).trim() !== '') components[id] = scaleNumber(raw, 1)
+      }
+      return normalizeScaleSettings({
+        global: readScaleNumber(store, SCALE_GLOBAL_KEY, 1),
+        uiText: readScaleNumber(store, SCALE_UI_TEXT_KEY, 1),
+        image: readScaleNumber(store, SCALE_IMAGE_KEY, 1),
+        components,
+      })
+    }
+    function hasStoredScaleModel(store) {
+      if (scaleGet(store, SCALE_MODEL_KEY) !== null) return true
+      if (scaleGet(store, SCALE_GLOBAL_KEY) !== null || scaleGet(store, SCALE_UI_TEXT_KEY) !== null || scaleGet(store, SCALE_IMAGE_KEY) !== null) return true
+      return SCALE_COMPONENT_IDS.some((id) => scaleGet(store, SCALE_COMPONENT_PREFIX + id) !== null)
+    }
+    /** One-time migration of the legacy absolute pet/text scales, at global 100%. */
+    function migrateLegacyScaleSettings(store) {
+      const legacyScale = scaleGet(store, LEGACY_SCALE_KEY)
+      const legacyText = scaleGet(store, LEGACY_TEXT_KEY)
+      if (legacyScale === null && legacyText === null) return null
+      let pet = 1
+      let text = 1
+      if (legacyScale !== null && String(legacyScale).trim() !== '') {
+        let parsed = null
+        try { parsed = JSON.parse(legacyScale) } catch {}
+        if (parsed && typeof parsed === 'object') {
+          pet = scaleNumber(parsed.pet, scaleNumber(parsed.image, pet))
+          text = scaleNumber(parsed.text, scaleNumber(parsed.uiText, text))
+        } else pet = scaleNumber(legacyScale, pet)
+      }
+      if (legacyText !== null && String(legacyText).trim() !== '') text = scaleNumber(legacyText, text)
+      return normalizeScaleSettings({ global: 1, uiText: text, image: pet, components: {} })
+    }
+    function loadScaleSettings(storage) {
+      const store = storage === undefined ? scaleStorage() : storage
+      if (!store) return { settings: defaultScaleSettings(), migrated: false }
+      if (hasStoredScaleModel(store)) return { settings: readScaleSettings(store), migrated: false }
+      const migrated = migrateLegacyScaleSettings(store)
+      return migrated ? { settings: migrated, migrated: true } : { settings: defaultScaleSettings(), migrated: false }
+    }
+    function persistScaleSettings(settings, storage) {
+      const store = storage === undefined ? scaleStorage() : storage
+      if (!store) return
+      const values = normalizeScaleSettings(settings)
+      scaleSet(store, SCALE_MODEL_KEY, String(SCALE_MODEL_VERSION))
+      scaleSet(store, SCALE_GLOBAL_KEY, String(values.global))
+      const axis = (key, value) => { if (Math.abs(value - 1) > 1e-9) scaleSet(store, key, String(value)); else scaleRemove(store, key) }
+      axis(SCALE_UI_TEXT_KEY, values.uiText)
+      axis(SCALE_IMAGE_KEY, values.image)
+      for (const id of SCALE_COMPONENT_IDS) {
+        const value = values.components[id]
+        if (typeof value === 'number') scaleSet(store, SCALE_COMPONENT_PREFIX + id, String(value))
+        else scaleRemove(store, SCALE_COMPONENT_PREFIX + id)
+      }
+    }
+    function resetScaleSettings(storage) {
+      const settings = defaultScaleSettings()
+      const store = storage === undefined ? scaleStorage() : storage
+      // A reset is deliberate: the marker keeps legacy keys inert.
+      if (store) persistScaleSettings(settings, store)
+      return settings
+    }
+    function resolveScaleSettings(settings) {
+      const values = normalizeScaleSettings(settings)
+      const uiScale = clampScale(values.global * values.uiText, UI_SCALE_MIN, UI_SCALE_MAX)
+      const imageScale = clampScale(values.global * values.image, IMAGE_CAP_MIN, IMAGE_CAP_MAX)
+      const components = {}
+      for (const id of SCALE_COMPONENT_IDS) components[id] = clampScale(uiScale * (values.components[id] || 1), COMPONENT_ZOOM_MIN, COMPONENT_ZOOM_MAX)
+      return { global: values.global, uiText: values.uiText, image: values.image, uiScale, imageScale, components }
+    }
+    /** Fit a desired zoom inside a viewport so scaled art is never clipped. */
+    function fitScaleToViewport(desired, art, viewport, margin) {
+      const wanted = Number.isFinite(desired) ? Math.max(0.01, desired) : 1
+      if (!(art.width > 0) || !(art.height > 0) || !(viewport.width > 0) || !(viewport.height > 0)) return wanted
+      return Math.max(0.01, Math.min(wanted, Math.max(0, viewport.width - margin.x * 2) / art.width, Math.max(0, viewport.height - margin.top - margin.bottom) / art.height))
+    }
+    function formatScalePercent(value) { return Math.round(value * 100) + '%' }
+    function formatScaleMultiplier(value) { return String(Math.round(value * 1000) / 1000) + '×' }
+    function scaleStorageKeys() {
+      return [SCALE_MODEL_KEY, SCALE_GLOBAL_KEY, SCALE_UI_TEXT_KEY, SCALE_IMAGE_KEY].concat(SCALE_COMPONENT_IDS.map((id) => SCALE_COMPONENT_PREFIX + id)).concat([LEGACY_SCALE_KEY, LEGACY_TEXT_KEY])
+    }
+    const SCALE_CATALOG = {
+      global: { min: Math.round(GLOBAL_SCALE_MIN * 100), max: Math.round(GLOBAL_SCALE_MAX * 100), step: Math.round(GLOBAL_SCALE_STEP * 100) },
+      uiText: { min: Math.round(UI_TEXT_SCALE_MIN * 100), max: Math.round(UI_TEXT_SCALE_MAX * 100), step: Math.round(AXIS_SCALE_STEP * 100) },
+      image: { min: Math.round(IMAGE_SCALE_MIN * 100), max: Math.round(IMAGE_SCALE_MAX * 100), step: Math.round(AXIS_SCALE_STEP * 100) },
+      componentOptions: [COMPONENT_SCALE_MIN, 1.25, COMPONENT_SCALE_MAX],
+      components: SCALE_COMPONENTS,
+      storageKeys: scaleStorageKeys(),
+      bubbleMaxWidth: BUBBLE_MAX_WIDTH,
+    }
+    // <dsh-famling:scale:end>
     // <dsh-famling:content:begin>
     // Role = theme bundle catalog. Applying a role writes character + voice
     // policy + dialogue + theme + background + font in one step; individual
@@ -355,23 +513,23 @@ window.__ModuleLoader__.load({
         contentLoading: '正在加载内容中心…', contentFailed: '内容中心加载失败，角色与外观设置仍可继续使用。',
         interact: '互动', settings: '设置',
         menu: '菜单', menuButton: '显示菜单按钮',
-        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.2 · 研究原型',
+        chatEntry: '聊两句…', settingsEntry: '设置…', moreEntry: '更多', quitEntry: '退出（隐藏，刷新恢复）', back: '返回', remindEntry: '提醒…', notice: '使用限制与版本', version: 'dsh-famling 0.10.4 · 研究原型',
         inputTitle: '和{pet}说话', placeholder: '对{pet}说点什么…',
         mic: '语音输入', send: '发送',
         settingsTitle: '设置', sound: '语音朗读',
-        aiNotice: 'AI 声明：角色与语音为 AI 生成/合成，不是真人；本插件不提供自由 LLM 角色扮演或情感陪伴。',
+        aiNotice: 'AI 声明：角色与语音为 AI 生成/合成，不是真人、非官方；聊天为工作助理型 AI 回复，文本经 DSH 发给你配置的模型供应商，勿发密码/隐私/客户资料；不提供角色扮演或情感陪伴。危机求助：12356 / 110 / 120。',
+        chatOff: 'AI 聊天已关闭。',
         settingsLoading: '正在加载设置…', settingsFailed: '设置面板加载失败；右键菜单与角色互动仍可继续使用。',
         useRestrictions: '⚠️ 使用限制：本项目及全部代码、美术、音频、文案、角色素材仅用于技术研究与原型验证，不得用于情感陪伴、虚拟伴侣、医疗/心理/法律/金融建议或任何违规用途。',
-        ttsHumanOnly: '语音朗读仅汀岚形象可用；塞尔凯克卷毛猫（卷毛灰白）/金毛只显示“心里话”气泡，浏览器 TTS 不会被调用（切换时也会停止朗读）。',
         consentTts: '开启语音朗读前需独立确认：使用浏览器系统语音，不是 DeepSeek stella/tide；回复文本会被朗读，可随时关闭。',
         consentAsr: '语音输入前需独立确认：浏览器语音识别可能把音频发送给浏览器厂商；仅在你点击麦克风后录音，可随时关闭。',
         task: '提醒', taskAt: '提醒时间', createTask: '创建提醒', taskEmpty: '写下提醒内容并选择未来时间。', taskDone: '已创建提醒。',
         allow: '同意并开启', cancel: '暂不开启',
-        bridgeMissing: 'DSH/Advisers 桥接尚未接入。', bridgeFailed: '桥接调用失败。',
+        bridgeFailed: '桥接调用失败。',
         micUnsupported: '当前浏览器不支持语音输入。', inputEmpty: '先说点什么吧。',
-        patLine: '被摸到了。', paperLine: '纸团飞出去了。', chasePaperLine: '纸团滚走了，捡回来。', waveLine: '挥了挥手。', stretchLine: '伸了个懒腰。', coverFaceLine: '抬手理了理头发。', lookBackLine: '回头看了一眼。',
-        catPatLine: '（被摸到了，呼噜呼噜…）', catPaperLine: '（那个纸团…想扑。）', catChaseLine: '（球！抓住它。）', catWashLine: '（洗洗脸。）', catStandLine: '（站起来看看。）', catTailLine: '（尾巴…转。）', catScratchLine: '（挠挠耳朵。）',
-        dogPatLine: '（好舒服，还要！）', dogPaperLine: '（球！丢远点！）', dogChaseLine: '（我去捡回来！）', dogWagLine: '（摇尾巴…开心。）', dogTailLine: '（尾巴在动？追！）', dogScratchLine: '（挠挠痒。）', dogLickLine: '（舔舔爪子。）',
+        waveLine: '挥了挥手。', stretchLine: '伸了个懒腰。', coverFaceLine: '抬手理了理头发。', lookBackLine: '回头看了一眼。',
+        catWashLine: '（洗洗脸。）', catStandLine: '（站起来看看。）', catTailLine: '（尾巴…转。）', catScratchLine: '（挠挠耳朵。）',
+        dogWagLine: '（摇尾巴…开心。）', dogTailLine: '（尾巴在动？追！）', dogScratchLine: '（挠挠痒。）', dogLickLine: '（舔舔爪子。）',
       },
       en: {
         lang: 'en',
@@ -381,24 +539,24 @@ window.__ModuleLoader__.load({
         contentLoading: 'Loading content center…', contentFailed: 'The content center failed to load; character and appearance settings still work.',
         interact: 'Play', settings: 'Settings',
         menu: 'Menu', menuButton: 'Show menu button',
-        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.2 · research prototype',
+        chatEntry: 'Chat…', settingsEntry: 'Settings…', moreEntry: 'More', quitEntry: 'Quit (hide; refresh to restore)', back: 'Back', remindEntry: 'Reminder…', notice: 'Usage & version', version: 'dsh-famling 0.10.4 · research prototype',
         inputTitle: 'Talk to {pet}', placeholder: 'Say something to {pet}…',
         mic: 'Voice input', send: 'Send',
         actionLabels: { pat: 'Pat', fetch: 'Throw / fetch', retrieve: 'Fetch', tail: 'Chase tail', run: 'Run', stretch: 'Stretch', wash: 'Wash face', feed: 'Hand paper', wave: 'Wave', tidy: 'Fix bow', talk: 'Chat' },
         settingsTitle: 'Settings', sound: 'Voice',
-        aiNotice: 'AI notice: character and voice are AI-generated, not a human; this plugin offers no free-form roleplay or emotional companionship.',
+        aiNotice: 'AI notice: character/voice are AI-generated, not a human or official; chat is a work-assistant style AI reply whose text goes through DSH to the model provider you configured - never send passwords, private data or client material; no roleplay or companionship. Crisis help: 12356 / 110 / 120.',
+        chatOff: 'AI chat is off.',
         settingsLoading: 'Loading settings…', settingsFailed: 'The settings panel failed to load; the right-click menu and interactions still work.',
         useRestrictions: '⚠️ Use restriction: this project and all code, art, audio, text and character assets are for technical research and prototype validation only. Do not use them for emotional companionship, virtual partners, medical/psychological/legal/financial advice, or any unlawful purpose.',
-        ttsHumanOnly: 'Voice playback is only available for Tinglan; the Selkirk Rex cat (curly grey-white) and Golden Retriever use hollow thought bubbles and never call browser TTS (any running speech is cancelled on switch).',
         consentTts: 'Voice playback needs separate confirmation: it uses the browser system voice, not DeepSeek stella/tide; replies may be read aloud and can be switched off.',
         consentAsr: 'Voice input needs separate confirmation: browser speech recognition may send audio to the browser vendor; the microphone starts only after your click and can be switched off.',
         task: 'Remind', taskAt: 'Remind at', createTask: 'Create reminder', taskEmpty: 'Write a reminder and choose a future time.', taskDone: 'Reminder created.',
         allow: 'Agree and enable', cancel: 'Not now',
-        bridgeMissing: 'DSH/Advisers bridge is not connected yet.', bridgeFailed: 'Bridge call failed.',
+        bridgeFailed: 'Bridge call failed.',
         micUnsupported: 'Speech input is unavailable in this browser.', inputEmpty: 'Say something first.',
-        patLine: 'Pat received.', paperLine: 'Paper ball away!', chasePaperLine: 'The paper ball rolled off; picked it up.', waveLine: 'Waved hello.', stretchLine: 'Stretched a little.', coverFaceLine: 'Tidied her hair.', lookBackLine: 'Glanced back.',
-        catPatLine: '(Patted. Purr…)', catPaperLine: '(That paper ball… pounce?)', catChaseLine: '(Ball! Got it.)', catWashLine: '(Washing my face.)', catStandLine: '(Standing up to look.)', catTailLine: '(Tail… spinning.)', catScratchLine: '(Scratching an ear.)',
-        dogPatLine: '(So good! Again!)', dogPaperLine: '(Ball! Throw it far!)', dogChaseLine: '(I will fetch it!)', dogWagLine: '(Tail wagging… happy.)', dogTailLine: '(Tail moved? Chase!)', dogScratchLine: '(Scratching an itch.)', dogLickLine: '(Licking a paw.)',
+        waveLine: 'Waved hello.', stretchLine: 'Stretched a little.', coverFaceLine: 'Tidied her hair.', lookBackLine: 'Glanced back.',
+        catWashLine: '(Washing my face.)', catStandLine: '(Standing up to look.)', catTailLine: '(Tail… spinning.)', catScratchLine: '(Scratching an ear.)',
+        dogWagLine: '(Tail wagging… happy.)', dogTailLine: '(Tail moved? Chase!)', dogScratchLine: '(Scratching an itch.)', dogLickLine: '(Licking a paw.)',
       },
     }
     const buttonBase = {
@@ -413,8 +571,10 @@ window.__ModuleLoader__.load({
       return L[lang] || L.zh
     }
     function loadSettings() {
-      try { return { sound: false, motion: true, bubble: true, voiceURI: '', ...JSON.parse(localStorage.getItem('dsh-famling/settings') || '{}') } } catch { return { sound: false, motion: true, bubble: true, voiceURI: '' } }
+      try { return { sound: false, motion: true, bubble: true, voiceURI: '', chat: true, ...JSON.parse(localStorage.getItem('dsh-famling/settings') || '{}') } } catch { return { sound: false, motion: true, bubble: true, voiceURI: '', chat: true } }
     }
+    // MB-021: one-time local first-run flag; only "1" counts, no network.
+    const FIRST_RUN_KEY = 'dsh-famling/first-run/v1'
     const CONSENT_KEY = 'dsh-famling/consent/v1'
     function loadConsent() {
       try { return { tts: false, asr: false, ...JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') } } catch { return { tts: false, asr: false } }
@@ -456,6 +616,15 @@ window.__ModuleLoader__.load({
       const [input, setInput] = useState('')
       const [listening, setListening] = useState(false)
       const [settings, setSettings] = useState(loadSettings)
+      // Four-level scale state (整体 / UI+文本 / 图像 / 组件); the model below is
+      // loaded once per mount and migration is written by an effect, never at load.
+      const scaleInitial = useRef(null)
+      if (scaleInitial.current === null) scaleInitial.current = loadScaleSettings()
+      const [scaleSettings, setScaleSettings] = useState(scaleInitial.current.settings)
+      const [, setScaleViewportVersion] = useState(0)
+      const scalePersistReady = useRef(false)
+      const [firstRunAck, setFirstRunAck] = useState(() => { try { return localStorage.getItem(FIRST_RUN_KEY) === '1' } catch { return false } })
+      const [localDataCleared, setLocalDataCleared] = useState(false)
       const [ttsConsent, setTtsConsent] = useState(() => loadConsent().tts)
       const [asrConsent, setAsrConsent] = useState(() => loadConsent().asr)
       const [consentKind, setConsentKind] = useState(null)
@@ -499,10 +668,43 @@ window.__ModuleLoader__.load({
       const characterRef = useRef(character)
       const charName = L.characters?.[character] || L.pet
       const canTts = characterCanTts(character)
+      // Resolve the four levels once per render: 100% is the shipped 72px/12px
+      // look, the pet is additionally fitted to the viewport, and every panel
+      // gets a box that is divided by its zoom so the scaled panel still fits.
+      const resolvedScale = resolveScaleSettings(scaleSettings)
+      const scaleZoom = resolvedScale.components
+      const scaleViewport = {
+        width: typeof window !== 'undefined' && Number.isFinite(window.innerWidth) ? window.innerWidth : 1024,
+        height: typeof window !== 'undefined' && Number.isFinite(window.innerHeight) ? window.innerHeight : 768,
+      }
+      const petScale = fitScaleToViewport(resolvedScale.imageScale, { width: SIZE, height: SIZE }, { width: Math.min(scaleViewport.width, BUBBLE_MAX_WIDTH + 8), height: scaleViewport.height }, { x: 4, top: 8, bottom: 8 })
+      const petSize = Math.max(24, Math.round(SIZE * petScale))
+      // Only the two values consumed by CSS calcs live as custom properties; the
+      // component zooms are applied as numeric layout/transform values instead.
+      const scaleVars = {
+        '--dsh-famling-ui-scale': String(resolvedScale.uiScale),
+        '--dsh-famling-bubble-zoom': String(scaleZoom.bubble),
+      }
       function fillPet(text) { return String(text).replaceAll('{pet}', charName) }
       useEffect(() => {
         try { localStorage.setItem('dsh-famling/settings', JSON.stringify(settings)) } catch {}
       }, [settings])
+      // Scale persistence: a fresh default profile writes nothing; a one-time
+      // legacy migration is written on mount, then every user change is saved.
+      useEffect(() => {
+        if (scaleInitial.current && scaleInitial.current.migrated) persistScaleSettings(scaleInitial.current.settings)
+      }, [])
+      useEffect(() => {
+        if (!scalePersistReady.current) { scalePersistReady.current = true; return }
+        persistScaleSettings(scaleSettings)
+      }, [scaleSettings])
+      // A resized DSH window re-renders the widget so the fitted pet and any open
+      // panel/menu re-clamp to the new viewport (scale never clips content).
+      useEffect(() => {
+        const onResize = () => setScaleViewportVersion((value) => value + 1)
+        window.addEventListener('resize', onResize)
+        return () => window.removeEventListener('resize', onResize)
+      }, [])
       useEffect(() => {
         try { localStorage.setItem(CHARACTER_KEY, character) } catch {}
       }, [character])
@@ -630,6 +832,13 @@ window.__ModuleLoader__.load({
         requestCharacterChunk(character, () => { if (alive) setAnimDataVersion((value) => value + 1) })
         return () => { alive = false }
       }, [character])
+      // First run: lazy-load the panel chunk only for the one-time safety notice.
+      useEffect(() => {
+        if (firstRunAck || contentState !== 'idle') return undefined
+        let alive = true
+        requestContentChunk((module) => { if (alive) setContentState(module ? 'ready' : 'failed') })
+        return () => { alive = false }
+      }, [firstRunAck, contentState])
       // The content-center UI is a package-local lazy chunk: load it only when
       // the panel opens, so the first-screen entry stays within its budget.
       useEffect(() => {
@@ -769,7 +978,7 @@ window.__ModuleLoader__.load({
           { id: 'chat', label: L.chatEntry, run: () => { closeMenu(false); setTaskMode(false); showPanel('input') } },
           { id: 'actions', label: L.interact, submenu: 'actions' },
           { id: 'content', label: L.contentEntry, run: () => { closeMenu(false); showPanel('content') } },
-          { id: 'settings', label: L.settingsEntry, run: () => { closeMenu(false); showPanel('settings') } },
+          { id: 'settings', label: L.settingsEntry, run: () => { closeMenu(false); setLocalDataCleared(false); showPanel('settings') } },
           { id: 'more', label: L.moreEntry, submenu: 'more' },
           { id: 'quit', label: L.quitEntry, run: () => { closeMenu(false); setExited(true) } },
         ]
@@ -918,6 +1127,31 @@ window.__ModuleLoader__.load({
         }
         setSettings((value) => ({ ...value, [key]: !value[key] }))
       }
+      /** One scale change: clamp now, apply on render, persist through the effect. */
+      function updateScaleSettings(next) {
+        setScaleSettings(normalizeScaleSettings(next))
+      }
+      function setGlobalScale(value) {
+        updateScaleSettings({ ...scaleSettings, global: clampScale(value, GLOBAL_SCALE_MIN, GLOBAL_SCALE_MAX) })
+      }
+      function setUiTextScale(value) {
+        updateScaleSettings({ ...scaleSettings, uiText: clampScale(value, UI_TEXT_SCALE_MIN, UI_TEXT_SCALE_MAX) })
+      }
+      function setImageScale(value) {
+        updateScaleSettings({ ...scaleSettings, image: clampScale(value, IMAGE_SCALE_MIN, IMAGE_SCALE_MAX) })
+      }
+      function setComponentScale(componentId, value) {
+        if (!SCALE_COMPONENT_IDS.includes(componentId)) return
+        const components = { ...scaleSettings.components }
+        if (value === null || !Number.isFinite(value) || Math.abs(value - 1) < 1e-9) delete components[componentId]
+        else components[componentId] = clampScale(value, COMPONENT_SCALE_MIN, COMPONENT_SCALE_MAX)
+        updateScaleSettings({ ...scaleSettings, components })
+      }
+      function resetScales() {
+        // resetScaleSettings persists immediately so the version marker survives
+        // a reset; the effect above then writes the same defaults idempotently.
+        setScaleSettings(resetScaleSettings())
+      }
       function acceptConsent() {
         const kind = consentKind
         if (!kind) return
@@ -934,6 +1168,12 @@ window.__ModuleLoader__.load({
       function cancelConsent() {
         pendingConsent.current = null
         setConsentKind(null)
+      }
+      /** MB-022: keys were wiped by the settings chunk; withdraw in-memory consent. */
+      function clearLocalState() {
+        setTtsConsent(false)
+        setAsrConsent(false)
+        setLocalDataCleared(true)
       }
       async function loadBrief() {
         setBriefError('')
@@ -955,6 +1195,7 @@ window.__ModuleLoader__.load({
       async function sendInput() {
         const text = input.trim()
         if (!text) { say(L.inputEmpty, 'speech', 'direct'); return }
+        if (settings.chat === false) { say(L.chatOff, 'speech', 'direct'); return }
         if (bridgeInFlight.current) return
         bridgeInFlight.current = true
         const controller = typeof AbortController === 'function' ? new AbortController() : null
@@ -1038,6 +1279,27 @@ window.__ModuleLoader__.load({
       const backgroundVars = (BACKGROUNDS[backgroundId] || BACKGROUNDS.transparent).vars
       const activeFont = FONTS[fontChoice.family] || FONTS.system
       const fontVars = { '--dsh-famling-font-family': activeFont.family, '--dsh-famling-font-size': fontChoice.size + 'px', '--dsh-famling-line-height': String(fontChoice.lineHeight) }
+      // Panel box: the layout width/height is divided by the component zoom and
+      // the panel is transform-scaled from its bottom-left anchor, so a scaled
+      // panel can never leave the viewport (transform origin = anchor corner).
+      function makePanelBox(kind, baseWidth, baseMaxHeight) {
+        const zoom = scaleZoom[kind] || 1
+        const left = Math.max(8, Math.min(panelAnchor.current.left, scaleViewport.width - 8))
+        const bottom = Math.max(8, Math.min(panelAnchor.current.bottom, scaleViewport.height - 8))
+        const availableWidth = Math.max(140, scaleViewport.width - left - 8)
+        const availableHeight = Math.max(120, scaleViewport.height - bottom - 8)
+        return {
+          zoom,
+          width: Math.max(140, Math.min(baseWidth, Math.floor(availableWidth / zoom))),
+          maxHeight: Math.max(120, Math.min(baseMaxHeight, Math.floor(availableHeight / zoom))),
+        }
+      }
+      function panelZoomStyle(box) {
+        return { width: box.width, maxWidth: box.width, maxHeight: box.maxHeight, overflowY: 'auto', transform: 'scale(' + box.zoom + ')', transformOrigin: 'left bottom' }
+      }
+      const panelBox = makePanelBox('panel', 300, 680)
+      const contentBox = makePanelBox('contentHub', 360, 640)
+      const settingsBox = makePanelBox('settings', 310, 680)
       const panelStyle = {
         position: 'fixed', left: panelAnchor.current.left, bottom: panelAnchor.current.bottom, zIndex: 1200, pointerEvents: 'auto',
         background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
@@ -1047,7 +1309,7 @@ window.__ModuleLoader__.load({
         boxShadow: '0 0 0 3px var(--dsh-famling-widget-bg, transparent), 0 10px 30px rgba(0,0,0,.32)',
         padding: 10, fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)',
       }
-      const inputPanel = mode === 'input' ? h('div', { role: 'dialog', 'aria-label': fillPet(L.inputTitle), style: { ...panelStyle, width: 300, maxWidth: 'calc(100vw - 24px)' } }, [
+      const inputPanel = mode === 'input' ? h('div', { role: 'dialog', 'aria-label': fillPet(L.inputTitle), style: { ...panelStyle, ...panelZoomStyle(panelBox) } }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } }, [
           h('strong', { key: 't', style: { flex: 1 } }, fillPet(L.inputTitle)),
           h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
@@ -1061,10 +1323,11 @@ window.__ModuleLoader__.load({
           }),
           h('div', { key: 'side', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
             h('button', { key: 'mic', type: 'button', title: L.mic, 'aria-label': L.mic, onClick: startVoice, style: { ...buttonBase, padding: '8px 7px' } }, listening ? '…' : '🎙'),
-            h('button', { key: 'send', type: 'button', onClick: () => void sendInput(), style: { ...buttonBase, padding: '8px 7px' } }, L.send),
+            h('button', { key: 'send', type: 'button', onClick: () => void sendInput(), disabled: settings.chat === false, style: { ...buttonBase, padding: '8px 7px', opacity: settings.chat === false ? 0.5 : 1 } }, L.send),
           ]),
         ]),
         h('p', { key: 'ai-note', style: { margin: '0 0 6px', fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, L.aiNotice),
+        settings.chat === false ? h('p', { key: 'chat-off', style: { margin: 0, fontSize: 11, color: '#a63d35' } }, L.chatOff) : null,
         h('div', { key: 'task', style: { marginTop: 8, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(255,255,255,.22))', paddingTop: 7 } }, [
           h('button', { key: 'toggle', type: 'button', onClick: () => setTaskMode((value) => !value), style: { ...buttonBase, padding: '4px 7px' } }, L.task),
           taskMode ? h('div', { key: 'form', style: { marginTop: 6, display: 'flex', flexDirection: 'column', gap: 5 } }, [
@@ -1077,16 +1340,19 @@ window.__ModuleLoader__.load({
       // Menu node: data-driven pages rendered as aria menuitems; positioned
       // fixed and clamped to the viewport (right-click, keyboard or trigger).
       const currentMenuItems = menuItems()
-      const menuHeight = MENU_PADDING + currentMenuItems.length * MENU_ITEM_HEIGHT
-      const menuPosition = clampMenuPosition(menuAnchor.x, menuAnchor.y, MENU_WIDTH, menuHeight)
+      const menuBaseHeight = MENU_PADDING + currentMenuItems.length * MENU_ITEM_HEIGHT
+      // The menu scales as one unit around its top-left anchor; the zoom is
+      // capped so the scaled menu always fits the viewport (right-click clamp).
+      const menuZoom = Math.min(scaleZoom.menu, Math.max(0.75, (scaleViewport.width - 16) / MENU_WIDTH), Math.max(0.75, (scaleViewport.height - 16) / menuBaseHeight))
+      const menuPosition = clampMenuPosition(menuAnchor.x, menuAnchor.y, MENU_WIDTH * menuZoom, menuBaseHeight * menuZoom)
       const menuNode = menuOpen ? h('div', {
         key: 'menu', ref: menuRef, id: 'dsh-famling-menu', role: 'menu', 'aria-label': L.menu,
         'aria-activedescendant': 'dsh-famling-menu-item-' + menuActive,
         onKeyDown: onMenuKeyDown,
         onContextMenu: (event) => { if (event && typeof event.preventDefault === 'function') event.preventDefault(); if (event && typeof event.stopPropagation === 'function') event.stopPropagation() },
         style: {
-          position: 'fixed', left: menuPosition.left, top: menuPosition.top, zIndex: 1300, padding: 4, minWidth: MENU_WIDTH,
-          maxWidth: 'calc(100vw - 16px)', pointerEvents: 'auto',
+          position: 'fixed', left: menuPosition.left, top: menuPosition.top, zIndex: 1300, padding: 4, width: MENU_WIDTH, minWidth: MENU_WIDTH,
+          transform: 'scale(' + menuZoom + ')', transformOrigin: 'left top', pointerEvents: 'auto',
           background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
           color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, #e8e8e8))',
           border: '1px solid var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, rgba(255,255,255,.16)))',
@@ -1109,7 +1375,7 @@ window.__ModuleLoader__.load({
         },
       }, [h('span', { key: 'label' }, item.label), item.submenu ? h('span', { key: 'arrow', 'aria-hidden': true }, ' ▸') : null]))) : null
       // More -> usage notice: short legal text, closed by the standard dialog keys.
-      const noticePanel = mode === 'notice' ? h('div', { role: 'dialog', 'aria-label': L.notice, style: { ...panelStyle, width: 300 } }, [
+      const noticePanel = mode === 'notice' ? h('div', { role: 'dialog', 'aria-label': L.notice, style: { ...panelStyle, ...panelZoomStyle(panelBox) } }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 } }, [
           h('strong', { key: 't', style: { flex: 1 } }, L.notice),
           h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
@@ -1121,7 +1387,7 @@ window.__ModuleLoader__.load({
       // share client.content.js; both degrade to a local message when it fails.
       const panelChunk = contentChunk.module
       function panelFallback(title, message) {
-        return h('div', { role: 'dialog', 'aria-label': title, style: { ...panelStyle, width: 300 } }, [
+        return h('div', { role: 'dialog', 'aria-label': title, style: { ...panelStyle, ...panelZoomStyle(panelBox) } }, [
           h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
             h('strong', { key: 't', style: { flex: 1 } }, title),
             h('button', { key: 'x', ref: closeRef, type: 'button', onClick: () => setMode(null), 'aria-label': L.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
@@ -1129,6 +1395,9 @@ window.__ModuleLoader__.load({
           h('p', { key: 'state', style: { margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, message),
         ])
       }
+      // One-time first-run safety card (MB-021): the card UI + strings live in the
+      // lazy panel chunk, so only the once-per-install notice pays for them.
+      const firstRunPanel = firstRunAck ? null : panelChunk?.createFirstRunNotice?.({ lang: L.lang, aiNotice: L.aiNotice, panelStyle, panelBox, buttonBase, onAck: () => { setFirstRunAck(true); try { localStorage.setItem(FIRST_RUN_KEY, '1') } catch {} } }) || null
       const contentPanel = mode === 'content'
         ? panelChunk && typeof panelChunk.createContentCenter === 'function'
           ? panelChunk.createContentCenter({
@@ -1140,7 +1409,7 @@ window.__ModuleLoader__.load({
               onToggleSound: () => updateSetting('sound'),
               onApplyRole: applyRole, onRestoreRole: restoreRole,
               onClose: () => setMode(null),
-              panelStyle, buttonBase, catalog: CONTENT_CATALOG,
+              panelStyle, panelBox: contentBox, buttonBase, catalog: CONTENT_CATALOG,
             })
           : panelFallback(L.contentTitle, contentState === 'failed' ? L.contentFailed : L.contentLoading)
         : null
@@ -1148,6 +1417,7 @@ window.__ModuleLoader__.load({
         ? panelChunk && typeof panelChunk.createSettingsPanel === 'function'
           ? panelChunk.createSettingsPanel({
               lang: L.lang, aiNotice: L.aiNotice, useRestrictions: L.useRestrictions,
+              localDataCleared, onToggleChat: () => updateSetting('chat'), onClearLocalData: clearLocalState,
               character, roleId, canTts, ttsConsent, voices, settings, setSettings,
               menuButton, dialogueMode, themeId, backgroundId, fontChoice, brief, briefError,
               advancedOpen: settingsAdvanced, onToggleAdvanced: () => setSettingsAdvanced((value) => !value),
@@ -1157,15 +1427,22 @@ window.__ModuleLoader__.load({
               onLoadBrief: () => void loadBrief(), onHideBrief: () => setBrief(null),
               onOpenContent: () => { panelAnchor.current = anchor(); setMode('content') },
               onRestoreRole: restoreRole, onClose: () => setMode(null),
-              panelStyle, buttonBase, catalog: CONTENT_CATALOG,
+              scaleSettings, resolvedScales: resolvedScale,
+              onGlobalScale: setGlobalScale, onUiTextScale: setUiTextScale, onImageScale: setImageScale,
+              onComponentScale: setComponentScale, onResetScales: resetScales,
+              scaleCatalog: SCALE_CATALOG,
+              panelStyle, panelBox: settingsBox, buttonBase, catalog: CONTENT_CATALOG,
             })
           : panelFallback(L.settingsTitle, contentState === 'failed' ? L.settingsFailed : L.settingsLoading)
         : null
+      const consentZoom = scaleZoom.panel
+      const consentWidth = Math.max(140, Math.min(300, Math.floor((scaleViewport.width - 24) / consentZoom)))
+      const consentMaxHeight = Math.max(120, Math.floor((scaleViewport.height - 24) / consentZoom))
       const consentNode = consentKind ? h('div', {
         role: 'dialog', 'aria-modal': true, 'aria-label': consentKind === 'tts' ? L.sound : L.mic,
         style: {
-          position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 1400,
-          width: 300, maxWidth: 'calc(100vw - 24px)', padding: 14,
+          position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(' + consentZoom + ')', transformOrigin: 'center', zIndex: 1400,
+          width: consentWidth, maxWidth: consentWidth, maxHeight: consentMaxHeight, overflowY: 'auto', padding: 14,
           background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
           color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, #e8e8e8))',
           border: '1px dashed var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, rgba(255,255,255,.35)))',
@@ -1180,23 +1457,32 @@ window.__ModuleLoader__.load({
           h('button', { key: 'allow', type: 'button', onClick: acceptConsent, style: { ...buttonBase, padding: '5px 8px' } }, L.allow),
         ]),
       ]) : null
+      // The bubble is clamped to the 240px sidebar content budget and to the
+      // viewport, and its text/padding follow UI+文本 via the bubble component
+      // zoom (font-size uses the stored base size x the zoom multiplier).
+      const bubbleRect = rootRef.current && typeof rootRef.current.getBoundingClientRect === 'function' ? rootRef.current.getBoundingClientRect() : null
+      const bubbleMaxWidth = Math.min(BUBBLE_MAX_WIDTH, Math.max(120, scaleViewport.width - 16))
+      const bubbleLeft = Math.max(8, Math.min(bubbleRect ? bubbleRect.left : 12, scaleViewport.width - 8 - bubbleMaxWidth))
+      const bubbleBottom = Math.max(8, (bubbleRect ? scaleViewport.height - bubbleRect.top : scaleViewport.height - 120) + 6)
+      const bubbleMaxHeight = Math.max(80, scaleViewport.height - bubbleBottom - 8)
       const bubbleNode = settings.bubble && bubble ? h('div', {
         role: 'status', 'aria-live': 'polite',
         style: {
-          position: 'fixed', left: Math.max(8, (rootRef.current?.getBoundingClientRect().left ?? 12)), bottom: Math.max(8, window.innerHeight - (rootRef.current?.getBoundingClientRect().top ?? 120) + 6), zIndex: 1100, pointerEvents: 'none',
-          width: 'fit-content', minWidth: 90, maxWidth: 240, padding: '7px 10px',
+          position: 'fixed', left: bubbleLeft, bottom: bubbleBottom, zIndex: 1100, pointerEvents: 'none',
+          width: 'fit-content', minWidth: 'calc(90px * var(--dsh-famling-bubble-zoom, 1))', maxWidth: bubbleMaxWidth, maxHeight: bubbleMaxHeight, overflowY: 'auto',
+          padding: 'calc(7px * var(--dsh-famling-bubble-zoom, 1)) calc(10px * var(--dsh-famling-bubble-zoom, 1))',
           background: 'var(--dsh-famling-bubble-bg, #ffffff)', color: 'var(--dsh-famling-bubble-text, #111111)',
           border: bubbleKind === 'thought' ? '1.5px dashed var(--dsh-famling-bubble-thought-border, #8f8f8f)' : '1px solid var(--dsh-famling-bubble-border, #9a9a9a)',
           boxShadow: '0 0 0 3px var(--dsh-famling-widget-bg, transparent), 0 4px 16px rgba(0,0,0,.25)',
-          borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 'var(--dsh-famling-font-size, 12px)', lineHeight: 'var(--dsh-famling-line-height, 1.5)', overflowWrap: 'anywhere',
+          borderRadius: 'var(--dsw-radius-md, 10px)', fontSize: 'calc(var(--dsh-famling-font-size, 12px) * var(--dsh-famling-bubble-zoom, 1))', lineHeight: 'var(--dsh-famling-line-height, 1.5)', overflowWrap: 'anywhere',
         },
       }, bubble) : null
       if (exited) return null
-      return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, onContextMenu: openMenu, style: { position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 4, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', background: 'var(--dsh-famling-widget-bg, transparent)', color: 'var(--dsh-famling-widget-fg, inherit)', fontFamily: 'var(--dsh-famling-font-family, inherit)', borderRadius: 10, ...themeVars, ...backgroundVars, ...fontVars } }, [
+      return h('div', { ref: rootRef, 'data-character': character, title: L.useRestrictions, 'aria-description': L.useRestrictions, onContextMenu: openMenu, style: { position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 4, width: 'fit-content', height: 'fit-content', pointerEvents: 'none', background: 'var(--dsh-famling-widget-bg, transparent)', color: 'var(--dsh-famling-widget-fg, inherit)', fontFamily: 'var(--dsh-famling-font-family, inherit)', borderRadius: 10, ...themeVars, ...backgroundVars, ...fontVars, ...scaleVars } }, [
         h('button', { key: 'pet', ref: petRef, type: 'button', onClick: onPetClick, onContextMenu: openMenu, onKeyDown: onPetKeyDown, 'aria-label': charName, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: fillPet(L.title), style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
-          h('img', { src, width: SIZE, height: SIZE, alt: charName, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),
-        menuButton ? h('button', { key: 'menu-trigger', type: 'button', onClick: () => openMenuFrom(petRef), 'aria-label': L.menu, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: L.menuButton, style: { ...buttonBase, flex: 'none', padding: '1px 6px', fontSize: 11, lineHeight: 1.4, pointerEvents: 'auto' } }, '⋯') : null,
-        menuNode, inputPanel, noticePanel, contentPanel, settingsPanel, consentNode, bubbleNode,
+          h('img', { src, width: petSize, height: petSize, alt: charName, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),
+        menuButton ? h('button', { key: 'menu-trigger', type: 'button', onClick: () => openMenuFrom(petRef), 'aria-label': L.menu, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: L.menuButton, style: { ...buttonBase, flex: 'none', padding: '1px 6px', fontSize: 'calc(11px * var(--dsh-famling-ui-scale, 1))', lineHeight: 1.4, pointerEvents: 'auto' } }, '⋯') : null,
+        menuNode, inputPanel, firstRunPanel, noticePanel, contentPanel, settingsPanel, consentNode, bubbleNode,
       ])
     }
     return {

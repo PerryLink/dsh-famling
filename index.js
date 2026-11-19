@@ -16,6 +16,52 @@ const MAX_BODY_BYTES = 16 * 1024
 const BRIDGE_PATH = '/api/famling/bridge'
 const LLM_TIMEOUT_MS = 25_000
 const CHARACTER_IDS = ['human', 'cat', 'dog']
+// Crisis short-circuit. A hit is answered from the fixed resources below
+// BEFORE any model call, so the chat text never leaves the machine for that
+// turn; nothing is logged or stored, and the reply always says it is not a
+// diagnosis so an accidental keyword match stays harmless and dismissible.
+// Chinese phrases match as plain substrings; English phrases match at a word
+// start (so "scraped" never trips "raped").
+export const CRISIS_KEYWORDS = Object.freeze([
+  // self-harm / suicide
+  '自杀', '轻生', '想死', '不想活', '活不下去', '结束生命', '结束自己', '了结自己',
+  '伤害自己', '自残', '割腕', '跳楼', '吞药', '安眠药', '一了百了', '死了算了', '不想醒来',
+  // harm to others
+  '杀人', '想杀', '杀了', '报复社会', '伤害别人', '伤害他人',
+  // violence / abuse / medical emergency
+  '家暴', '虐待', '性侵', '强奸', '胸痛', '呼吸困难', '大出血', '中风', '急救',
+  // English equivalents
+  'suicide', 'suicidal', 'kill myself', 'killing myself', 'end my life', 'ending my life',
+  'want to die', 'wanna die', 'self-harm', 'self harm', 'hurt myself', 'hurting myself',
+  'cut myself', 'cutting myself', 'overdose', 'jump off', 'hang myself', 'no reason to live',
+  'better off dead', 'kill him', 'kill her', 'kill them', 'hurt someone', 'hurt people',
+  'domestic violence', 'being abused', 'abused me', 'raped', 'rape me', 'sexual assault',
+  'chest pain', "can't breathe", 'cannot breathe', 'bleeding heavily', 'heart attack',
+])
+const CRISIS_RESOURCES_ZH = '我听到了，先把安全放在第一位。如果你有伤害自己或他人的念头，请联系：全国心理援助热线 12356；紧急情况报警 110 / 急救 120；也可以立刻联系你信任的人、学校或单位的心理老师、就近医院的精神心理科/急诊。这不是诊断，只是一条安全提示；如果你只是随口一说，可以忽略它并继续聊。'
+const CRISIS_RESOURCES_EN = 'I hear you - please put safety first. If you are thinking about harming yourself or someone else, please contact: the national psychological assistance hotline 12356; police 110 / ambulance 120 in an emergency; or immediately reach a trusted person, a school/workplace counselor, or the nearest hospital psychiatric or emergency department. This is not a diagnosis, just a safety notice; if it was only a figure of speech, you can ignore it and keep chatting.'
+const CJK = /[\u4e00-\u9fff]/
+// Pre-compiled matchers: CJK phrases are substring-tested, English phrases are
+// word-start-tested against the lowercased input (multi-word phrases included).
+const CRISIS_MATCHERS = CRISIS_KEYWORDS.map((keyword) => CJK.test(keyword)
+  ? { keyword, test: (text) => text.includes(keyword) }
+  : { keyword, test: (text) => new RegExp('\\b' + keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(text) })
+/**
+ * First crisis keyword in one input string, or null. Pure and local: no model,
+ * no storage, no logging of the input text.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function crisisKeyword(text) {
+  if (typeof text !== 'string' || text === '') return null
+  const lower = text.toLowerCase()
+  for (const matcher of CRISIS_MATCHERS) if (matcher.test(lower)) return matcher.keyword
+  return null
+}
+/** Fixed crisis reply, in the input's own language (Chinese when it contains CJK). */
+function crisisReply(text) {
+  return CJK.test(text) ? CRISIS_RESOURCES_ZH : CRISIS_RESOURCES_EN
+}
 // Every persona keeps the same hard boundaries: the pet must never pose as a
 // human/official/professional, must not build dependency or romantic/paid/minor
 // relationships, and must not output illegal or private content.
@@ -238,6 +284,19 @@ async function handleBridge(ctx, request, config) {
   if (typeof payload.text !== 'string') return error('E_INPUT', 'text is required.')
   const input = payload.text.trim()
   if (input.length === 0 || input.length > MAX_INPUT_CHARS) return error('E_INPUT', 'Text length is invalid.')
+  // Safety floor: a crisis keyword is answered locally with fixed resources and
+  // NO model call (the input never leaves this process). The fixed reply labels
+  // itself "not a diagnosis" so a false positive is harmless; nothing about the
+  // input is echoed back, logged or stored.
+  if (crisisKeyword(input)) {
+    return json(200, {
+      v: 1,
+      ok: true,
+      reply: crisisReply(input),
+      bubbleKind: 'speech',
+      meta: { stage: 'P2', safety: 'crisis-local-resource', llmCalls: 0 },
+    })
+  }
   // Persona follows the character picked in the client; invalid/absent values
   // deliberately fall back to the human Tinglan persona instead of failing.
   const character = characterId(payload.character)

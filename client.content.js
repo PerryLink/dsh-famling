@@ -6,7 +6,10 @@
  * access, no eval/new Function, no innerHTML and no pack/asset loading. The
  * content center has four tabs (roles / customize / packs / market); a role IS
  * the theme bundle. The settings popup centralizes every adjustable item and
- * folds the advanced/debug group.
+ * folds the advanced/debug group, including the data/boundaries section (sending
+ * destination, crisis resources, AI-chat switch, clear-local-data/withdrawal).
+ * The one-time first-run safety card (MB-021) is also rendered from this chunk so
+ * the first-screen entry budget is not charged for it.
  *
  * The chunk registers the same package module id and a "chunk" file name the
  * DSH client module loader accepts; client.js keeps the first-screen entry
@@ -29,11 +32,29 @@ window.__ModuleLoader__.load({
       zh: {
         title: '内容中心', close: '关闭',
         settingsTitle: '设置', settingsHint: '常用设置在前；高级与调试折叠在下面。',
+        scaleGlobal: '整体缩放（所有内容一并缩放）',
+        scaleGlobalHint: '100% = 默认大小；角色、UI/文本、气泡与面板一起缩放，窗口放不下时自动贴合、不裁切。',
+        scaleReset: '恢复默认缩放',
+        scaleGroup: '缩放（独立轴）', scaleUiText: 'UI + 文本', scaleImage: '图像',
+        scaleFollow: '跟随整体', scaleFollowing: '跟随整体', scaleIndependent: '独立',
+        scaleUiTextHint: '100% = 跟随整体缩放；单独调整后只有 UI/文本变化，角色图像不动。',
+        scaleImageHint: '100% = 跟随整体缩放；单独调整后只有角色/预览图变化，UI/文本不动。',
+        scaleComponentsTitle: '组件缩放（默认全部继承）',
+        scaleComponentsHint: '组件缩放比「整体缩放」更下一级：默认继承 UI + 文本；只覆盖需要单独调整的组件，可随时恢复继承。',
+        scaleInherit: '继承（跟随 UI + 文本）', scaleActual: '实际 ',
         commonGroup: '常用', appearanceGroup: '外观', roleGroup: '角色与内容', memoryGroup: 'Advisers',
         memory: '读取 Advisers 摘要',
         motion: '帧动画', bubble: '说话气泡', showMenuButton: '显示菜单按钮',
         menuButtonHint: '默认关闭：右键角色或按 Shift+F10 / ContextMenu 打开菜单；开启后角色旁出现「⋯」。',
-        advancedGroup: '高级 / 调试', version: 'dsh-famling 0.10.2 · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
+        advancedGroup: '高级 / 调试', version: 'dsh-famling 0.10.4 · 研究原型', debug: '当前状态', storageKeys: '本地存储键',
+        dataGroup: '数据与边界', chat: 'AI 聊天（发送给模型供应商）',
+        chatHint: '默认开启：聊天文本经 DSH Host 发送给 DSH 中配置的模型供应商；关闭后不发送任何聊天文本（提醒仍可用）。',
+        boundaryHint: '本插件只运行在 DSH 内：模型、Key、会话与供应商数据由 DSH 和你配置的供应商管理；插件不保存聊天记录。',
+        clearLocal: '清除本机设置与同意', clearHint: '仅删除本插件在浏览器 localStorage 的 dsh-famling/* 键（设置、形象、外观、同意记录）；不改 DSH 宿主数据或供应商侧数据。',
+        firstRunTitle: '首次使用说明', firstRunAck: '我知道了',
+        where: '发送去向：文本会经 DSH Host 发给 DSH 中配置的模型供应商；请勿发送密码、他人隐私或客户资料。',
+        crisisLine: '心理危机可联系 12356（心理援助）；紧急情况 110（报警）/ 120（急救），或信任的人与专业机构。',
+        clearDone: '已清除本机设置与同意（含撤回语音同意）；再次修改设置前不会写回存储。',
         contentEntry: '内容与角色…', hideBrief: '隐藏',
         tabs: { roles: '角色', custom: '自定义', packs: '内容包', market: '市场' },
         rolesHint: '角色就是主题：一键应用会同时切换声音 / 对话 / 外观（气泡 / 面板风格 / 字体）。',
@@ -70,11 +91,29 @@ window.__ModuleLoader__.load({
       en: {
         title: 'Content Center', close: 'Close',
         settingsTitle: 'Settings', settingsHint: 'Common settings first; advanced/debug fold below.',
+        scaleGlobal: 'Overall scale (everything together)',
+        scaleGlobalHint: '100% = shipped size; character, UI/text, bubbles and panels scale together and auto-fit the window instead of clipping.',
+        scaleReset: 'Reset scale',
+        scaleGroup: 'Scale (independent axes)', scaleUiText: 'UI + text', scaleImage: 'Image',
+        scaleFollow: 'Follow overall', scaleFollowing: 'follows overall', scaleIndependent: 'independent',
+        scaleUiTextHint: '100% = follow the overall scale; when changed on its own only UI/text moves, the character image stays.',
+        scaleImageHint: '100% = follow the overall scale; when changed on its own only the character/preview image moves, UI/text stays.',
+        scaleComponentsTitle: 'Component scale (inherit by default)',
+        scaleComponentsHint: 'One level below the overall scale: every component inherits UI + text by default; override only what you need and restore inheritance at any time.',
+        scaleInherit: 'Inherit (follow UI + text)', scaleActual: 'actual ',
         commonGroup: 'Common', appearanceGroup: 'Appearance', roleGroup: 'Role & content', memoryGroup: 'Advisers',
         memory: 'Read Advisers summary',
         motion: 'Frame animation', bubble: 'Speech bubble', showMenuButton: 'Show menu button',
         menuButtonHint: 'Off by default: right-click the pet or press Shift+F10 / ContextMenu; when on, a "⋯" appears next to the pet.',
-        advancedGroup: 'Advanced / debug', version: 'dsh-famling 0.10.2 · research prototype', debug: 'State', storageKeys: 'Local keys',
+        advancedGroup: 'Advanced / debug', version: 'dsh-famling 0.10.4 · research prototype', debug: 'State', storageKeys: 'Local keys',
+        dataGroup: 'Data & boundaries', chat: 'AI chat (sends to the model provider)',
+        chatHint: 'On by default: chat text goes through the DSH Host to the model provider configured in DSH; when off no chat text is sent (reminders still work).',
+        boundaryHint: 'This plugin only runs inside DSH: model, key, session and provider data are managed by DSH and your provider; the plugin stores no chat history.',
+        clearLocal: 'Clear local settings & consent', clearHint: 'Deletes only this plugin\'s dsh-famling/* local storage keys (settings, character, appearance, consent); DSH host data and provider-side data are untouched.',
+        firstRunTitle: 'First-run notice', firstRunAck: 'Got it',
+        where: 'Where it goes: text is sent through the DSH Host to the model provider configured in DSH; never send passwords, private data of others, or client material.',
+        crisisLine: 'Mental-health crisis: contact 12356 (psychological assistance); emergencies 110 (police) / 120 (ambulance), or a trusted person and a professional service.',
+        clearDone: 'Local settings and consent cleared (voice consent withdrawn); nothing is written back until you change a setting again.',
         contentEntry: 'Content & characters…', hideBrief: 'Hide',
         tabs: { roles: 'Roles', custom: 'Customize', packs: 'Packs', market: 'Market' },
         rolesHint: 'A role IS the theme: one click applies voice / dialogue / appearance (bubbles / panel style / fonts) together.',
@@ -175,7 +214,7 @@ window.__ModuleLoader__.load({
         lang, tab, setTab, character, roleId, canTts, ttsConsent, voices, settings,
         dialogueMode, themeId, backgroundId, fontChoice,
         setSettings, setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
-        onToggleSound, onApplyRole, onRestoreRole, onClose, panelStyle, buttonBase, catalog,
+        onToggleSound, onApplyRole, onRestoreRole, onClose, panelStyle, panelBox, buttonBase, catalog,
       } = props
       const T = STRINGS[lang] || STRINGS.zh
       const {
@@ -318,7 +357,8 @@ window.__ModuleLoader__.load({
       const body = tab === 'custom' ? customBody : tab === 'packs' ? packsBody : tab === 'market' ? marketBody : rolesBody
       const tabIds = ['roles', 'custom', 'packs', 'market']
 
-      return h('div', { role: 'dialog', 'aria-label': T.title, style: { ...panelStyle, width: 360, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(76vh, 640px)', overflowY: 'auto' } }, [
+      const contentBox = panelBox || { zoom: 1, width: 360, maxHeight: 640 }
+      return h('div', { role: 'dialog', 'aria-label': T.title, style: { ...panelStyle, width: contentBox.width, maxWidth: contentBox.width, maxHeight: contentBox.maxHeight, overflowY: 'auto', transform: 'scale(' + contentBox.zoom + ')', transformOrigin: 'left bottom' } }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
           h('strong', { key: 't', style: { flex: 1 } }, T.title),
           h('button', { key: 'x', type: 'button', onClick: onClose, 'aria-label': T.close, style: { ...buttonBase, padding: '2px 6px' } }, '×'),
@@ -339,16 +379,25 @@ window.__ModuleLoader__.load({
         lang, character, roleId, canTts, ttsConsent, voices, settings, setSettings, menuButton,
         dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, advancedOpen,
         aiNotice, useRestrictions, onToggleAdvanced, updateSetting,
+        localDataCleared, onToggleChat, onClearLocalData,
         setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
         onToggleSound, onToggleMenuButton, onLoadBrief, onHideBrief, onOpenContent, onRestoreRole,
-        onClose, panelStyle, buttonBase, catalog,
+        scaleSettings, resolvedScales,
+        onGlobalScale, onUiTextScale, onImageScale, onComponentScale, onResetScales, scaleCatalog,
+        onClose, panelStyle, panelBox, buttonBase, catalog,
       } = props
       const T = STRINGS[lang] || STRINGS.zh
       const { DIALOGUE_MODE_IDS, THEME_IDS, BACKGROUND_IDS, FONT_IDS, FONT_SIZES, FONT_LINE_HEIGHTS, ROLE_BUNDLES } = catalog
       const role = ROLE_BUNDLES[roleId] || ROLE_BUNDLES.human
       const roleName = (T.characters || {})[role.character] || role.character
       const counts = (brief && brief.counts) || { today: 0, commitments: 0 }
-      const storageKeys = ['dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/consent/v1']
+      const storageKeys = ['dsh-famling/first-run/v1', 'dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/consent/v1'].concat(scaleCatalog ? scaleCatalog.storageKeys : [])
+      const box = panelBox || { zoom: 1, width: 310, maxHeight: 680 }
+      const scale = scaleCatalog || null
+      const percent = (value) => Math.round(value * 100) + '%'
+      const follows = (value) => Math.abs(value - 1) < 1e-9
+      const axisValueText = (axis) => percent(scaleSettings.global * axis) + ' · ' + (follows(axis) ? T.scaleFollowing : T.scaleIndependent)
+      const panelDialogStyle = { ...panelStyle, width: box.width, maxWidth: box.width, maxHeight: box.maxHeight, overflowY: 'auto', transform: 'scale(' + box.zoom + ')', transformOrigin: 'left bottom' }
       const toggle = (key, label, note, checked, onChange) => h('label', {
         key, style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0', cursor: 'pointer' },
       }, [
@@ -365,10 +414,62 @@ window.__ModuleLoader__.load({
       const row = (key, label, children) => h('div', {
         key, style: { display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 4 },
       }, [h('span', { key: 'label', style: { ...captionStyle(), flex: 'none', minWidth: 46 } }, label), ...children])
+      /** Native range slider (keyboard/screen-reader operable for free) storing a
+       *  relative multiplier; the value reads as a percent with follow/independent. */
+      const slider = (key, label, ariaLabel, range, valuePercent, onChange, valueText, hint) => h('div', { key, style: { marginTop: 5 } }, [
+        h('label', { key: 'label', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 } }, [
+          h('span', { key: 'text', style: { flex: 1, minWidth: 0 } }, label),
+          h('span', { key: 'value', style: { flex: 'none', fontVariantNumeric: 'tabular-nums' } }, valueText),
+        ]),
+        h('input', {
+          key: 'input', type: 'range', min: range.min, max: range.max, step: range.step,
+          value: valuePercent, 'aria-label': ariaLabel, 'aria-valuetext': valueText,
+          onChange: (event) => { const next = Number(event.target.value); if (Number.isFinite(next)) onChange(next / 100) },
+          style: { width: '100%', margin: '2px 0 0' },
+        }),
+        hint ? h('p', { key: 'hint', style: { margin: '2px 0 0', ...captionStyle() } }, hint) : null,
+      ])
+      // First level: ONE overall scale (所有内容一并缩放). The independent axes
+      // and component overrides live strictly below it (next group / advanced).
+      const scaleRows = scale ? [
+        slider('scale-global', T.scaleGlobal, T.scaleGlobal, scale.global, Math.round(scaleSettings.global * 100), onGlobalScale, percent(scaleSettings.global), T.scaleGlobalHint),
+        h('div', { key: 'scale-reset', style: { marginTop: 4 } }, [
+          h('button', { key: 'reset', type: 'button', 'aria-label': T.scaleReset, onClick: onResetScales, style: { ...buttonBase, padding: '2px 7px', fontSize: 11 } }, T.scaleReset),
+        ]),
+      ] : []
       const common = section(T, T.commonGroup, 'common', [
+        ...scaleRows,
         toggle('motion', T.motion, null, settings.motion, () => updateSetting('motion')),
         toggle('bubble', T.bubble, null, settings.bubble, () => updateSetting('bubble')),
         toggle('menu-button', T.showMenuButton, T.menuButtonHint, menuButton, onToggleMenuButton),
+      ])
+      // Second level: UI + 文本 / 图像 can deviate from 整体缩放 independently.
+      const independent = scale ? section(T, T.scaleGroup, 'scale-axis', [
+        slider('scale-ui-text', T.scaleUiText, T.scaleUiText, scale.uiText, Math.round(scaleSettings.uiText * 100), onUiTextScale, axisValueText(scaleSettings.uiText), T.scaleUiTextHint),
+        h('div', { key: 'follow-ui-text', style: { marginTop: 3 } }, [
+          h('button', { key: 'follow', type: 'button', disabled: follows(scaleSettings.uiText), 'aria-label': T.scaleUiText + ' ' + T.scaleFollow, onClick: () => onUiTextScale(1), style: { ...buttonBase, padding: '2px 7px', fontSize: 11 } }, T.scaleFollow),
+        ]),
+        slider('scale-image', T.scaleImage, T.scaleImage, scale.image, Math.round(scaleSettings.image * 100), onImageScale, axisValueText(scaleSettings.image), T.scaleImageHint),
+        h('div', { key: 'follow-image', style: { marginTop: 3 } }, [
+          h('button', { key: 'follow', type: 'button', disabled: follows(scaleSettings.image), 'aria-label': T.scaleImage + ' ' + T.scaleFollow, onClick: () => onImageScale(1), style: { ...buttonBase, padding: '2px 7px', fontSize: 11 } }, T.scaleFollow),
+        ]),
+      ]) : null
+      // MB-021/022/024: sending destination, crisis resources, the DSH boundary,
+      // the chat kill switch and clear-local-data/consent-withdrawal live here.
+      // Clearing touches only this plugin's own dsh-famling/* keys; the DSH host,
+      // its sessions and the model provider's data are owned and kept by them.
+      const clearLocal = () => {
+        for (const key of storageKeys) { try { localStorage.removeItem(key) } catch {} }
+        onClearLocalData()
+      }
+      const data = section(T, T.dataGroup, 'data', [
+        toggle('chat', T.chat, T.chatHint, settings.chat !== false, onToggleChat),
+        h('p', { key: 'where', style: { margin: '4px 0 0', ...captionStyle() } }, T.where),
+        h('p', { key: 'crisis', style: { margin: '4px 0 0', ...captionStyle() } }, T.crisisLine),
+        h('p', { key: 'boundary', style: { margin: '4px 0 0', ...captionStyle() } }, T.boundaryHint),
+        h('button', { key: 'clear', type: 'button', onClick: clearLocal, style: { ...buttonBase, marginTop: 6, padding: '4px 8px', fontSize: 11, border: '1px solid #a63d35' } }, T.clearLocal),
+        h('p', { key: 'clearHint', style: { margin: '5px 0 0', ...captionStyle() } }, T.clearHint),
+        localDataCleared ? h('p', { key: 'clearStatus', role: 'status', style: { margin: '5px 0 0', fontSize: 11, color: 'var(--dsh-famling-accent, #7aa2ff)' } }, T.clearDone) : null,
       ])
       const voice = section(T, T.voiceGroup, 'voice', [
         canTts ? toggle('sound', T.voice, null, settings.sound, onToggleSound)
@@ -404,12 +505,33 @@ window.__ModuleLoader__.load({
           h('button', { key: 'restore', type: 'button', onClick: onRestoreRole, style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.restoreRole),
         ]),
       ])
+      // Third level (inside the folded advanced group): per-component overrides;
+      // every component inherits UI + 文本 by default and can be restored.
+      const componentScale = scale ? h('div', { key: 'component-scale', style: { marginBottom: 8 } }, [
+        h('strong', { key: 'title', style: { display: 'block', marginBottom: 4 } }, T.scaleComponentsTitle),
+        h('p', { key: 'hint', style: { margin: '0 0 6px', ...captionStyle() } }, T.scaleComponentsHint),
+        ...scale.components.map((component) => {
+          const override = scaleSettings.components[component.id]
+          const label = lang === 'en' ? component.en : component.zh
+          const actual = (resolvedScales && resolvedScales.components[component.id]) || 1
+          return h('div', { key: 'component-' + component.id, style: { display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' } }, [
+            h('span', { key: 'label', style: { flex: 'none', minWidth: 64 } }, label),
+            h('select', {
+              key: 'select', value: typeof override === 'number' ? String(override) : '1', 'aria-label': label + ' ' + T.scaleComponentsTitle,
+              onChange: (event) => onComponentScale(component.id, event.target.value === '1' ? null : Number(event.target.value)),
+              style: { background: 'var(--dsw-alias-bg-l1, rgba(255,255,255,.06))', color: 'inherit', border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,.16))', borderRadius: 6, padding: 3, font: 'inherit' },
+            }, [h('option', { key: 'inherit', value: '1' }, T.scaleInherit), ...scale.componentOptions.map((value) => h('option', { key: String(value), value: String(value) }, Math.round(value * 100) + '%'))]),
+            h('span', { key: 'actual', style: { ...captionStyle(), flex: 'none' } }, T.scaleActual + Math.round(actual * 100) / 100 + '×'),
+          ])
+        }),
+      ]) : null
       const advanced = h('div', { key: 'advanced', style: { marginTop: 8, paddingTop: 7, borderTop: '1px dashed var(--dsh-famling-panel-border, rgba(255,255,255,.22))' } }, [
         h('button', {
           key: 'toggle', type: 'button', 'aria-expanded': Boolean(advancedOpen), onClick: onToggleAdvanced,
           style: { ...buttonBase, padding: '3px 8px', fontSize: 11 },
         }, (advancedOpen ? '▾ ' : '▸ ') + T.advancedGroup),
         advancedOpen ? h('div', { key: 'body', style: { marginTop: 6 } }, [
+          componentScale,
           h('div', { key: 'version', style: { ...captionStyle() } }, T.version),
           h('div', { key: 'debug', style: { ...captionStyle(), marginTop: 3 } }, T.debug + ': ' + character + ' / ' + roleId + ' / ' + dialogueMode + ' / ' + themeId + ' / ' + backgroundId + ' / ' + fontChoice.family + ' ' + fontChoice.size + 'px'),
           h('div', { key: 'keys', style: { ...captionStyle(), marginTop: 3, overflowWrap: 'anywhere' } }, T.storageKeys + ': ' + storageKeys.join(', ')),
@@ -417,7 +539,7 @@ window.__ModuleLoader__.load({
       ])
       return h('div', {
         role: 'dialog', 'aria-label': T.settingsTitle,
-        style: { ...panelStyle, width: 310, maxWidth: 'calc(100vw - 24px)', maxHeight: 'min(80vh, 680px)', overflowY: 'auto' },
+        style: panelDialogStyle,
       }, [
         h('div', { key: 'title', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 } }, [
           h('strong', { key: 't', style: { flex: 1 } }, T.settingsTitle),
@@ -425,11 +547,30 @@ window.__ModuleLoader__.load({
         ]),
         h('p', { key: 'hint', style: { margin: '0 0 6px', ...captionStyle() } }, T.settingsHint),
         h('p', { key: 'use', role: 'note', style: { margin: '0 0 6px', padding: '7px 8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.45 } }, useRestrictions || ''),
-        common, voice, memory, appearance, roleGroup, advanced,
+        common, independent, data, voice, memory, appearance, roleGroup, advanced,
         h('p', { key: 'ai', style: { margin: '8px 0 0', ...captionStyle() } }, aiNotice || ''),
       ])
     }
 
-    return { createContentCenter, createSettingsPanel }
+    /**
+     * One-time, dismissible first-run safety card (MB-021). It carries the AI /
+     * sending-destination disclosure and the crisis resources, is never modal
+     * over the pet, and only writes a single local ack flag (owned by client.js).
+     */
+    function createFirstRunNotice(props) {
+      const { lang, aiNotice, onAck, panelStyle, panelBox, buttonBase } = props
+      const T = STRINGS[lang] || STRINGS.zh
+      const note = { margin: '0 0 7px', fontSize: 12, lineHeight: 1.5 }
+      const noticeBox = panelBox || { zoom: 1, width: 300, maxHeight: 640 }
+      return h('div', { role: 'dialog', 'aria-label': T.firstRunTitle, style: { ...panelStyle, width: noticeBox.width, maxWidth: noticeBox.width, maxHeight: noticeBox.maxHeight, border: '2px solid #a63d35', overflowY: 'auto', transform: 'scale(' + noticeBox.zoom + ')', transformOrigin: 'left bottom' } }, [
+        h('strong', { key: 'title', style: { display: 'block', marginBottom: 7 } }, T.firstRunTitle),
+        h('p', { key: 'ai', style: note }, aiNotice || ''),
+        h('p', { key: 'where', style: note }, T.where),
+        h('p', { key: 'crisis', style: { ...note, margin: '0 0 9px' } }, T.crisisLine),
+        h('button', { key: 'ack', type: 'button', onClick: onAck, style: { ...buttonBase, padding: '5px 9px' } }, T.firstRunAck),
+      ])
+    }
+
+    return { createContentCenter, createSettingsPanel, createFirstRunNotice }
   },
 })
