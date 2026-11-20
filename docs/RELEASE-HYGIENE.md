@@ -1,6 +1,6 @@
 # 发布与包卫生（MB-094 残余，2026-11-20）
 
-> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 版本化同意；0.10.11 猫布偶跨仓同步；0.10.12 宿主自适应外观；上述 0.10.x 均未真实发布。0.11.0（2026-11-21）是首次真实 `npm publish`：体验与预算修复 + 猫/狗 idle 帧重嵌入（212 帧）+ PLUGIN-MANIFEST；使用本地 npm token 发布，未启用 provenance / trusted publishing。公开仓 CI 首跑以实际 run 为准。**
+> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 版本化同意；0.10.11 猫布偶跨仓同步；0.10.12 宿主自适应外观；上述 0.10.x 均未真实发布。0.11.0（2026-11-21）是首次真实 `npm publish`：体验与预算修复 + 猫/狗 idle 帧重嵌入（212 帧）+ PLUGIN-MANIFEST；0.11.1（同日）新增包内懒加载 `client.behavior.js`，入口 97,460→94,491 B。两次均使用本地 npm token 发布，未启用 provenance / trusted publishing；公开仓 CI 以实际 run 为准。**
 > 本文与 `scripts/check-package.mjs`、`test/package-hygiene.test.js`、`package.json` 的
 > `repository` / `homepage` / `bugs` / `prepack` 合成一组可复核的发布卫生证据；
 > 外部链路（npm publish / provenance / 真实 CI / 公网可达性）**未在本轮执行**，见 §5。
@@ -33,7 +33,7 @@ npm 只打包 `files` 展开后的文件（外加 `package.json` / `README` / `L
 
 1. **无重复**：本任务修改前 `files` 里 `docs` 出现两次（历史遗留），现已删除——重复条目不算错但会让发布面难以审计。
 2. **必须存在**：每个字面条目必须存在；每个 glob（如 `locale/*.json`）必须至少命中一个文件。
-3. **运行必需项齐全**：`index.js`、`client.js`、`client.content.js`、三个懒加载角色 chunk、
+3. **运行必需项齐全**：`index.js`、`client.js`、`client.content.js`、`client.behavior.js`、三个懒加载角色 chunk、
    `content-extension.mjs`、`cordis.patch.yml`、`icon.png`、locale、文档、三份许可/声明文件、`package.json`。
 4. **`exports` 全覆盖**：`exports` 里每个入口（含 `./locale/*.json` 通配）都必须能在打包集合中找到。
 5. **禁止项**：`test/`、`scripts/`、`.github/`、`node_modules/`、`.git/`、`*.tgz`、`package-lock.json`、
@@ -103,6 +103,18 @@ locale/zh.json
 package.json
 ```
 
+### 4.1 2026-11-21 入口预算治理后的发布面（0.11.0 未发版，实测）
+
+新增懒加载行为 chunk `client.behavior.js` 后，本机 `npm run verify:package` 的真实清单为 **24 files**
+（`check-package: pack ok (24 files, tarball ≈318.9 KiB, unpacked ≈740 KiB)`；精确字节以 `npm run verify:package` 输出与 `PLUGIN-MANIFEST.json` 为准，24 entries），即在上面 19 文件清单基础上
+增加 `client.anims.*` 之外的 `client.behavior.js`。`PLUGIN-MANIFEST.json` 同步记录 24 个 packed 文件
+（总字节见 manifest 的 `packed.totalBytes`；文档自身也在打包集合内，改文档会轻微改变该值）。注意：该工作树比 registry 上已发布的 0.11.0 tarball（23 files / 322,561 B）多一个 chunk，
+发布前必须 bump 版本并按本节重新生成 manifest。
+
+另：`client.js` 的两处 `@generated` 内容块由 `scripts/gen-content-constants.mjs` 从 `desktop-games` 内容库派生，
+内容库（`public/content/library.json` / `public/characters/*`）任何改动都会让块头的 `source-sha256` 变旧；
+跨仓同步后必须跑 `npm run gen:content`（不是手改生成块），再重建 `PLUGIN-MANIFEST.json`。
+
 ## 4.1 MB-004 追加：独立 checkout + vendored LOCK（2026-11-20）
 
 发布卫生之外，插件现在也能在**无私有 famling 仓**的单独 checkout 里重建与验证（详见
@@ -164,4 +176,19 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | 发布前门禁 | `npm run release:check` exit 0（test 280/280 + check + verify + verify:package + lint + typecheck） |
 | 未做 / 不声称 | provenance、trusted publishing、GitHub 公开仓 CI 首个真实 run（以公开仓推送后的实际 run 为准）、任何签名/合规结论 |
 | 发布内容 | 0.11.0 体验与预算修复（宿主面板对比度、隐藏标签页暂停、首启 coach、点击冷却）+ 猫/狗 idle 重嵌入（212 帧）+ `PLUGIN-MANIFEST.json`；无新增数据收集/网络/权限/存储键 |
+
+> **发布面已前移（2026-11-21，未发版）**：入口预算治理后工作树的 pack 清单是 24 files / tarball ≈318.9 KiB / unpacked ≈740 KiB（精确值随文档字节浮动）、入口 94,491 B，与上表已发布 0.11.0 tarball（23 files / 322,561 B / 入口 97,460 B）**不再一致**。上表保留为首发史实；下一次对外发布必须 bump 版本（如 0.11.1）并重新 `npm publish`，不得把当前工作树当作已发布的 0.11.0 内容宣称；C1 联合证据里的插件字节以 `PLUGIN-MANIFEST.json` 重新生成后的 digest 为准。
+
+### 8.1 0.11.1（2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | `0.11.1`（registry `latest` = `0.11.1`） |
+| registry 时间 | `2026-11-20T17:34:59.503Z`（UTC；= 2026-11-21 01:34 +08） |
+| 发布方式 | 本地 `npm publish --tag latest --access public`（同一安全 token 路径）；未启用 provenance / trusted publishing |
+| tarball | `dsh-famling-0.11.1.tgz`；326,682 B；24 files；unpacked 758,269 B |
+| tarball sha256（本地同打包器计算） | `b5074cc00362dbdc9fecd184826b935b2fc67144f6e5d54bae6c72256d36480b` |
+| npm shasum | `aa5b6887ee9cfe2dddba6ea32df1a3f7dd1baf06` |
+| 相对 0.11.0 | 入口 97,460→94,491 B（−2,969 B）：新增包内懒加载 `client.behavior.js`（命中/冷却/饱和/随机回话/帧时长）；`files` 23→24；无 runtime 契约变更、无新增存储键/网络/权限 |
+| 未做 / 不声称 | provenance、trusted publishing、签名/合规；公开仓 CI 结果以实际 run 为准 |
 

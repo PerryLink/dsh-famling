@@ -48,6 +48,7 @@ const REQUIRED_PACKED = Object.freeze([
   'index.js',
   'client.js',
   'client.content.js',
+  'client.behavior.js',
   'client.anims.human.js',
   'client.anims.cat.js',
   'client.anims.dog.js',

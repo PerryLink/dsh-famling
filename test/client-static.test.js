@@ -13,6 +13,8 @@ const clientPath = join(PLUGIN_ROOT, 'client.js')
 const clientSource = readFileSync(clientPath, 'utf8')
 const contentChunkPath = join(PLUGIN_ROOT, 'client.content.js')
 const contentSource = readFileSync(contentChunkPath, 'utf8')
+const behaviorChunkPath = join(PLUGIN_ROOT, 'client.behavior.js')
+const behaviorSource = readFileSync(behaviorChunkPath, 'utf8')
 const clientData = loadClientData(clientSource)
 
 // Release pin follows package.json (the single version truth): version-truth
@@ -187,14 +189,16 @@ test('embedded regions and actions match the private regions.json or the vendore
 
 test('client code hit-tests regions at the rendered size, only reacts while idle and picks random says', () => {
   assert.ok(clientSource.includes('function onPetClick(event)'), 'pet click handler receives the DOM event')
-  assert.ok(clientSource.includes('function clickArtPoint(event, config)'), 'rendered-size -> 96px art mapping helper exists')
-  assert.ok(clientSource.includes('function regionAt(config, artX, artY)'), 'region hit-test helper exists')
+  assert.ok(behaviorSource.includes('function clickArtPoint(event, config)'), 'rendered-size -> 96px art mapping helper exists (lazy behavior kit)')
+  assert.ok(behaviorSource.includes('function regionAt(config, artX, artY)'), 'region hit-test helper exists (lazy behavior kit)')
   assert.ok(clientSource.includes("anim === 'idle' ? (blink ? 'idle_blink' : 'idle') : anim"), 'state gating accepts idle and idle_blink only')
-  assert.ok(clientSource.includes('function pickSaidLine(pool, key, previous)'), 'random bubble-line picker exists')
+  assert.ok(behaviorSource.includes('function pickSaidLine(pool, key, previous)'), 'random bubble-line picker exists (lazy behavior kit)')
   assert.ok(clientSource.includes('pickSaidLine(reaction.says'), 'region taps pick a random line from the region says')
   assert.ok(clientSource.includes('pickSaidLine(action.says'), 'menu actions pick a random line from the action says')
   assert.ok(!clientSource.includes('playMicroAction(true)'), 'pet clicks no longer fall back to a random micro action')
   assert.ok(!clientSource.includes('ACTION_SETS'), 'obsolete hand-written per-character action rows are gone')
+  assert.ok(clientSource.includes('behavior.tapPlan('), 'the entry applies the lazy behavior kit tap plan')
+  assert.ok(behaviorSource.includes('function tapGuard(history, key, now)'), 'repeat-tap cooldown lives in the lazy behavior kit')
 })
 
 test('the interaction menu renders the embedded current-character actions', () => {
@@ -253,6 +257,10 @@ test('first-screen client.js carries no sprite payload and meets the lazy budget
   assert.ok(entryBytes <= FIRST_SCREEN_BUDGET_BYTES, 'client.js ' + entryBytes + ' B is within the ' + FIRST_SCREEN_BUDGET_BYTES + ' B budget')
   assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.31, 'entry shrinks >69% vs the pre-split audit snapshot')
   assert.ok(entryBytes + humanBytes < AUDIT_BASELINE_BYTES * 0.52, 'first paint (entry + default chunk) shrinks >48% vs the pre-split audit snapshot')
+  // The behavior kit is requested right after mount, so the honest mount payload
+  // also charges it; keep the 52% first-frame gate true under that definition too.
+  const behaviorChunkBytes = Buffer.byteLength(readFileSync(behaviorChunkPath, 'utf8'))
+  assert.ok(entryBytes + humanBytes + behaviorChunkBytes < AUDIT_BASELINE_BYTES * 0.52, 'mount payload (entry + default chunk + behavior kit) stays within the 52% first-frame gate')
   assert.equal(/data:image\/png;base64,[A-Za-z0-9+/]{512,}/.test(clientSource), false, 'no full base64 PNG frame in client.js')
   assert.equal(/[A-Za-z0-9+/]{4096,}={0,2}/.test(clientSource), false, 'no multi-KB base64 literal in client.js')
   assert.ok(clientSource.includes('function requestCharacterChunk(kind, onSettled)'), 'lazy chunk request helper exists')
@@ -312,6 +320,7 @@ test('package version is ' + EXPECTED_VERSION + ', publishes the lazy chunks and
   assert.ok(pkg.files.includes('content-extension.mjs'), 'package publishes the content extension contract')
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
   assert.ok(pkg.files.includes('client.content.js'), 'package publishes the lazy content-center chunk')
+  assert.ok(pkg.files.includes('client.behavior.js'), 'package publishes the lazy behavior kit chunk')
   assert.equal(pkg.dsh.client.immediately, false, 'footer pet is not a stage-one registration barrier')
   assert.equal(pkg.scripts['measure:bundle'], 'node scripts/measure-bundle.mjs')
   const module = await import('../index.js')
@@ -330,7 +339,7 @@ test('client.js renders the pet alone: no permanent action buttons and no HTML i
   assert.ok(clientSource.includes('function loadMenuState()'), 'menu button state is loaded from storage')
   assert.ok(clientSource.includes('return { button: false }'), 'the menu button defaults to hidden')
   assert.equal(clientSource.includes(': false, page:'), false, 'open/submenu state is transient, not persisted')
-  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource]]) {
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource], ['client.behavior.js', behaviorSource]]) {
     assert.equal(source.includes('.innerHTML ='), false, name + ': no innerHTML injection')
     assert.equal(/\beval\s*\(|new Function\s*\(/.test(source), false, name + ': no eval/Function')
   }
@@ -396,7 +405,7 @@ test('default panel paints from the real DSH host tokens with a readable light/d
   assert.equal(defaultVars['--dsh-famling-panel-bg'], 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329))', 'panel surface uses the host layer-1 token with a light-dark fallback')
   assert.equal(defaultVars['--dsh-famling-panel-text'], 'var(--dsw-alias-label-primary, light-dark(#111111, #e8e8e8))', 'panel text uses the host primary label with a light-dark fallback')
   assert.equal(defaultVars['--dsh-famling-panel-border'], 'var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.14), rgba(255,255,255,.16)))', 'panel border uses the host border token')
-  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource]]) {
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource], ['client.behavior.js', behaviorSource]]) {
     assert.equal(source.includes('--dsw-alias-bg-elevated'), false, name + ': the phantom host token is gone')
   }
   // Real host-provided pairs and the fallback pairs must stay >= 4.5:1 body text.
@@ -436,6 +445,24 @@ test('lazy panel chunk exposes the four-tab content center and the unified setti
   assert.ok(contentSource.includes("'aria-expanded': Boolean(advancedOpen)"), 'advanced/debug group folds behind a toggle')
   assert.ok(contentSource.includes('setChoice') || contentSource.includes('choice('), 'appearance choices reuse the shared control helper')
   assert.ok(clientSource.includes("advancedOpen: settingsAdvanced"), 'collapsed state is owned by client.js (stable hook order)')
+})
+
+test('lazy behavior chunk registers with the module table and exports the interaction kit', () => {
+  // The DSH module table only serves names matching /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/.
+  assert.match('client.behavior.js', /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/, 'behavior chunk name is accepted by the DSH module table')
+  const loaded = loadChunkModule(behaviorChunkPath)
+  assert.equal(loaded.registration.id, 'dsh-famling', 'behavior chunk registers the package module id')
+  assert.equal(loaded.registration.chunk, 'client.behavior.js', 'behavior chunk field matches the file name')
+  assert.equal(typeof loaded.registration.factory, 'function', 'behavior chunk factory is registered')
+  for (const name of ['pickSaidLine', 'clickArtPoint', 'regionAt', 'regionReaction', 'tapGuard', 'tapPlan', 'frameDurations']) {
+    assert.equal(typeof loaded.exports[name], 'function', 'behavior kit exports ' + name + '()')
+  }
+  assert.ok(clientSource.includes('asyncRequire(entry.file).then') && clientSource.includes('requestBehaviorChunk'), 'the entry loads the kit through one memoized require.async entry point')
+  assert.ok(clientSource.includes("file: './client.behavior.js'"), 'the behavior kit request is package-local')
+  assert.equal(/(?:fetch|import)\s*\(\s*['\"]https?:\/\//.test(behaviorSource), false, 'no external fetch/import')
+  assert.equal(/(?:src|href)\s*[:=]\s*['\"]https?:/.test(behaviorSource), false, 'no external asset URL')
+  assert.equal(behaviorSource.includes('localStorage'), false, 'the behavior kit never touches storage (client.js owns every key)')
+  assert.equal(behaviorSource.includes('document.'), false, 'the behavior kit never touches the document')
 })
 
 test('client role bundles and dialogue modes mirror the shared famling content library', (t) => {

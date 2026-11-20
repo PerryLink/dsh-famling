@@ -4,9 +4,10 @@
 
 - 显示 72px 像素桌宠：汀岚 / 布偶猫（白底蓝重点长毛） / 金毛，台词、动作与聊天人格随形象变化。
 - 动画：每角色 12 clip，帧数按 manifest（dog 70 / cat 74 / human 68，共 212 帧；clip：idle 循环、idle_blink 眨眼、pat_head、ball_throw、ball_chase、paw_face、scratch、stand_wag、chase_tail、walk、run、attack），随机微动作只取本形象的 clip。
-- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.11.0 实测：入口 **95.2 KiB**（97,461 B，gzip 28,030 B / 27.4 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6/0.10.7 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.96%）、首帧约 156.9 KiB、全量约 336.4 KiB；chunk sha256 进入 embed/verify 门禁。
+- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.11.0 未发版实测（2026-11-21）：入口 **92.3 KiB**（94,491 B，gzip 27,083 B / 26.4 KiB，brotli 22,625 B；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6/0.10.7 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.02%）、首帧（入口+human，measure-bundle 口径）约 154.0 KiB、真实挂载总下载（再计 behavior kit）约 159.6 KiB = 51.93% 基线（< 52% 门禁）、全部角色加载后约 333.5 KiB；chunk sha256 进入 embed/verify 门禁。
 - 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（72.5 KiB，gzip 20.6 KiB，0.11.0 实测；0.10.7 增加 Host 能力面板，0.10.9 增加合规元数据展示，0.10.10 增加旧同意迁移/撤回与 versioned 同意 UI），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
-- 帧时长（0.8.4）：每帧停留时间读 manifest `holdMs`（缺省 1000/fps），非循环 clip 播完后按 `durationMs`/hold 总和回到 idle；cat 伸懒腰 10 帧 / 3200ms 按 300/300/300/350/400/400/400/350/250/150 逐帧播放。
+- 帧时长（0.8.4）：每帧停留时间读 manifest `holdMs`（缺省 1000/fps），非循环 clip 播完后按 `durationMs`/hold 总和回到 idle；cat 伸懒腰 10 帧 / 3200ms 按 300/300/300/350/400/400/400/350/250/150 逐帧播放。0.11.0 未发版起该时长表在懒加载 `client.behavior.js`（`frameDurations`）；chunk 未就绪/失败时入口用统一默认节奏（1000/fps）继续播放，不阻塞首帧。
+- 行为 kit 懒加载（0.11.0 未发版，入口预算治理）：点击几何/区域命中/状态 gating/1.2s 重复点击冷却与 2.5s 饱和冷却/随机回话选择/帧时长统一在 `client.behavior.js`（5.6 KiB，gzip 2.0 KiB），挂载后经单点 memoize 的 `require.async` 拉取；失败降级见下节「懒加载与预算」。
 - 点击区域（0.8.2）：点击人物头部/身体/尾巴分别触发 pat_head/stand_wag/chase_tail；区域来自与独立 famling 共用的 `regions.json`（96×96 逻辑画布 + idle gating），非 idle/idle_blink 状态或空白区域不动作，不回退随机动作。
 - 随机回话（0.8.3）：每条区域规则与每个互动动作都带 `says` 数组，命中时随机挑一条且连续两次不会重复；气泡文案全量来自共用 `regions.json`。
 - 物种专属互动（0.8.3）：互动菜单由 `ANIMS[character].actions` 数据驱动——汀岚 摸头/递纸/挥手/整理蝴蝶结/聊两句；布偶猫 摸头/伸懒腰/洗脸/追尾巴/跑一跑；金毛 摸头/丢球·捡球/捡球/追尾巴/跑一跑（丢球后 500ms 接追球）。猫/人没有球类动作。
@@ -160,7 +161,7 @@
 
 ### 懒加载与预算
 
-入口 `client.js` 95.2 KiB（0.11.0 实测 97,461 B / gzip 28,030 B）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.96%，首帧 156.9 KiB = 51.04%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意迁移/撤回 `client.content.js` 72.5 KiB（gzip 20.6 KiB，0.11.0 实测）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
+入口 `client.js` 92.3 KiB（0.11.0 未发版实测 94,491 B / gzip 27,083 B / brotli 22,625 B；较 2026-11-20 的 97,460 B 净减 2,969 B）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.02%，31% 门禁 97,576 B 余 3,085 B）；首帧（入口+human，measure-bundle 口径）157,695 B = 51.04%→**50.10%**；行为 kit `client.behavior.js`（点击几何/命中/冷却/随机回话/帧时长）5.6 KiB（gzip 2.0 KiB）在挂载后立即拉取，计入后真实挂载总下载 163,463 B = **51.93%**（< 52% 门禁）。内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意迁移/撤回 `client.content.js` 72.5 KiB（gzip 20.6 KiB，0.11.0 实测）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` / `client.behavior.js` 解析，不走网络/CDN（两者均 memoize）；`client.content.js` 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用；`client.behavior.js` 失败时帧播放回退统一默认节奏、区域点击 no-op，不抛错也不阻塞渲染。
 
 ## 内容扩展接口 CONTENT_EXTENSION_POINTS v3（预留）
 

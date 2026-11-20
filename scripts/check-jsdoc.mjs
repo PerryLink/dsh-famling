@@ -52,6 +52,7 @@ export const RUNTIME_FILES = Object.freeze([
   'index.js',
   'client.js',
   'client.content.js',
+  'client.behavior.js',
   'content-extension.mjs',
   'client.anims.human.js',
   'client.anims.cat.js',

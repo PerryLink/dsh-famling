@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
       },
       compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
     }
-    const PLUGIN_VERSION = '0.11.0'
+    const PLUGIN_VERSION = '0.11.1'
     // MB-014 (0.10.10): versioned TTS/ASR consent. This bundle is the canonical
     // declaration text shown in the consent dialog (zh authoritative + en); the
     // entry chunk pins its SHA-256 plus a version. Any wording change MUST bump

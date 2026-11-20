@@ -312,35 +312,26 @@ function createHarness(options = {}) {
     return React.api
   }
   const asyncCalls = []
+  // Per-chunk failure switches plus the shared failChunks list.
+  const failOptions = { 'client.content.js': 'failContentChunk', 'client.behavior.js': 'failBehaviorChunk' }
   requireModule.async = (spec) => {
     const fileName = String(spec).replace(/^\.\//, '')
     asyncCalls.push(fileName)
-    if (fileName === 'client.content.js') {
-      if (options.failContentChunk) {
-        return { then(resolve, reject) { reject(new Error('simulated missing content chunk: ' + fileName)) } }
-      }
-      if (!chunkDefinitions.has(fileName)) {
-        const chunkSource = readFileSync(join(dirname(CLIENT_PATH), fileName), 'utf8')
-        vm.runInContext(chunkSource, sandbox, { filename: fileName })
-      }
-      const contentRegistration = chunkDefinitions.get(fileName)
-      assert.ok(contentRegistration, 'content chunk registered: ' + fileName)
-      return { then(resolve) { resolve(contentRegistration.factory(requireModule)) } }
-    }
-    if (!/^client\.anims\.(human|cat|dog)\.js$/.test(fileName)) throw new Error('unexpected async chunk: ' + spec)
-    if (Array.isArray(options.failChunks) && options.failChunks.includes(fileName)) {
+    const failOption = failOptions[fileName]
+    if ((failOption && options[failOption]) || (Array.isArray(options.failChunks) && options.failChunks.includes(fileName))) {
       return { then(resolve, reject) { reject(new Error('simulated missing lazy chunk: ' + fileName)) } }
     }
+    const lazyChunk = fileName === 'client.content.js' || fileName === 'client.behavior.js'
+    if (!lazyChunk && !/^client\.anims\.(human|cat|dog)\.js$/.test(fileName)) throw new Error('unexpected async chunk: ' + spec)
     if (!chunkDefinitions.has(fileName)) {
       const chunkSource = readFileSync(join(dirname(CLIENT_PATH), fileName), 'utf8')
       vm.runInContext(chunkSource, sandbox, { filename: fileName })
     }
     const registration = chunkDefinitions.get(fileName)
     assert.ok(registration, 'lazy chunk registered: ' + fileName)
-    // Tests read the real generated chunk factory; production require.async
-    // returns the same exports as a Promise.
-    const payload = registration.factory(requireModule)
-    return { then(resolve) { resolve(payload) } }
+    // Tests read the real chunk factory; production require.async returns the
+    // same exports as a Promise.
+    return { then(resolve) { resolve(registration.factory(requireModule)) } }
   }
   const moduleObject = definition.factory(requireModule)
   let Component = null
@@ -1592,6 +1583,18 @@ test('a missing content/settings chunk degrades locally without breaking the wid
   ui.clickPetAt(51, 27)
   ui.render()
   assert.ok(petImage(ui).props.src.startsWith('data:image/png;base64,'), 'region interaction stays local')
+})
+
+test('a missing behavior kit degrades to the default rhythm without throwing', () => {
+  const { ui, timers } = createHarness({ character: 'cat', failBehaviorChunk: true, settings: { motion: true } })
+  assert.ok(timers.timeouts.some((timer) => timer.ms > 0), 'the uniform default frame rhythm keeps scheduling')
+  assert.match(petImage(ui).props.src, /^data:image\/png;base64,/, 'the pet still renders a frame')
+  openMenuAt(ui)
+  assert.equal(menuItemNodes(ui).length, 6, 'the right-click menu keeps working without the behavior kit')
+  ui.clickPetAt(50, 35)
+  ui.render()
+  assert.match(petImage(ui).props.src, /^data:image\/png;base64,/, 'a tap without the kit is a local no-op, not a crash')
+  assert.equal(ui.findBubble(), undefined, 'no fabricated reaction line without the kit')
 })
 
 

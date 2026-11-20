@@ -77,6 +77,10 @@ export const CLIENT_PATH = join(PLUGIN_ROOT, 'client.js')
 export const FIRST_SCREEN_BUDGET_BYTES = 96 * 1024
 /** Package-local lazy chunk file names, accepted by the DSH client module table. */
 export const CLIENT_CHUNK_RE = /^client\.anims\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
+/** Hand-written package-local lazy chunks the entry loads through require.async. */
+export const LAZY_CHUNKS = Object.freeze(['client.content.js', 'client.behavior.js'])
+/** Any package-local client chunk file the DSH module table accepts. */
+const MODULE_TABLE_CHUNK_RE = /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 /** Absolute external URLs in a load path would break the offline/no-network contract. */
 const EXTERNAL_NETWORK = /(?:(?:fetch|import)\s*\(\s*['"]https?:\/\/|(?:src|href)\s*[:=]\s*['"]https?:\/\/)/
 const EXPECTED_CANVAS = 96
@@ -376,7 +380,7 @@ export function verifyClient(options = {}) {
       errors.push('package.json dsh.client.immediately must not be true: the footer pet must not join the stage-one registration barrier')
     }
     stats.packageFiles = Array.isArray(pkg.files) ? pkg.files.slice() : []
-    if (published.size > 0 && !published.has('client.content.js')) errors.push('package.json files must publish the lazy content chunk client.content.js')
+    if (published.size > 0) for (const chunk of LAZY_CHUNKS) if (!published.has(chunk)) errors.push('package.json files must publish the lazy chunk ' + chunk)
   } catch (error) {
     errors.push('cannot read package.json: ' + error.message)
   }
@@ -429,7 +433,7 @@ export function verifyClient(options = {}) {
   stats.firstPaintBytes = stats.entryBytes + (stats.chunkBytes.human || 0)
   try {
     for (const name of readdirSync(pluginRoot)) {
-      if (CLIENT_CHUNK_RE.test(name) && !Object.values(CHUNK_NAMES).includes(name)) errors.push('unexpected stale lazy chunk file: ' + name)
+      if (MODULE_TABLE_CHUNK_RE.test(name) && !Object.values(CHUNK_NAMES).includes(name) && !LAZY_CHUNKS.includes(name)) errors.push('unexpected stale lazy chunk file: ' + name)
     }
   } catch (error) {
     warnings.push('cannot list plugin root for stale chunks: ' + error.message)
@@ -563,12 +567,32 @@ export function verifyClient(options = {}) {
     if (!contentSource.includes('远程市场接口已预留')) errors.push('content chunk must show the reserved remote-market placeholder')
   } catch (error) { errors.push('cannot read client.content.js: ' + error.message) }
   if (/fonts\.googleapis|@import|url\(\s*['"]?https?:/i.test(source)) errors.push('backgrounds/fonts must not load network images or web fonts')
-  if (!source.includes('function frameDuration(seq, index)')) errors.push('client.js is missing the per-frame (holdMs) duration helper')
-  if (!source.includes('function frameDurations(seq)') || !source.includes('seq.durationMs')) errors.push('client.js does not read durationMs when timing a clip')
-  if (!source.includes('seq.holdMs') || !source.includes('durations[index]')) errors.push('client.js playback does not schedule frames from holdMs')
-  if (source.includes('setInterval(() => setFrameIndex')) errors.push('client.js still uses a fixed-interval frame advance instead of holdMs timeouts')
-  if (!source.includes('function pickSaidLine(pool, key, previous)')) errors.push('client.js is missing the random bubble-line picker')
-  if (!source.includes('previous[key] = line')) errors.push('random bubble-line picker does not remember the previous line')
+  // Behavior kit chunk: lazy, package-local, offline, pure interaction logic.
+  try {
+    const behaviorSource = readFileSync(join(pluginRoot, 'client.behavior.js'), 'utf8')
+    if (!behaviorSource.includes("chunk: 'client.behavior.js'")) errors.push('client.behavior.js must register the package-local chunk name')
+    if (/(?:^|[^.\w])fetch\s*\(/.test(behaviorSource)) errors.push('client.behavior.js must not call fetch (no network)')
+    if (/(?:src|href)\s*[:=]\s*['"]https?:/.test(behaviorSource) || /https?:\/\/[^\s'"]+/.test(behaviorSource)) errors.push('client.behavior.js must not reference external URLs')
+    if (/(?:^|[^.\w])eval\s*\(|new Function\s*\(/.test(behaviorSource)) errors.push('client.behavior.js must not execute dynamic code')
+    for (const helper of ['function pickSaidLine(pool, key, previous)', 'function regionAt(config, artX, artY)', 'function regionReaction(config, regionId, state, gesture)', 'function clickArtPoint(event, config)', 'function tapGuard(history, key, now)', 'function tapPlan(config, clips, eventClips, event, state, history, character, now)', 'function frameDurations(seq)']) {
+      if (!behaviorSource.includes(helper)) errors.push('behavior kit is missing ' + helper)
+    }
+    if (!behaviorSource.includes('seq.holdMs')) errors.push('behavior kit playback does not schedule frames from holdMs')
+    if (!behaviorSource.includes('seq.durationMs')) errors.push('behavior kit does not read durationMs when timing a clip')
+    if (!behaviorSource.includes('previous[key] = line')) errors.push('random bubble-line picker does not remember the previous line')
+    const loaded = loadChunkModule(join(pluginRoot, 'client.behavior.js'))
+    if (loaded.registration.id !== CLIENT_MODULE_ID) errors.push('client.behavior.js module id must be ' + CLIENT_MODULE_ID + ', got ' + String(loaded.registration.id))
+    for (const name of ['pickSaidLine', 'clickArtPoint', 'regionAt', 'regionReaction', 'tapGuard', 'tapPlan', 'frameDurations']) {
+      if (typeof loaded.exports[name] !== 'function') errors.push('client.behavior.js must export ' + name + '()')
+    }
+    stats.mountBytes = stats.entryBytes + stats.chunkBytes.human + Buffer.byteLength(behaviorSource)
+  } catch (error) { errors.push('cannot read client.behavior.js: ' + error.message) }
+  if (/fonts\.googleapis|@import|url\(\s*['"]?https?:/i.test(source)) errors.push('backgrounds/fonts must not load network images or web fonts')
+  if (!source.includes('function fallbackFrameDurations(seq)')) errors.push('client.js is missing the uniform default frame-timing fallback')
+  if (!source.includes('requestBehaviorChunk') || !source.includes('./client.behavior.js')) errors.push('the interaction behavior kit must load from the lazy client.behavior.js chunk')
+  if (!source.includes('behavior.tapPlan(')) errors.push('client.js does not apply the lazy behavior kit tap plan')
+  if (!source.includes('behavior.frameDurations(')) errors.push('client.js playback does not use the lazy behavior kit frame timing')
+  if (source.includes('setInterval(() => setFrameIndex')) errors.push('client.js still uses a fixed-interval frame advance instead of per-frame timeouts')
   if (!source.includes('pickSaidLine(reaction.says')) errors.push('region taps do not pick a random line from the region says')
   if (!source.includes('pickSaidLine(action.says')) errors.push('menu actions do not pick a random line from the action says')
   if (!source.includes('ANIMS[character]?.actions')) errors.push('action panel is not rendered from the embedded species actions')
@@ -636,6 +660,7 @@ export async function main(argv = process.argv.slice(2)) {
       if (result.stats.chunkBytes[kind] !== undefined) console.log('[verify-anims] lazy chunk ' + CHUNK_NAMES[kind] + ': ' + formatKiB(result.stats.chunkBytes[kind]))
     }
     console.log('[verify-anims] first paint (client.js + human chunk): ' + formatKiB(result.stats.firstPaintBytes))
+    if (result.stats.mountBytes > 0) console.log('[verify-anims] mount payload (+ mount-time behavior kit): ' + formatKiB(result.stats.mountBytes))
     console.log('[verify-anims] all lazy chunks + entry: ' + formatKiB(result.stats.totalBytes))
   }
   if (!result.ok) {
