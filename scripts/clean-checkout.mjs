@@ -160,8 +160,11 @@ export function runStep(name, command, args, options) {
  */
 export function parseTestSummary(stdout) {
   const number = (name) => {
-    const match = new RegExp('(?:^|\\n)\\u2139 ' + name + ' (\\d+)').exec(stdout)
-    return match ? Number(match[1]) : 0
+    const unicode = new RegExp('(?:^|\\n)\\u2139 ' + name + ' (\\d+)').exec(stdout)
+    if (unicode) return Number(unicode[1])
+    // Node 22 defaults to the TAP reporter when stdout is not a TTY (e.g. CI).
+    const tap = new RegExp('^# ' + name + ' (\\d+)$', 'm').exec(stdout)
+    return tap ? Number(tap[1]) : 0
   }
   const skipReasons = []
   for (const line of stdout.split('\n')) {

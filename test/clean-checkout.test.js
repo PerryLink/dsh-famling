@@ -23,12 +23,20 @@ import { test } from 'node:test'
 
 import { LOCKFILE_NAME, loadLockfile, lockProblems, staticReport } from '../scripts/check-package.mjs'
 import { SPEC_RELATIVE_PATH, readAnimationSpec, validateEmbeddedAgainstSpec } from '../scripts/anim-spec.mjs'
+import { parseTestSummary } from '../scripts/clean-checkout.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DEEP_CHECKOUT = join(ROOT, 'scripts', 'clean-checkout.mjs')
 const IS_CHILD = process.env.DSH_FAMLING_STANDALONE_CHILD === '1'
 const REBUILD_DOC = join(ROOT, 'docs', 'INDEPENDENT-REBUILD-2026-11-20.md')
 const SYNC_DOC = join(ROOT, 'docs', 'PUBLIC-REPO-SYNC-2026-11-20.md')
+
+test('test summary parser accepts Node 22 TAP output used on non-TTY CI', () => {
+  const tap = '# tests 12\n# pass 10\n# fail 0\n# skipped 2\n# duration_ms 5\n'
+  assert.deepEqual(parseTestSummary(tap), { tests: 12, pass: 10, fail: 0, skipped: 2, durationMs: 5, skipReasons: [] })
+  const spec = '\u2139 tests 3\n\u2139 pass 2\n\u2139 fail 0\n\u2139 skipped 1\n\u2139 duration_ms 4\n'
+  assert.equal(parseTestSummary(spec).pass, 2)
+})
 
 test('package-lock.json is a committed root-only install LOCK', () => {
   const lock = loadLockfile(ROOT)
