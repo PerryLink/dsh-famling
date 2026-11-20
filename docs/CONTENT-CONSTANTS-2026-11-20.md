@@ -89,10 +89,11 @@ node scripts/gen-content-constants.mjs --check
 
 ### 4.2 `npm run typecheck` = `scripts/typecheck.mjs` + `scripts/tsconfig.checkjs.json`
 
-- scope：`scripts/*.mjs` 工具链 7 个文件（gen/check-jsdoc/typecheck/embed-anims/verify-anims/check-package/measure-bundle），`allowJs + checkJs + noEmit`。
+- scope：`scripts/*.mjs` 工具链 7 个文件（gen/check-jsdoc/typecheck/embed-anims/verify-anims/check-package/measure-bundle）**+ `content-extension.mjs`**（MB-108 补齐，见下），`allowJs + checkJs + noEmit`。
 - 解析顺序：`FAMLING_TSC` → 插件本地 `node_modules/typescript/bin/tsc` → 兄弟 `desktop-games/node_modules/typescript/bin/tsc` → `DSH_CHECKOUT/node_modules/typescript/bin/tsc`；`@types/node` 同理（`FAMLING_TYPES_ROOT` 可覆盖），由脚本把 `--typeRoots` 传给 tsc。
 - **诚实 skip**：找不到 TypeScript/@types 时打印 `[typecheck] skipped: …` 并 exit 0；找到则真实跑 tsc，失败 exit 非 0。本机实测使用 `desktop-games/node_modules` 的 TypeScript 5.9.3，`[typecheck] checkJs ok`。
-- 排除项（写进 `scripts/tsconfig.checkjs.json` 注释）：`client.js` / `client.content.js` / `client.anim.*.js` 不是 ES module（经 `window.__ModuleLoader__` 注册），无法直接 checkJs；`content-extension.mjs` 的 v3 校验器有约 40 个历史 `unknown` 收窄错误，属 MB-108 后续（其契约仍由 parity 测试 + JSDoc 门禁覆盖）。
+- 排除项（写进 `scripts/tsconfig.checkjs.json` 注释）：`client.js` / `client.content.js` / `client.anim.*.js` 不是 ES module（经 `window.__ModuleLoader__` 注册），无法直接 checkJs。
+- **MB-108（2026-11-20）已把 `content-extension.mjs` 纳入 checkJs**：给 `isPlainObject` / `isBoundedText` 加 JS type guard（`@returns {value is …}`），把 asset/totalBytes/voice.mode/kind/source/preview.kind 等 `unknown` 收窄改为显式 typeof 守卫（不改校验语义），并修掉 JSDoc 注释里的 `@import` 误解析；`npm run typecheck` 实测 `checkJs ok`（0 error），v3 契约行为由 10 例 `content-extension-compliance` + 14 例 `parity-contract` 冻结。
 
 ### 4.3 package.json 接线
 

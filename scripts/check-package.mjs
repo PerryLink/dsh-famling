@@ -18,6 +18,13 @@
  *
  * The gate is deliberately static/fast and network-free: it can run in prepack,
  * CI and any offline checkout. Public URL reachability is NOT verified here.
+ *
+ * MB-004 adds the reproducible-install LOCK: package-lock.json must exist, be a
+ * lockfileVersion 3 tree that matches package.json (name/version/license, every
+ * declared dependency present), and must never resolve through a private local
+ * path (file:/link: into a sibling checkout). The plugin is currently
+ * dependency-free, so the expected lock is a root-only tree; the check is
+ * written generically so a future dev dependency still has to be locked.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
@@ -77,6 +84,97 @@ function toPosix(file) { return file.split(sep).join('/') }
 
 export function loadPackage(root) {
   return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+}
+
+/** Lockfile name checked at the package root (npm lockfileVersion 3). */
+export const LOCKFILE_NAME = 'package-lock.json'
+
+/** Dependency sections that must be represented in the lock. */
+const DEPENDENCY_SECTIONS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
+
+/**
+ * Read the committed package-lock.json, or null when absent.
+ * @param {string} root Package root.
+ * @returns {any|null} Parsed lockfile or null.
+ */
+export function loadLockfile(root) {
+  const path = join(root, LOCKFILE_NAME)
+  if (!existsSync(path)) return null
+  return JSON.parse(readFileSync(path, 'utf8'))
+}
+
+/**
+ * Validate the committed package-lock.json: the clean-checkout LOCK (MB-004).
+ *
+ * The lock is what makes `npm ci` reproducible in a plugin-only checkout. It
+ * must describe this exact package, carry every declared dependency, and never
+ * point at a private local checkout. A missing or stale lock is a hard failure,
+ * not a warning: without it a clean checkout either needs the private repo or
+ * installs a different tree.
+ * @param {string} root Package root.
+ * @returns {string[]} Problems (empty when the lock is valid).
+ */
+export function lockProblems(root) {
+  const problems = []
+  const pkg = loadPackage(root)
+  const lockPath = join(root, LOCKFILE_NAME)
+  if (!existsSync(lockPath)) {
+    return [LOCKFILE_NAME + ' is missing: a clean checkout must be reproducible (run `npm install --package-lock-only --ignore-scripts`)']
+  }
+  let lock
+  try {
+    lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+  } catch (error) {
+    return [LOCKFILE_NAME + ' is not valid JSON: ' + error.message]
+  }
+  if (lock === null || typeof lock !== 'object' || Array.isArray(lock)) return [LOCKFILE_NAME + ' must be a JSON object']
+  if (lock.lockfileVersion !== 3) problems.push('lockfileVersion is ' + JSON.stringify(lock.lockfileVersion) + ', expected 3 (npm >=7 lock)')
+  if (lock.name !== pkg.name) problems.push('lock name is ' + JSON.stringify(lock.name) + ', expected ' + JSON.stringify(pkg.name))
+  if (lock.version !== pkg.version) problems.push('lock version is ' + JSON.stringify(lock.version) + ', expected ' + JSON.stringify(pkg.version) + ' (run `npm install --package-lock-only`)')
+  const packages = lock.packages
+  if (packages === null || typeof packages !== 'object' || Array.isArray(packages)) {
+    problems.push('lock is missing the packages map')
+    return problems
+  }
+  const rootEntry = packages['']
+  if (rootEntry === null || typeof rootEntry !== 'object') {
+    problems.push('lock is missing the "" root package entry')
+  } else {
+    if (rootEntry.name !== pkg.name) problems.push('lock root name is ' + JSON.stringify(rootEntry.name) + ', expected ' + JSON.stringify(pkg.name))
+    if (rootEntry.version !== pkg.version) problems.push('lock root version is ' + JSON.stringify(rootEntry.version) + ', expected ' + JSON.stringify(pkg.version))
+    if (rootEntry.license !== pkg.license) problems.push('lock root license is ' + JSON.stringify(rootEntry.license) + ', expected ' + JSON.stringify(pkg.license))
+    for (const section of DEPENDENCY_SECTIONS) {
+      const declared = Object.keys(pkg[section] ?? {}).sort()
+      const locked = Object.keys(rootEntry[section] ?? {}).sort()
+      if (declared.join(',') !== locked.join(',')) {
+        problems.push('lock root ' + section + ' [' + locked.join(',') + '] != package.json [' + declared.join(',') + ']')
+      }
+    }
+  }
+  const packageKeys = Object.keys(packages).filter((key) => key !== '')
+  const declaredNames = new Set()
+  for (const section of DEPENDENCY_SECTIONS) for (const name of Object.keys(pkg[section] ?? {})) declaredNames.add(name)
+  for (const key of packageKeys) {
+    const name = key.startsWith('node_modules/') ? key.slice('node_modules/'.length).split('/node_modules/').pop() : key
+    const entry = packages[key] ?? {}
+    // A private/local resolution would make the clean checkout depend on a
+    // sibling repository that the public checkout does not have.
+    const resolved = typeof entry.resolved === 'string' ? entry.resolved : ''
+    if (/^(file|link):/.test(resolved) || /^\.\.?\//.test(resolved) || /^[A-Za-z]:[\\/]/.test(resolved)) {
+      problems.push('lock entry ' + JSON.stringify(key) + ' resolves through a private/local path: ' + resolved)
+    }
+    if (!name) problems.push('lock entry ' + JSON.stringify(key) + ' has no package name')
+    else {
+      const isDeclared = declaredNames.has(name)
+      const isTransitive = packageKeys.some((candidate) => candidate !== key && Object.prototype.hasOwnProperty.call(packages[candidate]?.dependencies ?? {}, name))
+      if (!isDeclared && !isTransitive) problems.push('lock pins ' + JSON.stringify(name) + ' but it is not a declared or transitive dependency')
+    }
+  }
+  for (const name of declaredNames) {
+    const matches = packageKeys.filter((key) => key === 'node_modules/' + name || key.endsWith('/node_modules/' + name))
+    if (matches.length === 0) problems.push('declared dependency ' + JSON.stringify(name) + ' is not represented in ' + LOCKFILE_NAME)
+  }
+  return problems
 }
 
 function normalizeRepoUrl(url) {
@@ -257,15 +355,19 @@ export function staticReport(root) {
   const pkg = loadPackage(root)
   const metadata = metadataProblems(pkg)
   const expected = expectedPacked(pkg, root)
+  const lock = lockProblems(root)
+  const lockfile = loadLockfile(root)
   return {
     pkg,
-    problems: [...metadata, ...expected.problems],
+    problems: [...metadata, ...expected.problems, ...lock],
     info: {
       name: pkg.name,
       version: pkg.version,
       allowlistEntries: Array.isArray(pkg.files) ? pkg.files.length : 0,
       expectedFiles: expected.paths.length,
       exports: Object.keys(pkg.exports ?? {}).length,
+      lockfileVersion: lockfile?.lockfileVersion ?? null,
+      lockedPackages: lockfile?.packages ? Object.keys(lockfile.packages).length : 0,
     },
     expectedPaths: expected.paths,
   }
@@ -318,7 +420,7 @@ export function runCli(argv, { stdout = console.log, stderr = console.error } = 
     return 1
   }
   const { info } = report
-  const summary = `metadata ok, ${info.allowlistEntries} allowlist entries -> ${info.expectedFiles} packed files, ${info.exports} exports covered`
+  const summary = `metadata ok, ${info.allowlistEntries} allowlist entries -> ${info.expectedFiles} packed files, ${info.exports} exports covered, lockfileVersion ${info.lockfileVersion} (${info.lockedPackages} locked package(s))`
   if (pack && report.pack) {
     const kib = (bytes) => (bytes / 1024).toFixed(1) + ' KiB'
     stdout(`check-package: pack ok (${report.pack.entryCount} files, tarball ${kib(report.pack.size)}, unpacked ${kib(report.pack.unpackedSize)})`)

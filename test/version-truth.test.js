@@ -75,9 +75,11 @@ test('client.js, client.content.js, README, LEGAL-NOTICE and locale all state th
   }
   assert.equal(found['client.js'].length, 1, 'client.js has one PLUGIN_VERSION constant')
   assert.equal(found['client.content.js'].length, 1, 'client.content.js has one PLUGIN_VERSION constant')
-  for (const file of ['client.js', 'client.content.js']) {
-    assert.equal(read(file).split("'dsh-famling ' + PLUGIN_VERSION").length - 1, 2, file + ': zh and en version labels both derive from PLUGIN_VERSION')
-  }
+  // client.content.js renders the visible "dsh-famling <version> · ..." label
+  // in both locales; client.js no longer renders one (the old L.version key was
+  // dead copy) but still reports the package version in the hello handshake.
+  assert.equal(read('client.content.js').split("'dsh-famling ' + PLUGIN_VERSION").length - 1, 2, 'client.content.js: zh and en version labels derive from PLUGIN_VERSION')
+  assert.equal(read('client.js').split('clientVersion: PLUGIN_VERSION').length - 1, 1, 'client.js: hello handshake reports PLUGIN_VERSION')
 })
 
 test('safety floor docs stay truthful: destination, crisis resources, clear/withdraw, cross-product wording', () => {

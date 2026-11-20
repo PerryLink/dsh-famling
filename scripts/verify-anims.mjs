@@ -25,12 +25,17 @@
  *   - the white bubble background / dark text and the random-say code paths are
  *     present in client.js;
  *   - the hand-written micro-action bubble line i18n keys exist in both locales;
+ *   - the committed client.js + lazy chunks match the vendored semantic
+ *     spec/LOCK at scripts/spec/anim-spec.json (sourceSha256, per-chunk SHA,
+ *     embedded frame SHA, clip/region contract). This check always runs: a
+ *     missing or tampered spec is an error, never a skip. A clean plugin-only
+ *     checkout therefore verifies without the private art repository;
  *   - optionally (default: auto) the embedded frames still match the private
- *     asset pack byte-for-byte after re-encoding.
+ *     art checkout byte-for-byte after re-encoding, when that checkout exists.
  *
  * Usage:
- *   node scripts/verify-anims.mjs            # verify, cross-check assets if found
- *   node scripts/verify-anims.mjs --no-assets # skip the private asset cross-check
+ *   node scripts/verify-anims.mjs            # verify + vendored spec, cross-check private assets if found
+ *   node scripts/verify-anims.mjs --no-assets # skip only the private byte-level cross-check
  */
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -53,6 +58,7 @@ import {
   decodePng,
   resolveAssetsRoot,
 } from './embed-anims.mjs'
+import { animationSpecSummary, readAnimationSpec, validateEmbeddedAgainstSpec } from './anim-spec.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const ACTION_BEGIN = '// <dsh-famling:actions:begin>'
@@ -570,10 +576,29 @@ export function verifyClient(options = {}) {
   if (!source.includes('function onPetClick(event)')) errors.push('client.js is missing the region tap handler')
   if (source.includes('ACTION_SETS')) errors.push('client.js still contains the obsolete ACTION_SETS table')
 
+  // Vendored spec/LOCK (MB-004): this check always runs, with or without the
+  // private art checkout. A clean plugin-only checkout has no private repo, so
+  // its verification evidence is the committed spec + changed artifacts; a
+  // missing or tampered spec is a hard error (never a skip).
+  try {
+    const { spec, path } = readAnimationSpec(pluginRoot)
+    const specCheck = validateEmbeddedAgainstSpec({ pluginRoot, spec })
+    for (const problem of specCheck.errors) errors.push('vendored spec check failed: ' + problem)
+    stats.spec = {
+      path,
+      specVersion: spec.specVersion,
+      specSha256: spec.specSha256,
+      sourceSha256: spec.sourceSha256,
+      summary: animationSpecSummary(spec),
+    }
+  } catch (error) {
+    errors.push('vendored animation spec check failed: ' + error.message)
+  }
+
   const assetsRootOption = Object.prototype.hasOwnProperty.call(options, 'assetsRoot') ? options.assetsRoot : undefined
   const assetsRoot = assetsRootOption === null ? null : resolveAssetsRoot(assetsRootOption)
   if (assetsRoot === null) {
-    warnings.push('private animation assets not found; skipped byte-level source cross-check')
+    stats.privateAssets = 'absent (vendored spec is the verification source)'
   } else {
     try {
       const fresh = buildAnimationData(assetsRoot, { optimize: true })
@@ -596,7 +621,11 @@ export async function main(argv = process.argv.slice(2)) {
   const assetsRoot = argv.includes('--no-assets') ? null : undefined
   const result = verifyClient({ assetsRoot })
   for (const warning of result.warnings) console.warn('[verify-anims] warn: ' + warning)
-  if (result.stats.assetsRoot) console.log('[verify-anims] assets cross-check: ' + result.stats.assetsRoot)
+  if (result.stats.spec) {
+    console.log('[verify-anims] vendored spec: ' + result.stats.spec.path + ' (' + result.stats.spec.summary + ')')
+  }
+  if (result.stats.assetsRoot) console.log('[verify-anims] private assets cross-check: ' + result.stats.assetsRoot)
+  else if (result.stats.privateAssets) console.log('[verify-anims] private assets: ' + result.stats.privateAssets)
   console.log('[verify-anims] total frames: ' + result.stats.totalFrames + ', base64: ' + formatKiB(result.stats.totalBase64Chars))
   for (const [kind, item] of Object.entries(result.stats.characters)) {
     console.log('[verify-anims] ' + kind.padEnd(5) + ' clips=' + item.clips + ' frames=' + item.frames + ' base64=' + formatKiB(item.base64Chars))

@@ -36,8 +36,8 @@
  * script instead.
  *
  * Usage:
- *   node scripts/embed-anims.mjs                 # inject / refresh client.js + chunks
- *   node scripts/embed-anims.mjs --check         # fail if client.js or a chunk is stale
+ *   node scripts/embed-anims.mjs                 # inject / refresh client.js + chunks + spec
+ *   node scripts/embed-anims.mjs --check         # fail if client.js/chunks or the vendored spec is stale
  *   node scripts/embed-anims.mjs --qa            # also write scripts/qa/anim-data.js
  *   node scripts/embed-anims.mjs --no-optimize   # embed source PNG bytes verbatim
  *   node scripts/embed-anims.mjs --src DIR       # explicit anim asset root
@@ -47,12 +47,30 @@
  * checkout ../../desktop-games/public/assets/pet/anim. The tap-region root
  * defaults to FAMLING_CHARACTERS_DIR, else the sibling private repo checkout
  * ../../desktop-games/public/characters. No network, no deps.
+ *
+ * Standalone (MB-004): when the private asset checkout is absent, --check does
+ * NOT skip and does NOT need the private repo. It validates the committed
+ * client.js + lazy chunks against the vendored semantic spec/LOCK at
+ * scripts/spec/anim-spec.json (scripts/anim-spec.mjs); a missing or tampered
+ * spec is a hard failure. The embed/update mode still requires the private art
+ * checkout and always refreshes the spec together with the chunks, so the
+ * vendored lock can never silently drift from the generated artifacts.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { deflateSync, inflateSync } from 'node:zlib'
+
+import {
+  SPEC_RELATIVE_PATH,
+  animationSpecSummary,
+  buildAnimationSpec,
+  readAnimationSpec,
+  renderAnimationSpec,
+  specPathFor,
+  validateEmbeddedAgainstSpec,
+} from './anim-spec.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const PLUGIN_ROOT = resolve(HERE, '..')
@@ -592,6 +610,7 @@ export function buildAnimationData(assetsRoot, options = {}) {
   if (!charactersRoot) throw new Error('character tap regions not found; pass --characters DIR or set FAMLING_CHARACTERS_DIR')
   const anims = {}
   const sprites = {}
+  const sourceFrames = {}
   const hash = createHash('sha256')
   const stats = []
   for (const kind of CHARACTERS) {
@@ -617,10 +636,12 @@ export function buildAnimationData(assetsRoot, options = {}) {
     let embeddedBytes = 0
     let base64Chars = 0
     let optimizedFrames = 0
+    const sourceFrameSha256 = {}
     for (const frame of pack.frames) {
       const buffer = readFileSync(frame.absolutePath)
       hash.update(kind + '/' + frame.relativePath + ':')
       hash.update(buffer)
+      sourceFrameSha256[frame.relativePath] = createHash('sha256').update(buffer).digest('hex')
       const result = optimize ? optimizeFrame(buffer) : { data: buffer, optimized: false }
       const base64 = result.data.toString('base64')
       sprites[frame.spriteKey] = base64
@@ -644,10 +665,11 @@ export function buildAnimationData(assetsRoot, options = {}) {
       microActions,
       license: typeof pack.manifest.license === 'string' ? pack.manifest.license : '',
     }
+    sourceFrames[kind] = sourceFrameSha256
     stats.push({ kind, frames: pack.frames.length, sourceBytes, embeddedBytes, base64Chars, optimizedFrames })
   }
   validatePolicies(anims)
-  return { anims, sprites, stats, sourceSha256: hash.digest('hex'), charactersRoot }
+  return { anims, sprites, stats, sourceFrames, sourceSha256: hash.digest('hex'), charactersRoot }
 }
 
 /**
@@ -739,6 +761,7 @@ export function renderChunk(data, kind) {
 
 /** Render every character chunk keyed by kind. */
 export function renderChunks(data) {
+  /** @type {Record<string, string>} */
   const chunks = {}
   for (const kind of CHARACTERS) chunks[kind] = renderChunk(data, kind)
   return chunks
@@ -803,6 +826,10 @@ function printSummary(data, assetsRoot, extra = {}) {
     console.log('[embed-anims] first-screen payload: client.js ' + formatBytes(entryBytes) + '; + default character chunk ' + formatBytes(firstPaint) + ' (only when used)')
   }
   if (extra.qaPath) console.log('[embed-anims] qa data: ' + extra.qaPath)
+  if (extra.specPath) {
+    console.log('[embed-anims] vendored spec ' + extra.specPath + ' ' + formatBytes(extra.specBytes) + (extra.specChanged ? ' (updated)' : ' (unchanged)'))
+    console.log('[embed-anims] vendored ' + animationSpecSummary(extra.spec))
+  }
 }
 
 /** Read a file as UTF-8, or null when it is absent. */
@@ -828,7 +855,27 @@ export function generate(options = {}) {
     const path = chunkPath(pluginRoot, kind)
     return { kind, path, fileName: CHUNK_NAMES[kind], content: chunkContents[kind], previous: readFileIfExists(path) }
   })
-  return { data, block, source, next, chunks, assetsRoot, pluginRoot, clientPath, charactersRoot: data.charactersRoot }
+  // Vendored spec/LOCK (MB-004): the semantic contract + SHA-256 locks that a
+  // clean plugin-only checkout validates against when the private art checkout
+  // is absent. It is refreshed together with the chunks so it cannot drift.
+  const spec = buildAnimationSpec({ data, chunkContents })
+  const specText = renderAnimationSpec(spec)
+  const specPath = specPathFor(pluginRoot)
+  return {
+    data,
+    block,
+    source,
+    next,
+    chunks,
+    spec,
+    specText,
+    specPath,
+    specPrevious: readFileIfExists(specPath),
+    assetsRoot,
+    pluginRoot,
+    clientPath,
+    charactersRoot: data.charactersRoot,
+  }
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -842,7 +889,31 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (options.help) {
     console.log('usage: node scripts/embed-anims.mjs [--check] [--qa] [--no-optimize] [--src DIR] [--characters DIR]')
+    console.log('  standalone (no private checkout): --check validates the committed chunks against ' + SPEC_RELATIVE_PATH)
     return
+  }
+  // Standalone mode (MB-004): no private art checkout. --check stays a real
+  // gate: the committed client.js + lazy chunks must match the vendored
+  // semantic spec/LOCK. A missing or tampered spec fails; it never skips.
+  if (options.mode === 'check' && resolveAssetsRoot(options.assetsRoot) === null) {
+    try {
+      const { path, spec } = readAnimationSpec(PLUGIN_ROOT)
+      const checked = validateEmbeddedAgainstSpec({ pluginRoot: PLUGIN_ROOT, spec })
+      if (!checked.ok) {
+        console.error('[embed-anims] committed animation artifacts do not match the vendored spec (' + path + '):')
+        for (const problem of checked.errors) console.error('[embed-anims]   - ' + problem)
+        process.exitCode = 1
+        return
+      }
+      console.log('[embed-anims] standalone spec mode: private animation assets not present (no skip)')
+      console.log('[embed-anims] vendored ' + animationSpecSummary(spec))
+      console.log('[embed-anims] check ok: client.js + ' + checked.stats.characters + ' lazy character chunks match the vendored spec (' + checked.stats.frames + ' frames)')
+      return
+    } catch (error) {
+      console.error('[embed-anims] ' + error.message)
+      process.exitCode = 1
+      return
+    }
   }
   try {
     const result = generate(options)
@@ -856,10 +927,15 @@ export async function main(argv = process.argv.slice(2)) {
         bytes: Buffer.byteLength(chunk.content),
         changed: chunk.previous !== chunk.content,
       })),
+      specPath: result.specPath,
+      specChanged: result.specPrevious !== result.specText,
+      specBytes: Buffer.byteLength(result.specText),
+      spec: result.spec,
     }
     const stale = [
       ...(base.changed ? [result.clientPath] : []),
       ...result.chunks.filter((chunk) => chunk.previous !== chunk.content).map((chunk) => chunk.path),
+      ...(base.specChanged ? [result.specPath] : []),
     ]
     if (options.mode === 'check') {
       if (stale.length > 0) {
@@ -868,14 +944,25 @@ export async function main(argv = process.argv.slice(2)) {
         process.exitCode = 1
         return
       }
+      const checked = validateEmbeddedAgainstSpec({ pluginRoot: result.pluginRoot, spec: result.spec })
+      if (!checked.ok) {
+        console.error('[embed-anims] committed animation artifacts do not match the vendored spec:')
+        for (const problem of checked.errors) console.error('[embed-anims]   - ' + problem)
+        process.exitCode = 1
+        return
+      }
       if (options.qa) base.qaPath = writeQaData(result.data)
       printSummary(result.data, result.assetsRoot, base)
-      console.log('[embed-anims] check ok: client.js + ' + result.chunks.length + ' lazy character chunks match the asset pack')
+      console.log('[embed-anims] check ok: client.js + ' + result.chunks.length + ' lazy character chunks match the asset pack and the vendored spec')
       return
     }
     // Write the lazy chunks first so the client entry never references a missing file.
     for (const chunk of result.chunks) if (chunk.previous !== chunk.content) writeFileSync(chunk.path, chunk.content)
     if (base.changed) writeFileSync(result.clientPath, result.next)
+    if (base.specChanged) {
+      mkdirSync(dirname(result.specPath), { recursive: true })
+      writeFileSync(result.specPath, result.specText)
+    }
     if (options.qa) base.qaPath = writeQaData(result.data)
     printSummary(result.data, result.assetsRoot, base)
   } catch (error) {

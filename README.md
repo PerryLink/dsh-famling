@@ -73,7 +73,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - 清理入口「清除本机设置与同意」同时删除 `hidden-until` 与 v1/v2 同意记录；设置「高级 / 调试」的存储键列表会列出它们。
 - 全部文案与控件在懒加载 `client.content.js`（输入面板/同意弹窗/使用限制弹窗也自 0.10.6 起移入该 chunk；0.10.10 的旧同意迁移与「撤回语音同意」也在该 chunk），入口 `client.js` 保持 96 KiB 首屏预算内。
-- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 227 项全绿。
+- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计全绿（含 MB-004 的 LOCK / vendored spec / clean-checkout 门禁）。
 
 ## Host 能力协商 hello/probe（0.10.7，MB-034 / E3-T2）
 
@@ -117,7 +117,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 - 互动菜单不再手写固定表：`scripts/embed-anims.mjs` 把 `regions.json` 的 `actions`（id/label/event/followUpEvent/followUpMs/says）和 `gestures[].says` 一起嵌入 `ANIMS[character]`，并纳入 `source-sha256` 与 `--check` 过期检测；改数据后重跑 `npm run embed:anims` 即可。
 - 事件 → clip 映射不再手写：`scripts/gen-content-constants.mjs` 从 famling 的 `public/characters/*/{regions,behavior}.json` + `public/assets/pet/anim/*/manifest.json` 生成 `client.js` 的 `EVENT_CLIPS` 块（`pat`→`pat_head`、`ball_throw`→`ball_throw`、`ball_chase`→`ball_chase`、`paw_face`→`paw_face`、`run`→`run`；`feed` 复用 stand/wave clip；`talk` 只出气泡、保持 idle）；`npm run check:content` 对生成块做过期检测，`scripts/verify-anims.mjs` 继续校验映射完整、猫/人没有球类动作、金毛丢球→追球 follow-up，以及每个动作/区域至少 2 条随机回话。
-- 单源与检查链（MB-107）：`public/content/library.json` 的角色/对话/外观/用途/合规常量同样由 `gen-content-constants.mjs` 生成到 `client.js` 的 `@generated` 块（声明差异 D1–D4 见 `docs/CONTENT-CONSTANTS-2026-11-20.md`）；`npm run check`（ANIMS + content 双生成块）、`npm run lint`（JSDoc/lint 最小链）与 `npm run typecheck`（checkJs，缺 TypeScript 时诚实 skip）已纳入 `release:check`。
+- 单源与检查链（MB-107/MB-108）：`public/content/library.json` 的角色/对话/外观/用途/合规常量同样由 `gen-content-constants.mjs` 生成到 `client.js` 的 `@generated` 块（声明差异 D1–D4 见 `docs/CONTENT-CONSTANTS-2026-11-20.md`）；`npm run check`（ANIMS + content 双生成块）、`npm run lint`（JSDoc/lint 最小链）与 `npm run typecheck`（checkJs，**含 content-extension.mjs**；缺 TypeScript 时诚实 skip）已纳入 `release:check`。i18n/locale 单一源由 `scripts/check-i18n.mjs` 冻结（10 项检查：client.js `L`、client.content.js `STRINGS`、`locale/*.json` 的键树/引用/死键；随 `npm test` 的 `test/i18n.test.js` 执行）。
 - 随机回话使用“避开上一句”的选择器：同一区域/同一动作连续点击不会返回同一句；气泡文案、TTS 与 thought 策略沿用 0.8.2。
 
 ## 帧时长与 holdMs 播放（0.8.4）
@@ -298,18 +298,30 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - **命令**：`npm run check:package`（静态）/ `npm run verify:package`（含 `npm pack --dry-run`）/ `npm run release:check`（test + check + verify + verify:package，发布前总门禁）。
 - **未做**：真实 `npm publish`、provenance、CI 首跑与 GitHub 公网可达性均未在本轮执行（不伪造外部验证）；npm 上目前仍是占位版本。细节、证据与本机实测记录见 [docs/RELEASE-HYGIENE.md](docs/RELEASE-HYGIENE.md)。
 
+## 独立 checkout 重建与 LOCK（MB-004，2026-11-20）
+
+本插件可以在**没有私有 famling 仓**的单独 checkout 里重建、测试与验证：
+
+- **安装 LOCK**：仓库提交 `package-lock.json`（lockfileVersion 3；插件零运行时依赖 → root-only 锁）；`npm ci` / `npm ci --offline` 可复现安装。`scripts/check-package.mjs` 把 LOCK 纳入发布门禁（name/version/license 与 `package.json` 一致、声明的依赖都在锁里、禁止 `file:`/`link:`/绝对路径的私有解析）。
+- **动画 vendored spec/LOCK**：`scripts/spec/anim-spec.json` 保存三套动画的语义契约（clips 帧数/fps/holdMs、regions/actions）、`client.js`/懒加载 chunk/每帧 SHA-256、私有源帧逐文件 SHA-256（**不含 PNG/base64 字节**）。`node scripts/embed-anims.mjs --check` 在无私有资产时进入 `standalone spec mode`（缺 spec 或篡改一律失败，不再 skip）；`node scripts/verify-anims.mjs` 总是校验 vendored spec，私有无资产时打印 `private assets: absent` 而不是跳过字节级比对。
+- **clean checkout 门禁**：`node scripts/clean-checkout.mjs` 把包复制到临时目录、把 `FAMLING_ANIM_DIR` / `FAMLING_CHARACTERS_DIR` / `FAMLING_REPO_DIR` 指向不存在路径，真实跑 `npm ci --offline` + 全量 `node --test` + `check` / `verify` / `check-package --pack` / `lint` / `typecheck`；`--json` 输出可复核证据，`--keep` 保留副本。`test/clean-checkout.test.js` 会把该门禁纳入 `npm test`。
+- **公开仓同步准备**：`node scripts/clean-checkout.mjs --export DIR` 生成可直接首推的公开仓树（排除 `node_modules` / `.git` / 缓存 / tarball）并对导出树做静态包卫生 + spec 校验；首推、CI 首跑、分支保护与 npm publish 属外部步骤（本工作区不执行、不声称完成）。
+- **剩余限制**：单独 checkout 仍有 **10 个跨仓 parity skip**（对照兄弟 famling 仓的 library/behavior/terms/compliance 冻结值；插件侧 frozen 值与 `test/fixtures/content-compliance/` 仍照跑），它们不是构建依赖，clean-checkout 门禁会断言“仅剩这些既知跨仓 skip、无私产资产 skip”。没有 TypeScript 的裸 checkout 里 `typecheck` 按既有设计打印诚实 skip。
+- 细节与实测证据：[docs/INDEPENDENT-REBUILD-2026-11-20.md](docs/INDEPENDENT-REBUILD-2026-11-20.md)；公开仓 staging 清单：[docs/PUBLIC-REPO-SYNC-2026-11-20.md](docs/PUBLIC-REPO-SYNC-2026-11-20.md)。
+
 ## 验证
 
 - `node --check client.js`
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试 + 版本化同意（0.10.10 / MB-014：接受/迁移/陈旧版本或哈希/撤回/清除、canonical 哈希与双端锚点冻结）测试 + 发布卫生（元数据 / files 白名单 / prepack 接线 / 打包清单）测试，**227 项**，不调用真实模型）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试 + 版本化同意（0.10.10 / MB-014：接受/迁移/陈旧版本或哈希/撤回/清除、canonical 哈希与双端锚点冻结）测试 + 发布卫生（元数据 / files 白名单 / prepack 接线 / 打包清单）测试 + **MB-004 独立重建（package-lock LOCK / vendored anim spec / clean-checkout / 公开仓导出 staging）** 测试（测试项数随并发任务增删，以 `npm test` 实测为准），不调用真实模型）
 - `npm run check:package`（静态发布卫生：repository/homepage/bugs 一致、files 无重复且存在、禁止项、exports 全覆盖）
 - `npm run verify:package`（静态 + `npm pack --dry-run --json`：实际 tarball 清单必须与白名单展开完全相等）
 - `npm run release:check`（发布前总门禁 = test + check + verify + verify:package）
-- `npm run check`（= `check:anims`：嵌入块与私有动画包一致）
-- `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
+- `node scripts/clean-checkout.mjs`（MB-004：无私有仓的临时 checkout 重建；`--json` 证据 / `--export DIR` 公开仓 staging；`npm test` 内也跑）
+- `npm run check`（= `check:anims`：嵌入块与私有动画包一致；无私有资产时用 vendored `anim-spec` 的 `standalone spec mode`）
+- `npm run verify`（= `verify:anims`：vendored anim-spec 校验 + 3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
 - `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示+版本化同意 chunk 72.2 KiB 等实测）
 - 版本真值：`package.json` 是唯一来源；`node test/version-truth.test.js --write` 从 package.json 重新生成 `client.js`/`client.content.js` 的 `PLUGIN_VERSION` 常量（zh/en 标签由它派生）、README「当前实现」、LEGAL-NOTICE「适用插件版本」与 `locale/*.json` 的 `meta.version`，`npm test` 会校验它们全部一致（含安全地板文档真值）。
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）

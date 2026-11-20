@@ -40,6 +40,10 @@ npm 只打包 `files` 展开后的文件（外加 `package.json` / `README` / `L
    `.npmrc`、`.gitignore` 永不出现在 tarball。
 6. **精确清单**：`npm run verify:package` 用 `npm pack --dry-run --json` 取真实打包清单，
    与“`files` 展开 + npm 始终包含项”做**集合相等**比较——多一个、少一个都红。
+7. **安装 LOCK（MB-004）**：`package-lock.json` 不进 tarball（npm 语义如此），但它是 clean checkout 的
+   可复现安装证据，纳入静态门禁：`lockfileVersion === 3`、name/version/license 与 `package.json` 一致、
+   声明的依赖全部在锁里、禁止任何 `file:`/`link:`/绝对路径的私有解析。插件零运行时依赖 ⇒ 当前锁是
+   root-only（1 个 package 条目）；将来若加 devDependency，同样必须先更新锁。
 
 ## 3. 门禁（scripts）
 
@@ -49,6 +53,7 @@ npm 只打包 `files` 展开后的文件（外加 `package.json` / `README` / `L
 | `npm run verify:package` | 静态 + `npm pack --dry-run --json` 清单相等校验（不写 tarball、不联网） | 本地自检 / CI / 发布前 |
 | `npm run prepack`（`prepack` 钩子） | 仅静态部分，**成功信息走 stderr** | 每次 `npm pack` / `npm publish` 自动执行 |
 | `npm run release:check` | `npm test && npm run check && npm run verify && npm run verify:package` | 发布前总门禁 / CI |
+| `node scripts/clean-checkout.mjs` | MB-004：复制到临时目录（无私有仓）→ `npm ci --offline` + 全量测试 + 各门禁；`--json` / `--export DIR` staging | 本地自检 / CI |
 
 **为什么 prepack 只做静态校验、且输出到 stderr**：npm 会把生命周期脚本的 stdout 直接混进
 `npm pack --dry-run --json` 的 stdout；prepack 若打印普通日志会破坏 JSON。prepack 成功信息因此写
@@ -97,6 +102,26 @@ locale/en.json
 locale/zh.json
 package.json
 ```
+
+## 4.1 MB-004 追加：独立 checkout + vendored LOCK（2026-11-20）
+
+发布卫生之外，插件现在也能在**无私有 famling 仓**的单独 checkout 里重建与验证（详见
+[`INDEPENDENT-REBUILD-2026-11-20.md`](./INDEPENDENT-REBUILD-2026-11-20.md)）：
+
+- `package-lock.json`：root-only lockfileVersion 3；`npm ci --offline` 可复现，`check-package` 校验其
+  name/version/license、依赖完整性与“无私有本地解析”。
+- `scripts/spec/anim-spec.json`：vendored 语义 spec + 逐帧/逐 chunk SHA-256 LOCK（不含美术字节）；
+  `embed-anims --check` 在无私有资产时进入 `standalone spec mode`，`verify-anims` 总是校验它（缺/篡改
+  即失败，不再 skip）。
+- `scripts/clean-checkout.mjs`：临时 checkout 内真实跑 `npm ci --offline` + `node --test` + `check` +
+  `verify` + `check-package --pack` + `lint` + `typecheck`；`test/clean-checkout.test.js` 把它纳入 `npm test`。
+- `scripts/clean-checkout.mjs --export DIR`：公开仓首推 staging（`PUBLIC-REPO-SYNC-2026-11-20.md`）；
+  首推/CI/npm publish 仍是外部步骤，不伪造。
+
+执行证据（2026-11-20，本工作树；`node scripts/clean-checkout.mjs --json`）：`ok: true`，整包临时副本（无 `node_modules`/`.git`），
+**0 test failures**，10 个既知跨仓 parity skip（全部 `famling` 相关），embed `standalone spec mode`，
+verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里诚实 skip。发布面文件数会随文档
+增补变化，以 `verify:package` 的实际清单为准。
 
 ## 5. 未做 / 外部依赖（不伪造完成）
 

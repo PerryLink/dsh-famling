@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { CHARACTERS, CHUNK_NAMES, PLUGIN_ROOT, chunkPath, decodePng, loadRegionConfig, resolveAssetsRoot, resolveCharactersRoot } from '../scripts/embed-anims.mjs'
+import { readAnimationSpec, validateEmbeddedAgainstSpec } from '../scripts/anim-spec.mjs'
 import { FIRST_SCREEN_BUDGET_BYTES, loadChunkModule, loadClientData, verifyClient } from '../scripts/verify-anims.mjs'
 import { AUDIT_BASELINE_BYTES } from '../scripts/measure-bundle.mjs'
 import { CONTENT_EXTENSION_COMPATIBILITY, CONTENT_EXTENSION_POINTS, CONTENT_EXTENSION_VERSION, CONTENT_PACK_EXAMPLE, CONTENT_PACK_SCHEMA_VERSION, PROHIBITED_USES, ROLE_BUNDLE_IDS, USAGE_DECLARATION_TEMPLATE, isContentExtensionCompatible, validateContentPack } from '../content-extension.mjs'
@@ -164,16 +165,23 @@ test('cat and human menus have no ball actions; dog fetch chains ball_throw -> b
   assert.ok(dog.some((action) => action.event === 'ball_chase'), 'dog: exposes a retrieve/ball_chase action')
 })
 
-test('embedded regions and actions match the private character regions.json when present', (t) => {
+test('embedded regions and actions match the private regions.json or the vendored spec', () => {
+  // Cross-repo byte cross-check when the private checkout exists; the vendored
+  // spec is the standalone source of truth (MB-004: no private repo needed).
   const charactersRoot = resolveCharactersRoot(null)
-  if (!charactersRoot) {
-    t.skip('private character regions are not available in this checkout')
+  if (charactersRoot) {
+    for (const kind of CHARACTERS) {
+      const source = loadRegionConfig(charactersRoot, kind)
+      assert.deepEqual(clientData.ANIMS[kind].regions, source, kind + ': embedded regions equal the source document')
+      assert.deepEqual(clientData.ANIMS[kind].actions, source.actions, kind + ': embedded actions equal the source document')
+    }
     return
   }
+  const { spec } = readAnimationSpec(PLUGIN_ROOT)
   for (const kind of CHARACTERS) {
-    const source = loadRegionConfig(charactersRoot, kind)
-    assert.deepEqual(clientData.ANIMS[kind].regions, source, kind + ': embedded regions equal the source document')
-    assert.deepEqual(clientData.ANIMS[kind].actions, source.actions, kind + ': embedded actions equal the source document')
+    const expected = spec.characters[kind].regions
+    assert.deepEqual(clientData.ANIMS[kind].regions, expected, kind + ': embedded regions equal the vendored spec')
+    assert.deepEqual(clientData.ANIMS[kind].actions, expected.actions, kind + ': embedded actions equal the vendored spec')
   }
 })
 
@@ -226,14 +234,17 @@ test('chat payload carries the active character with a human fallback', () => {
   assert.ok(clientSource.includes("op: 'chat', text, character: chatCharacter(characterRef.current)"), 'chat request carries the live character')
 })
 
-test('embedded animation data is current against the private asset pack when present', (t) => {
+test('embedded animation data is current against the private asset pack or the vendored spec', () => {
   const assetsRoot = resolveAssetsRoot(null)
-  if (!assetsRoot) {
-    t.skip('private animation assets are not available in this checkout')
+  if (assetsRoot) {
+    const result = verifyClient({ assetsRoot })
+    assert.equal(result.ok, true, result.errors.join('; '))
     return
   }
-  const result = verifyClient({ assetsRoot })
+  const { spec } = readAnimationSpec(PLUGIN_ROOT)
+  const result = validateEmbeddedAgainstSpec({ pluginRoot: PLUGIN_ROOT, spec })
   assert.equal(result.ok, true, result.errors.join('; '))
+  assert.equal(result.stats.frames, 208, 'vendored spec validates all 208 embedded frames without the private checkout')
 })
 
 test('first-screen client.js carries no sprite payload and meets the lazy budget', () => {
@@ -360,7 +371,7 @@ test('lazy panel chunk exposes the four-tab content center and the unified setti
   for (const label of ['一键应用', '仅修改当前角色的搭配', '恢复角色默认', '资产包', '远程市场接口已预留', 'researchOnly=true']) assert.ok(contentSource.includes(label), 'content chunk keeps: ' + label)
   for (const tab of ["roles: '角色'", "custom: '自定义'", "packs: '内容包'", "market: '市场'"]) assert.ok(contentSource.includes(tab), 'four first-level tabs: ' + tab)
   // Unified settings popup: every adjustable item + folded advanced/debug.
-  for (const label of ["settingsTitle: '设置'", "showMenuButton: '显示菜单按钮'", "menuButtonHint:", "advancedGroup: '高级 / 调试'", "motion: '帧动画'", "bubble: '说话气泡'", "memoryGroup: 'Advisers'", "contentEntry: '内容与角色…'"]) assert.ok(contentSource.includes(label), 'settings labels: ' + label)
+  for (const label of ["settingsTitle: '设置'", "showMenuButton: '显示菜单按钮'", "menuButtonHint:", "advancedGroup: '高级 / 调试'", "bubble: '说话气泡'", "memoryGroup: 'Advisers'", "contentEntry: '内容与角色…'"]) assert.ok(contentSource.includes(label), 'settings labels: ' + label)
   for (const toggle of ["toggle('quiet'", "toggle('bubble'", "toggle('menu-button'", "toggle('sound'"]) assert.ok(contentSource.includes(toggle), 'settings toggle: ' + toggle)
   for (const label of ["lowDisturbGroup: '低打扰'", "quietHours: '安静时段'", "motionAuto: '跟随系统'", "motionOn: '允许动画'", "motionOff: '减少动态'", "hideHour: '隐藏 1 小时'", "hideTomorrow: '隐藏到明天'", "prefers-reduced-motion", "type: 'time'"]) assert.ok(contentSource.includes(label), 'low-disturb settings: ' + label)
   for (const entryGate of ["const HIDDEN_KEY = 'dsh-famling/hidden-until'", 'function isQuietHoursActive(', 'function resolveMotionPreference(', '60000 + Math.random() * 30000']) assert.ok(clientSource.includes(entryGate), 'low-disturb entry logic: ' + entryGate)

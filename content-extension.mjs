@@ -31,7 +31,7 @@
  *     segments, safe chars, <= 160 chars, and carry a sha256 hash;
  *   - CSS limits: theme variables must be named --dsh-famling-* and their
  *     values must be safe colors (hex / rgb()/hsl() / keyword) - no url(),
- *     @import, expression(), markup or control characters;
+ *     at-import, expression(), markup or control characters;
  *   - backgrounds: only { kind: 'transparent' } or solid safe colors, never
  *     images/gradients/URLs;
  *   - fonts: 1..8 unquoted local family names (letters/digits/space/dot/_/-),
@@ -424,10 +424,24 @@ export const CONTENT_EXTENSION_POINTS = Object.freeze({
   }),
 })
 
+/**
+ * Pure plain-object check (prototype-pollution safe): rejects arrays, null,
+ * primitives and class instances. Typed as a JS type guard so the validator's
+ * checkJs narrowing works without casts.
+ * @param {unknown} value Candidate value.
+ * @returns {value is Record<string, unknown>} True for a plain object.
+ */
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.prototype.toString.call(value) === '[object Object]'
 }
 
+/**
+ * Bounded plain text (no control chars): typed as a JS type guard so checkJs
+ * narrows the value after the check.
+ * @param {unknown} value Candidate value.
+ * @param {number} max Maximum character length.
+ * @returns {value is string} True when value is a bounded plain string.
+ */
 function isBoundedText(value, max) {
   return typeof value === 'string' && value.length > 0 && value.length <= max && !BAD_TEXT_RE.test(value)
 }
@@ -658,9 +672,10 @@ function validateAiProvenance(value, where, errors) {
   }
   exactKeys(value, ['generated', 'disclosure'], ['tools'], where, errors)
   if (typeof value.generated !== 'boolean') errors.push(where + '.generated: boolean')
-  if (!isBoundedText(value.disclosure, CONTENT_LIMITS.maxAiDisclosureChars)) {
+  const disclosure = value.disclosure
+  if (!isBoundedText(disclosure, CONTENT_LIMITS.maxAiDisclosureChars)) {
     errors.push(where + '.disclosure: 1..' + CONTENT_LIMITS.maxAiDisclosureChars + ' plain chars')
-  } else if (value.generated === true && value.disclosure.trim().length < 4) {
+  } else if (value.generated === true && disclosure.trim().length < 4) {
     errors.push(where + '.disclosure: AI-generated content needs a real disclosure')
   }
   if (value.tools !== undefined) {
@@ -688,8 +703,9 @@ function validateAssets(value, where, errors) {
     return
   }
   exactKeys(value, ['format', 'files'], ['totalBytes'], where, errors)
-  if (!ASSET_FORMATS.includes(value.format)) errors.push(where + '.format: must be one of ' + ASSET_FORMATS.join('/'))
-  if (value.totalBytes !== undefined && (!Number.isInteger(value.totalBytes) || value.totalBytes < 0 || value.totalBytes > CONTENT_LIMITS.maxAssetTotalBytes)) {
+  if (typeof value.format !== 'string' || !ASSET_FORMATS.includes(value.format)) errors.push(where + '.format: must be one of ' + ASSET_FORMATS.join('/'))
+  const totalBytes = value.totalBytes
+  if (totalBytes !== undefined && (typeof totalBytes !== 'number' || !Number.isInteger(totalBytes) || totalBytes < 0 || totalBytes > CONTENT_LIMITS.maxAssetTotalBytes)) {
     errors.push(where + '.totalBytes: integer 0..' + CONTENT_LIMITS.maxAssetTotalBytes)
   }
   const files = value.files
@@ -711,12 +727,13 @@ function validateAssets(value, where, errors) {
     else if (seen.has(file.path)) errors.push(fileWhere + '.path: duplicate asset path "' + file.path + '"')
     else seen.add(file.path)
     if (typeof file.sha256 !== 'string' || !SHA256_RE.test(file.sha256)) errors.push(fileWhere + '.sha256: lower-case sha256 hex (64 chars)')
-    if (file.bytes !== undefined) {
-      if (!Number.isInteger(file.bytes) || file.bytes < 0 || file.bytes > CONTENT_LIMITS.maxAssetTotalBytes) errors.push(fileWhere + '.bytes: integer 0..' + CONTENT_LIMITS.maxAssetTotalBytes)
-      else sum += file.bytes
+    const bytes = file.bytes
+    if (bytes !== undefined) {
+      if (typeof bytes !== 'number' || !Number.isInteger(bytes) || bytes < 0 || bytes > CONTENT_LIMITS.maxAssetTotalBytes) errors.push(fileWhere + '.bytes: integer 0..' + CONTENT_LIMITS.maxAssetTotalBytes)
+      else sum += bytes
     }
   }
-  if (value.totalBytes !== undefined && sum > value.totalBytes) errors.push(where + '.totalBytes: smaller than the sum of file bytes')
+  if (typeof totalBytes === 'number' && sum > totalBytes) errors.push(where + '.totalBytes: smaller than the sum of file bytes')
 }
 
 /** Reserved remote catalog metadata. URLs are stored/validated, never fetched. */
@@ -816,8 +833,8 @@ function validateRoleApply(apply, where, errors) {
   } else {
     exactKeys(voice, ['canTts', 'mode'], ['sound', 'voiceURI'], where + '.voicePolicy', errors)
     if (typeof voice.canTts !== 'boolean') errors.push(where + '.voicePolicy.canTts: boolean')
-    if (!['speech', 'thought'].includes(voice.mode)) errors.push(where + '.voicePolicy.mode: speech/thought')
-    if (typeof voice.canTts === 'boolean' && ['speech', 'thought'].includes(voice.mode) && voice.canTts !== (voice.mode === 'speech')) {
+    if (typeof voice.mode !== 'string' || !['speech', 'thought'].includes(voice.mode)) errors.push(where + '.voicePolicy.mode: speech/thought')
+    if (typeof voice.canTts === 'boolean' && typeof voice.mode === 'string' && ['speech', 'thought'].includes(voice.mode) && voice.canTts !== (voice.mode === 'speech')) {
       errors.push(where + '.voicePolicy: canTts must match mode (speech => true, thought => false)')
     }
     if (voice.sound !== undefined && typeof voice.sound !== 'boolean') errors.push(where + '.voicePolicy.sound: boolean')
@@ -853,7 +870,7 @@ function validateEntry(entry, index, packSource, errors, pluginVersion) {
   }
   exactKeys(entry, required, optional, where, errors)
   const kind = entry.kind
-  if (!CONTENT_KINDS.includes(kind)) {
+  if (typeof kind !== 'string' || !CONTENT_KINDS.includes(kind)) {
     errors.push(where + '.kind: must be one of ' + CONTENT_KINDS.join('/'))
     return
   }
@@ -863,7 +880,7 @@ function validateEntry(entry, index, packSource, errors, pluginVersion) {
     errors.push(where + '.description: <= ' + CONTENT_LIMITS.maxDescriptionChars + ' plain chars')
   }
   if (typeof entry.version !== 'string' || !VERSION_RE.test(entry.version)) errors.push(where + '.version: semver x.y.z')
-  if (!CONTENT_SOURCES.includes(entry.source)) errors.push(where + '.source: must be one of ' + CONTENT_SOURCES.join('/'))
+  if (typeof entry.source !== 'string' || !CONTENT_SOURCES.includes(entry.source)) errors.push(where + '.source: must be one of ' + CONTENT_SOURCES.join('/'))
   else if (entry.source !== packSource) errors.push(where + '.source: must match pack.source ("' + packSource + '")')
   if (!Array.isArray(entry.permissions) || entry.permissions.length === 0 || entry.permissions.length > CONTENT_LIMITS.maxPermissions) {
     errors.push(where + '.permissions: 1..' + CONTENT_LIMITS.maxPermissions + ' entries')
@@ -881,7 +898,7 @@ function validateEntry(entry, index, packSource, errors, pluginVersion) {
   if (entry.aiProvenance !== undefined) validateAiProvenance(entry.aiProvenance, where + '.aiProvenance', errors)
   const preview = entry.preview
   if (!isPlainObject(preview)) errors.push(where + '.preview: must be a plain object')
-  else if (!['glyph', 'text', 'color', 'image'].includes(preview.kind)) errors.push(where + '.preview.kind: unsupported preview kind')
+  else if (typeof preview.kind !== 'string' || !['glyph', 'text', 'color', 'image'].includes(preview.kind)) errors.push(where + '.preview.kind: unsupported preview kind')
   else if (preview.kind === 'image') {
     exactKeys(preview, ['kind', 'path'], [], where + '.preview', errors)
     if (!isSafeContentPath(preview.path)) errors.push(where + '.preview.path: relative image path (.png/.webp/.jpg), no traversal/scheme/absolute path')
@@ -938,7 +955,7 @@ export function validateContentPack(pack, options = {}) {
   if (typeof pack.id !== 'string' || !PACK_ID_RE.test(pack.id)) errors.push('pack.id: must match the pack id pattern')
   if (!isBoundedText(pack.name, CONTENT_LIMITS.maxNameChars)) errors.push('pack.name: 1..' + CONTENT_LIMITS.maxNameChars + ' plain chars')
   if (typeof pack.version !== 'string' || !VERSION_RE.test(pack.version)) errors.push('pack.version: semver x.y.z')
-  if (!CONTENT_SOURCES.includes(pack.source)) errors.push('pack.source: must be one of ' + CONTENT_SOURCES.join('/'))
+  if (typeof pack.source !== 'string' || !CONTENT_SOURCES.includes(pack.source)) errors.push('pack.source: must be one of ' + CONTENT_SOURCES.join('/'))
   else if (pack.source === 'remote' && options.allowRemote !== true) errors.push('pack.source: remote packs are reserved; a future host must opt in with { allowRemote: true }')
   validateUsageDeclaration(pack.usageDeclaration, 'pack.usageDeclaration', errors, requireCompliance)
   if (pack.license !== undefined) validateLicense(pack.license, 'pack.license', errors)
@@ -958,7 +975,7 @@ export function validateContentPack(pack, options = {}) {
     if (!Array.isArray(pack.permissions) || pack.permissions.length > CONTENT_LIMITS.maxPermissions) errors.push('pack.permissions: array of at most ' + CONTENT_LIMITS.maxPermissions)
     else for (const permission of pack.permissions) if (!CONTENT_ENTRY_PERMISSIONS.includes(permission)) errors.push('pack.permissions: unknown permission "' + String(permission) + '"')
   }
-  if (!Array.isArray(pack.entries)) return { ok: false, errors: errors.concat('pack.entries: must be an array') }
+  if (!Array.isArray(pack.entries)) return { ok: false, errors: errors.concat('pack.entries: must be an array'), warnings }
   if (pack.entries.length > CONTENT_LIMITS.maxEntries) errors.push('pack.entries: more than ' + CONTENT_LIMITS.maxEntries + ' entries')
   const seen = new Set()
   const perKind = {}

@@ -6,11 +6,9 @@
   //   - client.js / client.content.js / client.anims.*.js are not ES modules
   //     (they register through window.__ModuleLoader__), so they are not
   //     checkJs-able without a custom ambient module declaration;
-  //   - content-extension.mjs (v3 wire validator) predates checkJs and its
-  //     deliberate `unknown` narrowing currently reports ~40 pre-existing
-  //     errors. It is still covered by scripts/check-jsdoc.mjs (JSDoc gate) and
-  //     its contract is frozen by test/parity-contract.test.js; typing the
-  //     validator is a documented follow-up (MB-108), not silently ignored here.
+  //   - content-extension.mjs is now checked here: its unknown-narrowing points
+  //     are typed with JS type guards (isPlainObject / isBoundedText) and local
+  //     narrowing instead of casts, so checkJs reports 0 errors (MB-108).
   //
   // Run through the package gate so the script can locate the workspace
   // TypeScript/@types/node install and skip honestly when neither is present:
@@ -32,6 +30,7 @@
     "noUnusedParameters": false
   },
   "include": [
+    "../content-extension.mjs",
     "./check-jsdoc.mjs",
     "./check-package.mjs",
     "./embed-anims.mjs",
@@ -40,5 +39,5 @@
     "./typecheck.mjs",
     "./verify-anims.mjs"
   ],
-  "exclude": ["../client.js", "../client.content.js", "../content-extension.mjs", "../test", "../node_modules"]
+  "exclude": ["../client.js", "../client.content.js", "../test", "../node_modules"]
 }

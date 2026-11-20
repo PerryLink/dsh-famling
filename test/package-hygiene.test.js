@@ -7,15 +7,19 @@
  * tarball, or drop a runtime chunk from `files`.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import {
   CANONICAL,
+  LOCKFILE_NAME,
   allowlistReport,
   expectedPacked,
+  loadLockfile,
   loadPackage,
+  lockProblems,
   metadataProblems,
   packEntryProblems,
   staticReport,
@@ -148,6 +152,38 @@ test('staticReport on the working tree has no problems and reports the inventory
   assert.ok(report.info.expectedFiles >= 18)
 })
 
+
+test('package-lock.json is a committed, dependency-free install LOCK (MB-004)', () => {
+  const lock = loadLockfile(ROOT)
+  assert.ok(lock, LOCKFILE_NAME + ' is committed (a clean checkout needs it)')
+  assert.equal(lock.lockfileVersion, 3, 'npm lockfileVersion 3')
+  assert.equal(lock.name, pkg.name, 'lock describes this package')
+  assert.equal(lock.version, pkg.version, 'lock version matches package.json')
+  assert.deepEqual(Object.keys(lock.packages), [''], 'root-only lock: the plugin has no runtime dependencies')
+  assert.deepEqual(lockProblems(ROOT), [], 'the release gate accepts the committed LOCK')
+})
+
+test('lock drift is rejected: missing, stale version, private local resolution', () => {
+  const temp = mkdtempSync(join(tmpdir(), 'dsh-famling-lock-test-'))
+  try {
+    writeFileSync(join(temp, 'package.json'), JSON.stringify(pkg, null, 2))
+    assert.ok(lockProblems(temp).some((problem) => /package-lock.json is missing/.test(problem)), 'missing LOCK fails')
+
+    const lock = JSON.parse(readFileSync(join(ROOT, LOCKFILE_NAME), 'utf8'))
+    const staleVersion = JSON.parse(JSON.stringify(lock))
+    staleVersion.version = '9.9.9'
+    writeFileSync(join(temp, LOCKFILE_NAME), JSON.stringify(staleVersion, null, 2))
+    assert.ok(lockProblems(temp).some((problem) => /lock version is/.test(problem)), 'stale lock version fails')
+
+    const privateResolution = JSON.parse(JSON.stringify(lock))
+    privateResolution.packages['node_modules/private-asset'] = { version: '1.0.0', resolved: 'file:../desktop-games/private-asset' }
+    writeFileSync(join(temp, LOCKFILE_NAME), JSON.stringify(privateResolution, null, 2))
+    const privateProblems = lockProblems(temp)
+    assert.ok(privateProblems.some((problem) => /private\/local path/.test(problem)), 'private local resolution fails: ' + JSON.stringify(privateProblems))
+  } finally {
+    rmSync(temp, { recursive: true, force: true })
+  }
+})
 test('release hygiene is documented next to the package', () => {
   const doc = readFileSync(join(ROOT, 'docs/RELEASE-HYGIENE.md'), 'utf8')
   for (const needle of ['npm run check:package', 'npm run verify:package', 'npm pack --dry-run', 'prepack', CANONICAL.repository, CANONICAL.bugs]) {
