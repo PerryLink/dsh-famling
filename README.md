@@ -17,9 +17,11 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
-## 当前实现（0.10.12）
+## 当前实现（0.11.0）
 
-- 0.10.12 宿主自适应外观：猫/狗角色默认背景由 dark/paper 改为 **transparent**（插件 `ROLE_BUNDLES.cat/dog.background` 与 famling `public/content/library.json` rolePresets 同步；沿用 `dsh-famling/background` 显式覆盖，老用户已存的 dark/paper 不被静默清除），背景不再铺满 sidebar，气泡与面板仍保留夜间/纸张主题；右键菜单**不再读取角色主题的 `--dsh-famling-panel-bg/text/border`**，改为 DSH 宿主变量 `--dsw-alias-bg-elevated`（回退 `--dsw-alias-bg-layer-1` → `light-dark(#ffffff, #1f2329)`）、`--dsw-alias-label-primary`、`--dsw-alias-border-l2`，选中项用宿主 accent `--dsw-alias-state-business-primary` + 反色 `--dsw-alias-label-primary-inverted`，`buttonBase` 边框/填充回退改为 `light-dark(...)`；widget 根显式 `color-scheme: inherit` 跟随宿主 `:root` 的 light/dark（不写死 `light dark`，避免宿主显式主题与系统偏好不一致时错配），human/cat/dog 渲染同一宿主菜单表面并随 DSH 昼夜切换。入口 95.2 KiB / 97,533 B（gzip 27.2 KiB，< 96 KiB 预算）；`client-static` / `client-behavior` / parity / content 测试同步冻结宿主变量与 transparent 背景。
+- 0.11.0 体验与预算修复：面板/同意弹窗默认表面改用宿主真实 token `--dsw-alias-bg-layer-1` + `light-dark()`（宿主 0.2.2-rc.4 无 `--dsw-alias-bg-elevated`，旧回退链会在浅色宿主落深底深字；light/dark 正文对比度 ≥4.5:1，paper/night 仍为显式主题）；`visibilitychange` 隐藏时停止帧调度、不再 setState，恢复后立即回当前角色 idle；首启安全卡新增「点角色 = 互动；右键 / Shift+F10 = 菜单」（一次性、可关、不新增常驻按钮）；区域点击新增 1.2s 冷却、10s 内同区第 4 次起降为既有 `idle_blink` 轻反应（饱和后 2.5s 冷却，菜单动作始终回应）；猫/狗 idle 6→8 帧、猫 `idle_blink` 慢眨眼 4fps、狗 8fps（12 clip 不变；cat 74 / dog 70 / human 68 = 212 帧，chunk 重嵌入）；新增 `PLUGIN-MANIFEST.json`（逐文件 sha256 + 版本/体积摘要）与桌面 `JOINT-EVIDENCE` 联合证据格式。无新增数据收集 / 网络 / 权限 / 常驻 UI；仍是 C1 unsigned 邀请 beta，能力与限制以本 README 与 LEGAL-NOTICE 为准。
+- 0.10.12 宿主自适应外观：猫/狗角色默认背景由 dark/paper 改为 **transparent**（插件 `ROLE_BUNDLES.cat/dog.background` 与 famling `public/content/library.json` rolePresets 同步；沿用 `dsh-famling/background` 显式覆盖，老用户已存的 dark/paper 不被静默清除），背景不再铺满 sidebar，气泡与面板仍保留夜间/纸张主题；右键菜单**不再读取角色主题的 `--dsh-famling-panel-bg/text/border`**，改为 DSH 宿主**真实**变量 `--dsw-alias-bg-layer-1`（回退 `light-dark(#ffffff, #1f2329)`）、`--dsw-alias-label-primary`（回退 `light-dark(#111111, #e8e8e8)`）、`--dsw-alias-border-l2`（宿主 0.2.2-rc.4 并未定义 `--dsw-alias-bg-elevated`，旧回退链在浅色宿主会深底深字），选中项用宿主 accent `--dsw-alias-state-business-primary` + 反色 `--dsw-alias-label-primary-inverted`，`buttonBase` 边框/填充回退改为 `light-dark(...)`；widget 根显式 `color-scheme: inherit` 跟随宿主 `:root` 的 light/dark（不写死 `light dark`，避免宿主显式主题与系统偏好不一致时错配），human/cat/dog 渲染同一宿主菜单表面并随 DSH 昼夜切换。入口 95.2 KiB / 97,441 B（gzip 28,009 B，< 96 KiB 预算）；`client-static` / `client-behavior` / parity / content 测试同步冻结宿主变量与 transparent 背景。
+- 0.10.12 未发版 C1 P0 修复：内容面板 / 同意弹窗的默认表面统一走宿主 `--dsw-alias-bg-layer-1` + `light-dark()` 回退（只有 `--dsh-famling-panel-bg/text/border` 缺失时才用回退），light/dark 下正文对比度 ≥ 4.5:1，paper/night 仍是显式主题；标签页隐藏（`visibilitychange`）时停止帧调度、不再 setState，恢复后立即回到当前角色 idle；首启安全卡新增「点角色 = 互动；右键 / Shift+F10 = 菜单」一行（中英同步，仍只写一次 `dsh-famling/first-run/v1`，不新增常驻按钮）；区域点击新增 1.2s 冷却、10s 内同区第 4 次起降为既有 `idle_blink` 轻反应（饱和后 2.5s 冷却），菜单动作始终回应。`client-static` 冻结宿主 token 链与 4.5:1 对比度，`client-behavior` 冻结隐藏暂停与点击节奏。
 - 0.10.11 布偶猫跨仓同步（猫像素 / UI 文案 / 重嵌入）：`public/assets/pet/anim/cat/` 改为**同配色蓝重点双色布偶猫**——16 个 palette hex 逐个不变、palette id 改 `cat-ragdoll-anim@0.1`、72 帧 / 12 clip / 96×96 / 地线 y=89 / anchor 48,96 契约不变（白底丝滑直长毛 + 冷灰蓝连帽/面罩/耳/羽状尾 + v10 白 blaze，产品化短腿保留，确定性 Python 渲染、无模型/无 API）。`public/characters/pet-cat/regions.json` 的单源 `src/pet/anim/interactions/cat.json` 洗脸台词改为长毛版本（「长毛不好梳」）并重生成 behavior/regions；插件 `embed:anims` 重新嵌入 cat 帧（72 帧，208 帧总数不变）、`gen:content` 同步 behavior/regions/manifest 单源哈希；UI 文案统一为「布偶猫」/「Ragdoll」（入口、内容中心、聊天人格、locale、README、DETAIL），金毛渲染器标签同步为 v11；版本真值（package / client / client.content / README / LEGAL-NOTICE / locale）统一到 0.10.11。
 - 0.10.10 版本化 TTS/ASR 同意（MB-014 / E1）：同意从 `{tts, asr}` 布尔升级为 `dsh-famling/consent/v2` 的逐项 `{version, hash, acceptedAt, withdrawn}` 记录；TTS/ASR 声明的中文（权威）+ 英文 canonical bundle 由 `client.js` 冻结 SHA-256 与日期版本（`2026-11-20.1`），版本或哈希任一不符即 **fail-closed 重弹**，绝不复用旧同意。旧 `dsh-famling/consent/v1` 布尔在懒加载 `client.content.js` 首次加载时一次性迁移为 `withdrawn: true` 记录并删除旧键（旧值无版本/哈希，无法验证 → 必须重新确认）。设置「数据与边界」新增**「撤回语音同意」**（写 `withdrawn: true`、保留 acceptedAt/version/hash 证据、关闭语音并停止 TTS/录音；可随时重新同意），同意弹窗与设置显示声明版本 + SHA-256 前缀；「清除本机设置与同意」仍删除全部 `dsh-famling/*` 键（含 v1/v2）。约定：声明文本任一措辞变化必须同时 bump 版本与哈希（`test/parity-contract.test.js` 重算 canonical bundle 哈希并与入口/懒加载两处冻结锚点比对；`test/client-behavior.test.js` 覆盖接受/迁移/陈旧版本或哈希/撤回/清除，`test/client-static.test.js` 冻结接线）。插件声明版本是插件自有浏览器 TTS/ASR 文本版本（`2026-11-20.1`），与 famling 的 TTS/ASR terms 版本不同源；parity 测试只冻结 famling terms 版本与共享内容语义锚点，不把两套不同来源的声明混成同一版本号。
 - 0.10.9 v3 合规字段（MB-032/033 / E3）：content-extension **仍为 v3（不升 v4）**，以**追加可选字段**补齐 `license`（`spdx` / `attribution`，可选 `url` / `file`）、`aiProvenance`（`generated` / `disclosure`，可选 `tools`）与 pack 级 `compatibility`（`minPluginVersion` / 可选 `maxPluginVersion`）；`usageDeclaration` 可追加 canonical `statement` / `statementRef` / `statementSha256`（与 client `SHARED_CONTENT_SEMANTICS` 同源，声明值必须逐字一致）。pre-0.10.9 v3 pack 仍通过校验（缺字段只进 `warnings`，不改变 `ok`）；Host 可用 `validateContentPack(pack, { requireCompliance: true })` 对不受信 pack **fail-closed**，并用 `{ pluginVersion }` 校验兼容区间；hello/probe 的契约 revision 保持 3，老 Host 不受影响。「内容包」页展示内置包的许可 / AI 来源 / 兼容性；双端 parity 测试冻结锚点。版本真值同步至 0.10.9。
@@ -30,10 +32,10 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - slot：`sidebar.footer.action`（DSH 侧栏账号信息下方的 footer 区域）。
 - 最终交互结构（0.10.1）：**默认只渲染角色，角色以外零常驻按钮**。右键角色（或 Shift+F10 / ContextMenu 键）打开自绘分级菜单，`fixed` 定位并按视口夹取；键盘 ↑/↓、Home/End、←/→、Enter、Escape、Tab 全部可用，菜单外点或窗口失焦即关闭。一级只有 5 项：**聊两句… / 互动 ▸ / 内容与角色… / 设置… / 更多 ▸**；互动与更多是带「« 返回」的二级页面；复杂内容（内容中心 / 设置 / 提醒 / 使用限制）一律进独立弹窗。点击人物的头/身体/尾巴分别触发按区域反应（0.8.2），互动页按当前形象渲染物种专属动作并随机挑一句回话（0.8.3，见下）。
 - **72px 像素桌宠**（96×96 帧按 `image-rendering: pixelated` 显示为 72px），可切换 **汀岚 / 布偶猫（白底蓝重点长毛） / 金毛** 三个形象；点击头部/身体/尾巴分别触发摸头/摇尾/追尾，点击透明或未声明区域不动作。
-- 待机是真正的帧动画：3 个角色各 12 clip（帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）；`idle` 循环 + `idle_blink` 眨眼替换 + 随机微动作（`paw_face` / `scratch` / `stand_wag` / `chase_tail`）；每帧时长读 manifest 的 `holdMs`（缺省 1000/fps），非循环 clip 按 `durationMs`/hold 总和结束（0.8.4）。
+- 待机是真正的帧动画：3 个角色各 12 clip（帧数按 manifest：dog 70 / cat 74 / human 68，共 212 帧）；`idle` 循环 + `idle_blink` 眨眼替换 + 随机微动作（`paw_face` / `scratch` / `stand_wag` / `chase_tail`）；每帧时长读 manifest 的 `holdMs`（缺省 1000/fps），非循环 clip 按 `durationMs`/hold 总和结束（0.8.4）。
 - 输入面板：人物右侧展开文本框 + 语音输入按钮（浏览器 SpeechRecognition），预留 `window.__DSH_FAMLING_BRIDGE__` 给 DSH/Advisers Host。面板内常驻 AI 声明 + 发送去向 + 危机资源三行说明（0.10.2，见「聊天安全地板」）。
 - 聊天安全地板（0.10.2 / E3）：Host `op:"chat"` 在**任何模型调用之前**做本地危机关键词短路（自伤/自杀、伤害他人、家暴/性侵、急症）；命中返回固定资源文案（12356 心理援助 / 110 报警 / 120 急救 / 信任的人与专业机构），**不调用 `ctx.llm.stream`、不回显原文、不落盘**，固定文案明确「不是诊断」，误报可忽略。实现与可审计导出：`index.js` 的 `CRISIS_KEYWORDS` / `crisisKeyword`；响应 `meta.safety = "crisis-local-resource"`、`llmCalls: 0`。
-- 发送去向与首启告知（0.10.2 / MB-021）：输入面板 AI 声明与设置「数据与边界」明确「聊天为工作助手型 AI 回复，文本经 DSH Host 发给 DSH 中配置的模型供应商；勿发密码/隐私/客户资料」；首次安装显示**一次性、可关闭、非阻断**卡片（只写本地 `dsh-famling/first-run/v1`，不联网），卡片 UI 放在懒加载 `client.content.js`，不进首屏预算。
+- 发送去向与首启告知（0.10.2 / MB-021）：输入面板 AI 声明与设置「数据与边界」明确「聊天为工作助手型 AI 回复，文本经 DSH Host 发给 DSH 中配置的模型供应商；勿发密码/隐私/客户资料」；首次安装显示**一次性、可关闭、非阻断**卡片（只写本地 `dsh-famling/first-run/v1`，不联网；卡片另含一行「点角色 = 互动；右键 / Shift+F10 = 菜单」的两步操作引导，中英同步），卡片 UI 放在懒加载 `client.content.js`，不进首屏预算。
 - 清除与撤回（0.10.2 / MB-022；0.10.10 / MB-014 版本化）：设置 →「数据与边界」→「清除本机设置与同意」只删除本插件在浏览器 `localStorage` 的 `dsh-famling/*` 键（设置、形象、外观、首启确认、v1/v2 同意记录；等同全量撤回 TTS/ASR 同意）；同处另有独立的**「撤回语音同意」**——只把已存记录标记为 `withdrawn: true` 并关闭语音/停止 TTS/录音，保留设置与最小证据字段，可随时重新同意。两项操作都**不改** DSH 宿主数据、会话与供应商侧数据，同处展示与 DSH 的边界说明。
 - AI 聊天开关（0.10.2 / MB-024）：设置内可关闭聊天；关闭后输入面板不发送任何聊天文本（提醒创建仍可用），状态持久化在 `dsh-famling/settings.chat`（默认开启，开启即披露发送去向）。
 - 互动面板（0.8.3）：直接读嵌入的 `ANIMS[character].actions`（来自与独立 famling 共用的 `regions.json`），按形象渲染物种专属动作——汀岚：摸头 / 递纸 / 挥手 / 整理蝴蝶结 / 聊两句；布偶猫：摸头 / 伸懒腰 / 洗脸 / 追尾巴 / 跑一跑；金毛：摸头 / 丢球·捡球 / 捡球 / 追尾巴 / 跑一跑（丢球后 500ms 自动接追球）。猫和人没有球类/捡球动作，绝不会把 A 角色的动作放到 B 角色身上。
@@ -97,11 +99,11 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 ## 多角色动画数据（0.8.0）
 
-三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **95.2 KiB**（0.10.12 实测 97,533 B；gzip 27.2 KiB，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.0%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 157.0 KiB，全部角色加载后才约 331.8 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 0.10.9 合规元数据展示 + 0.10.10 版本化同意/撤回）只在首次安装或首次打开弹窗时下载（72.2 KiB，gzip 20.5 KiB，0.10.12 实测）：
+三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **95.2 KiB**（0.11.0 实测 97,461 B；gzip 28,030 B，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.0%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 156.9 KiB，全部角色加载后才约 331.8 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 0.10.9 合规元数据展示 + 0.10.10 版本化同意/撤回）只在首次安装或首次打开弹窗时下载（72.5 KiB，gzip 20.6 KiB，0.10.12 实测）：
 
 - 数据源：私有仓 `desktop-games/public/assets/pet/anim/{human,cat,dog}/`（`manifest.json` + 帧 PNG）。
 - 生成器：`scripts/embed-anims.mjs` —— 读取 manifest/PNG、校验三套 clip 契约、把 RGBA 帧**无损**重编码为最小位深索引 PNG（硬 alpha 保留，体积约减半），再按 marker 注入 `client.js`。**禁止手改生成块**，改数据重跑脚本即可。
-- 体积（0.10.12 实测）：入口 `client.js` 95.2 KiB / 97,533 B（gzip 27.2 KiB）；3 个角色 chunk 合计约 236.5 KiB（human 61.7 / cat 97.2 / dog 77.6 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意 chunk 72.2 KiB（gzip 20.5 KiB）按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**（0.10.6/0.10.7 未再上调）；首启卡、设置内容、低打扰 UI 与输入/同意弹窗仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.99%**（< 31% 门禁），首帧 157.0 KiB = 基线的 **51.07%**（< 52% 门禁）。
+- 体积（0.10.12 实测）：入口 `client.js` 95.2 KiB / 97,461 B（gzip 28,030 B / 27.4 KiB）；3 个角色 chunk 合计约 241.2 KiB（human 61.7 / cat 99.8 / dog 79.7 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意 chunk 72.5 KiB（gzip 20.6 KiB，0.11.0 实测）按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**（0.10.6/0.10.7 未再上调）；首启卡、设置内容、低打扰 UI 与输入/同意弹窗仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.96%**（< 31% 门禁），首帧 156.9 KiB = 基线的 **51.04%**（< 52% 门禁）。
 - 重新生成：`npm run embed:anims`；只校验不写：`node scripts/embed-anims.mjs --check`；`npm run verify:anims`；量化：`npm run measure:bundle`。
 - 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并检查 `client.content.js` 存在、四个一级 tabs、无 fetch/外部 URL，并在私有资产可用时逐字节比对嵌入块是否过期。
 - 静态 QA：`node scripts/embed-anims.mjs --qa` 生成 `scripts/qa/anim-data.js`，浏览器直接打开 `scripts/qa/index.html` 可切角色、播 12 个 clip、看实心/空心气泡并跑数据自检，不需要重启 DSH。
@@ -111,7 +113,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 区域数据来自私有仓 `desktop-games/public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/regions.json`，与独立 famling 的 hero 共用同一份 `version/canvas/regions/gestures` 契约：区域是 96×96 逻辑画布上的 `head` / `body` / `tail` 矩形（带 priority）。
 - `scripts/embed-anims.mjs` 读取并校验这些文档，写入生成块 `ANIMS[character].regions`；`--check` 会把它纳入过期检测，`--qa` 生成的 `anim-data.js` 也包含区域数据。
 - 点击时用图片**实际渲染尺寸**把 `offsetX/offsetY` 映射回 96 逻辑坐标，再按 priority 命中区域；同一相对位置在 64/72/96/144px 等任意显示尺寸下命中一致。
-- 命中映射：`head → pat_head`（摸头）、`body → stand_wag`（摇尾/伸展）、`tail → chase_tail`（追尾）；气泡文案来自该区域规则自带的 `says` 随机行（0.8.3），没有台词数据就不说话。
+- 命中映射：`head → pat_head`（摸头）、`body → stand_wag`（摇尾/伸展）、`tail → chase_tail`（追尾）；气泡文案来自该区域规则自带的 `says` 随机行（0.8.3），没有台词数据就不说话。同一区域连续点击有 1.2s 冷却；10s 内同区第 4 次起降为既有 `idle_blink` 轻反应（饱和后 2.5s 冷却），菜单动作不受此限制。
 - 只有 `idle` / `idle_blink` 状态响应，正在播放其它 clip 时不打断；命中透明区/未声明区域是明确的 no-op，**不再回退为随机微动作**（随机微动作仍由待机计时器触发）。
 - 区域回话（0.8.3）：`regions.json` 的每条区域规则带 3 条 `says`，命中后随机挑一条（连续同区域点击会换一句）；猫/狗仍为空心 thought 气泡、永不 TTS；汀岚为实心 speech + 既有 TTS 同意。
 
@@ -306,8 +308,9 @@ Advisers 0.3.0（npm raw registry `latest`；本机 npmmirror 缓存仍显示 0.
 2. DSH **Plugins → Add plugin** 选择本目录（或使用 `plugin_manager install_bundle`，target 为本目录绝对路径）；
 3. 启用 `dsh-famling`，刷新 Web UI；
 4. 查看左侧栏底部账号区域下方是否出现 `汀岚`。
+5. （可选）npm 包 `dsh-famling@0.11.0` 已发布，可用 `npm view dsh-famling` / `npm pack dsh-famling@0.11.0` 获取 tarball；DSH 插件目录安装仍以上面 1–4 步为准。
 
-## 发布与包卫生（0.10.12 工作树，MB-094 残余，2026-11-20）
+## 发布与包卫生（0.11.0，MB-094 残余，2026-11-21）
 
 本插件以 npm tarball 分发，所以 `package.json` 的元数据与 `files` 白名单就是发布面；这些规则由脚本门禁强制，不是约定：
 
@@ -315,7 +318,7 @@ Advisers 0.3.0（npm raw registry `latest`；本机 npmmirror 缓存仍显示 0.
 - **`files` 白名单**：无重复（历史遗留的 `docs` 重复项已删除）、每个条目必须存在、运行必需文件与 `exports` 全部覆盖、`test/`/`scripts/`/`*.tgz` 永不打包；`npm run verify:package` 用 `npm pack --dry-run --json` 做「实际打包清单 = 白名单展开 + npm 始终包含项」的集合相等校验。
 - **`prepack`**：每次 `npm pack` / `npm publish` 自动跑静态发布卫生校验；成功信息走 stderr（避免污染 `npm pack --json` 的 stdout），失败直接中断打包。
 - **命令**：`npm run check:package`（静态）/ `npm run verify:package`（含 `npm pack --dry-run`）/ `npm run release:check`（test + check + verify + verify:package，发布前总门禁）。
-- **未做**：真实 `npm publish`、provenance、CI 首跑与 GitHub 公网可达性均未在本轮执行（不伪造外部验证）；npm 上目前仍是占位版本。细节、证据与本机实测记录见 [docs/RELEASE-HYGIENE.md](docs/RELEASE-HYGIENE.md)。
+- **已发布**：`npm publish` 0.11.0（2026-11-21，本地 npm token 发布；**未启用 provenance / trusted publishing**）；`npm view dsh-famling version` = 0.11.0。GitHub 公开仓推送后的 CI 首次真实运行以实际 run 为准（本机不伪造 CI 结果）。细节、证据与本机实测记录见 [docs/RELEASE-HYGIENE.md](docs/RELEASE-HYGIENE.md)。
 
 ## 独立 checkout 重建与 LOCK（MB-004，2026-11-20）
 
@@ -342,7 +345,7 @@ Advisers 0.3.0（npm raw registry `latest`；本机 npmmirror 缓存仍显示 0.
 - `node scripts/clean-checkout.mjs`（MB-004：无私有仓的临时 checkout 重建；`--json` 证据 / `--export DIR` 公开仓 staging；`npm test` 内也跑）
 - `npm run check`（= `check:anims`：嵌入块与私有动画包一致；无私有资产时用 vendored `anim-spec` 的 `standalone spec mode`）
 - `npm run verify`（= `verify:anims`：vendored anim-spec 校验 + 3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
-- `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示+版本化同意 chunk 72.2 KiB 等实测）
+- `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示+版本化同意 chunk 72.5 KiB 等实测）
 - 版本真值：`package.json` 是唯一来源；`node test/version-truth.test.js --write` 从 package.json 重新生成 `client.js`/`client.content.js` 的 `PLUGIN_VERSION` 常量（zh/en 标签由它派生）、README「当前实现」、LEGAL-NOTICE「适用插件版本」与 `locale/*.json` 的 `meta.version`，`npm test` 会校验它们全部一致（含安全地板文档真值）。
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`

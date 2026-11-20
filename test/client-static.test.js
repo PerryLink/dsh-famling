@@ -19,11 +19,11 @@ const clientData = loadClientData(clientSource)
 // keeps every public surface in sync, and this test proves the package ships it.
 const EXPECTED_VERSION = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'package.json'), 'utf8')).version
 
-// Frame counts come from the private manifests: dog/human 68 each, cat 72
-// (10-frame stand_wag). Total 208 embedded frames; never assume 12x68/204.
-const EXPECTED_FRAME_COUNTS = { human: 68, cat: 72, dog: 68 }
+// Frame counts come from the private manifests: human 68, cat 74 (10-frame
+// stand_wag + 8-frame idle), dog 70. Total 212 embedded frames; never assume 12x68/204.
+const EXPECTED_FRAME_COUNTS = { human: 68, cat: 74, dog: 70 }
 
-test('generated block embeds human/cat/dog with 12 clips and manifest frame counts (68/72/68 = 208)', () => {
+test('generated block embeds human/cat/dog with 12 clips and manifest frame counts (68/74/70 = 212)', () => {
   const total = { frames: 0 }
   for (const kind of CHARACTERS) {
     const anim = clientData.ANIMS[kind]
@@ -33,8 +33,8 @@ test('generated block embeds human/cat/dog with 12 clips and manifest frame coun
     assert.equal(frames, EXPECTED_FRAME_COUNTS[kind], kind + ': manifest frame count')
     total.frames += frames
   }
-  assert.equal(total.frames, 208, '208 embedded frames in total')
-  assert.equal(Object.keys(clientData.SPRITES).length, 208, '208 unique sprite keys')
+  assert.equal(total.frames, 212, '212 embedded frames in total')
+  assert.equal(Object.keys(clientData.SPRITES).length, 212, '212 unique sprite keys')
 })
 
 test('cat stand_wag keeps its 10-frame / 3200ms non-uniform holdMs timing', () => {
@@ -244,7 +244,7 @@ test('embedded animation data is current against the private asset pack or the v
   const { spec } = readAnimationSpec(PLUGIN_ROOT)
   const result = validateEmbeddedAgainstSpec({ pluginRoot: PLUGIN_ROOT, spec })
   assert.equal(result.ok, true, result.errors.join('; '))
-  assert.equal(result.stats.frames, 208, 'vendored spec validates all 208 embedded frames without the private checkout')
+  assert.equal(result.stats.frames, 212, 'vendored spec validates all 212 embedded frames without the private checkout')
 })
 
 test('first-screen client.js carries no sprite payload and meets the lazy budget', () => {
@@ -364,7 +364,7 @@ test('menu, triggers and buttons paint from the DSH host theme, not the role the
   const menuEnd = clientSource.indexOf('currentMenuItems.map')
   assert.ok(menuStart > 0 && menuEnd > menuStart, 'menu node block exists')
   const menuBlock = clientSource.slice(menuStart, menuEnd)
-  assert.ok(menuBlock.includes('var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329)))'), 'menu surface uses the host raised tokens with a light-dark fallback')
+  assert.ok(menuBlock.includes('var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329))'), 'menu surface uses the real host layer-1 token with a light-dark fallback')
   assert.ok(menuBlock.includes('var(--dsw-alias-label-primary, light-dark(#0f1115, #f5f7fa))'), 'menu text uses the host primary label')
   assert.ok(menuBlock.includes('var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.12), rgba(255,255,255,.16)))'), 'menu border uses the host border token')
   assert.equal(menuBlock.includes('--dsh-famling-panel-bg'), false, 'the menu never reads the role night/paper panel background')
@@ -374,6 +374,45 @@ test('menu, triggers and buttons paint from the DSH host theme, not the role the
   assert.ok(clientSource.includes('var(--dsw-alias-button-elevated-fill, light-dark(rgba(0,0,0,.04), rgba(255,255,255,.08)))'), 'button fill fallback adapts to day/night')
   assert.ok(clientSource.includes("colorScheme: 'inherit'"), 'the widget root inherits the DSH palette selector so light-dark() follows day/night')
 })
+test('default panel paints from the real DSH host tokens with a readable light/dark fallback', () => {
+  // DSH 0.2.2-rc.4 defines --dsw-alias-bg-layer-1 (light #ffffff / dark #232324)
+  // and --dsw-alias-label-primary (light #0f1115 / dark #f9fafb) in
+  // packages/client/ui-theme/src/styles/design-platform.css; it never defines
+  // --dsw-alias-bg-elevated, so that token must not lead a fallback chain.
+  const luminance = (hex) => {
+    const channel = (value) => { const c = value / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
+    const number = parseInt(hex.slice(1), 16)
+    return 0.2126 * channel((number >> 16) & 255) + 0.7152 * channel((number >> 8) & 255) + 0.0722 * channel(number & 255)
+  }
+  const contrast = (a, b) => {
+    const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+    return (high + 0.05) / (low + 0.05)
+  }
+  const themeStart = clientSource.indexOf('const THEMES = {')
+  const themeEnd = clientSource.indexOf('const FONT_SIZES = [')
+  assert.ok(themeStart > 0 && themeEnd > themeStart, 'THEMES literal is readable by the budget test')
+  const themes = new Function('return ' + clientSource.slice(themeStart + 'const THEMES = '.length, themeEnd).trim())()
+  const defaultVars = themes.default.vars
+  assert.equal(defaultVars['--dsh-famling-panel-bg'], 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329))', 'panel surface uses the host layer-1 token with a light-dark fallback')
+  assert.equal(defaultVars['--dsh-famling-panel-text'], 'var(--dsw-alias-label-primary, light-dark(#111111, #e8e8e8))', 'panel text uses the host primary label with a light-dark fallback')
+  assert.equal(defaultVars['--dsh-famling-panel-border'], 'var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.14), rgba(255,255,255,.16)))', 'panel border uses the host border token')
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource]]) {
+    assert.equal(source.includes('--dsw-alias-bg-elevated'), false, name + ': the phantom host token is gone')
+  }
+  // Real host-provided pairs and the fallback pairs must stay >= 4.5:1 body text.
+  assert.ok(contrast('#ffffff', '#0f1115') >= 4.5, 'light host surface/label contrast')
+  assert.ok(contrast('#232324', '#f9fafb') >= 4.5, 'dark host surface/label contrast')
+  assert.ok(contrast('#ffffff', '#111111') >= 4.5, 'light fallback contrast')
+  assert.ok(contrast('#1f2329', '#e8e8e8') >= 4.5, 'dark fallback contrast')
+  for (const themeId of ['paper', 'night']) {
+    assert.ok(contrast(themes[themeId].vars['--dsh-famling-panel-bg'], themes[themeId].vars['--dsh-famling-panel-text']) >= 4.5, themeId + ': explicit theme panel contrast')
+  }
+  // The lazy consent dialog duplicates the chain; it must mirror the fix.
+  assert.ok(contentSource.includes("background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329)))'"), 'consent dialog mirrors the panel surface chain')
+  assert.ok(contentSource.includes("color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, light-dark(#111111, #e8e8e8)))'"), 'consent dialog mirrors the panel text chain')
+  assert.ok(clientSource.includes("background: 'var(--dsh-famling-panel-bg)'"), 'panel surfaces inherit the validated widget-root variable')
+})
+
 test('lazy panel chunk exposes the four-tab content center and the unified settings popup', () => {
   assert.ok(contentSource.includes("chunk: 'client.content.js'"), 'content chunk registers the package-local chunk name')
   assert.ok(contentSource.includes('function createContentCenter('), 'content chunk exposes the content center factory')

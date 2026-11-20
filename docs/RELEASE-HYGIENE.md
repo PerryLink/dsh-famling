@@ -1,6 +1,6 @@
 # 发布与包卫生（MB-094 残余，2026-11-20）
 
-> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 仅追加版本化同意（MB-014）与版本真值同步；0.10.11 仅做猫布偶跨仓同步（宠物像素 / UI 文案 / cat chunk 重嵌入）与版本真值同步；0.10.12 仅做宿主自适应外观（猫/狗默认背景 transparent、右键菜单改用 DSH 宿主主题变量 + light-dark() 回退、buttonBase 回退 day/night、widget 根 color-scheme 继承宿主）与版本真值同步；均未真实发布。**
+> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 版本化同意；0.10.11 猫布偶跨仓同步；0.10.12 宿主自适应外观；上述 0.10.x 均未真实发布。0.11.0（2026-11-21）是首次真实 `npm publish`：体验与预算修复 + 猫/狗 idle 帧重嵌入（212 帧）+ PLUGIN-MANIFEST；使用本地 npm token 发布，未启用 provenance / trusted publishing。公开仓 CI 首跑以实际 run 为准。**
 > 本文与 `scripts/check-package.mjs`、`test/package-hygiene.test.js`、`package.json` 的
 > `repository` / `homepage` / `bugs` / `prepack` 合成一组可复核的发布卫生证据；
 > 外部链路（npm publish / provenance / 真实 CI / 公网可达性）**未在本轮执行**，见 §5。
@@ -127,7 +127,7 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 
 | 项 | 状态 | 原因 / 后续 |
 | --- | --- | --- |
-| `npm publish`（真实版本 ≥0.10.12） | **未做** | 需要 npm 账号/2FA 与发布授权；本轮只做发布卫生与本地门禁 |
+| `npm publish`（0.11.0） | **已执行（2026-11-21）** | 本地 npm token 发布（authorized by owner），`npm view dsh-famling version` = 0.11.0；发布前 release:check 绿。见 §8 发布记录 |
 | npm provenance / trusted publishing | **未做** | 需要 GitHub Actions + OIDC + 公开仓；插件目录无 `.git`/CI |
 | `npm deprecate dsh-famling@0.0.1` 等占位版本 | **未做** | 需要 npm 发布权限；占位包不阻塞本地门禁 |
 | 插件 CI workflow（`.github/workflows`） | **未做** | 本任务的授权写范围不含 `.github`；门槛命令已封装成 `release:check`，接 CI 时直接调用 |
@@ -150,3 +150,18 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 - `package.json` —— `repository` / `homepage` / `bugs` / `prepack`
 - `docs/DETAIL.md` —— 插件契约细节；`docs/LEGAL-NOTICE-2026-11-18.md` —— 使用限制原文
 - 工作区计划文档 `docs/plan/CI-SUPPLY-CHAIN-2026-11-20.md` §8.1 —— MB-094 残余项的原始方案（本任务据此补齐插件侧）
+
+## 8. 首次真实发布记录（0.11.0，2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | `0.11.0`（registry `dist-tags.latest` = `0.11.0`） |
+| registry 时间 | `2026-11-20T16:55:05.471Z`（UTC；= 2026-11-21 00:55 +08） |
+| 发布方式 | 本地 `npm publish --tag latest --access public`；npm token 从工作区既有安全文件加载（不回显/不落盘）；**未启用 provenance / trusted publishing** |
+| tarball | `dsh-famling-0.11.0.tgz`；322,561 B；23 files；unpacked 748,568 B |
+| tarball sha256（本地按同一打包器计算） | `fb81fd158572393fe89ff4cb2e966c11dd33e0ccfc65db369b9bcd7f6fc389e7` |
+| npm shasum（发布输出） | `fa6f07b6bc1c9431970f5fd9a9caeedffb284076` |
+| 发布前门禁 | `npm run release:check` exit 0（test 280/280 + check + verify + verify:package + lint + typecheck） |
+| 未做 / 不声称 | provenance、trusted publishing、GitHub 公开仓 CI 首个真实 run（以公开仓推送后的实际 run 为准）、任何签名/合规结论 |
+| 发布内容 | 0.11.0 体验与预算修复（宿主面板对比度、隐藏标签页暂停、首启 coach、点击冷却）+ 猫/狗 idle 重嵌入（212 帧）+ `PLUGIN-MANIFEST.json`；无新增数据收集/网络/权限/存储键 |
+

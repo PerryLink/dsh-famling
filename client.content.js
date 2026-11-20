@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
       },
       compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
     }
-    const PLUGIN_VERSION = '0.10.12'
+    const PLUGIN_VERSION = '0.11.0'
     // MB-014 (0.10.10): versioned TTS/ASR consent. This bundle is the canonical
     // declaration text shown in the consent dialog (zh authoritative + en); the
     // entry chunk pins its SHA-256 plus a version. Any wording change MUST bump
@@ -127,6 +127,7 @@ window.__ModuleLoader__.load({
         clearLocal: '清除本机设置与同意', clearHint: '仅删除本插件在浏览器 localStorage 的 dsh-famling/* 键（设置、形象、外观、同意记录）；不改 DSH 宿主数据或供应商侧数据。',
         withdrawConsent: '撤回语音同意', withdrawHint: '仅把已保存的 TTS/ASR 同意标记为已撤回并关闭语音；设置与其它数据保留，可随时重新同意。', consentMeta: '声明版本',
         firstRunTitle: '首次使用说明', firstRunAck: '我知道了',
+        firstRunCoach: '点角色 = 互动；右键 / Shift+F10 = 菜单。',
         where: '发送去向：文本会经 DSH Host 发给 DSH 中配置的模型供应商；请勿发送密码、他人隐私或客户资料。',
         crisisLine: '心理危机可联系 12356（心理援助）；紧急情况 110（报警）/ 120（急救），或信任的人与专业机构。',
         clearDone: '已清除本机设置与同意（含撤回语音同意）；再次修改设置前不会写回存储。',
@@ -216,6 +217,7 @@ window.__ModuleLoader__.load({
         clearLocal: 'Clear local settings & consent', clearHint: 'Deletes only this plugin\'s dsh-famling/* local storage keys (settings, character, appearance, consent); DSH host data and provider-side data are untouched.',
         withdrawConsent: 'Withdraw voice consent', withdrawHint: 'Only marks the stored TTS/ASR consent as withdrawn and switches voice off; settings and other data stay, and you can consent again at any time.', consentMeta: 'Declaration version',
         firstRunTitle: 'First-run notice', firstRunAck: 'Got it',
+        firstRunCoach: 'Click the character to play; right-click or Shift+F10 opens the menu.',
         where: 'Where it goes: text is sent through the DSH Host to the model provider configured in DSH; never send passwords, private data of others, or client material.',
         crisisLine: 'Mental-health crisis: contact 12356 (psychological assistance); emergencies 110 (police) / 120 (ambulance), or a trusted person and a professional service.',
         clearDone: 'Local settings and consent cleared (voice consent withdrawn); nothing is written back until you change a setting again.',
@@ -780,9 +782,9 @@ window.__ModuleLoader__.load({
         style: {
           position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%) scale(' + consentZoom + ')', transformOrigin: 'center', zIndex: 1400,
           width, maxWidth: width, maxHeight, overflowY: 'auto', padding: 14,
-          background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-elevated, #1f2329))',
-          color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, #e8e8e8))',
-          border: '1px dashed var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, rgba(255,255,255,.35)))',
+          background: 'var(--dsh-famling-panel-bg, var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329)))',
+          color: 'var(--dsh-famling-panel-text, var(--dsw-alias-label-primary, light-dark(#111111, #e8e8e8)))',
+          border: '1px dashed var(--dsh-famling-panel-border, var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.14), rgba(255,255,255,.16))))',
           borderRadius: 'var(--dsw-radius-md, 10px)',
           boxShadow: '0 12px 36px rgba(0,0,0,.4)', fontSize: 12, lineHeight: 1.55,
         },
@@ -825,6 +827,7 @@ window.__ModuleLoader__.load({
         h('strong', { key: 'title', style: { display: 'block', marginBottom: 7 } }, T.firstRunTitle),
         h('p', { key: 'ai', style: note }, aiNotice || ''),
         h('p', { key: 'where', style: note }, T.where),
+        h('p', { key: 'coach', style: note }, T.firstRunCoach),
         h('p', { key: 'crisis', style: { ...note, margin: '0 0 9px' } }, T.crisisLine),
         h('button', { key: 'ack', type: 'button', onClick: onAck, style: { ...buttonBase, padding: '5px 9px' } }, T.firstRunAck),
       ])

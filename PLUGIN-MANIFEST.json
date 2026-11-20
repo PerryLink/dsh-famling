@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "kind": "dsh-famling/plugin-manifest",
+  "generatedBy": "scripts/plugin-manifest.mjs",
+  "generatedAt": "2026-11-20T16:55:36.512Z",
+  "reproducible": false,
+  "sourceDateEpoch": null,
+  "package": {
+    "name": "dsh-famling",
+    "version": "0.11.0",
+    "license": "PolyForm-Noncommercial-1.0.0"
+  },
+  "packed": {
+    "count": 23,
+    "totalBytes": 749813,
+    "digest": "df56c540129287638e2c9f11ca5f679ce990772ea83c6f0bd7135bdd987498d8",
+    "files": [
+      {
+        "path": "LICENSE",
+        "bytes": 4563,
+        "sha256": "ffcca38841adb694b6f380647e15f17c446a4d1656fed51a1e2041d064c94cc8"
+      },
+      {
+        "path": "LICENSE-ART",
+        "bytes": 24769,
+        "sha256": "8faf889eb176fab1d729597af564b6b359fa8f310cde9f8b363745bf86d639ec"
+      },
+      {
+        "path": "NOTICE",
+        "bytes": 201,
+        "sha256": "5c5258bb9f1345d9078a3f3e1f6de755d798da57e93df4b8b34cb600ff38c20f"
+      },
+      {
+        "path": "README.md",
+        "bytes": 66190,
+        "sha256": "162b7ef05ab4582464257b5bf74ce8864a6da5f08283df3086aa9d9980e40dc7"
+      },
+      {
+        "path": "client.anims.cat.js",
+        "bytes": 102231,
+        "sha256": "9342f85820d8a434526841277c1c7b39b9a48bef520c05536159b33f45912e78"
+      },
+      {
+        "path": "client.anims.dog.js",
+        "bytes": 81577,
+        "sha256": "160a1d06725cf07d21061f890baff47d86f76aaf3dd38e09c73714bc492759e4"
+      },
+      {
+        "path": "client.anims.human.js",
+        "bytes": 63204,
+        "sha256": "c1278a5242ed2ba8a07f310304749fb7686b66e11b20afd21935439c139c33ae"
+      },
+      {
+        "path": "client.content.js",
+        "bytes": 74189,
+        "sha256": "debed3d82edd6405aaacd7cd476bafd4fb83265bc38ea8bbe4a177d0b35f7ef1"
+      },
+      {
+        "path": "client.js",
+        "bytes": 97460,
+        "sha256": "64550f7ad27948a93af9af0bed4e664b6278ece1ed29d15fc15e122581159c18"
+      },
+      {
+        "path": "content-extension.mjs",
+        "bytes": 57150,
+        "sha256": "f5eea63bf17cec1fe6d008ebad2b1df795c2c99eb7b308172ee5ccae1c2f2770"
+      },
+      {
+        "path": "cordis.patch.yml",
+        "bytes": 56,
+        "sha256": "102218633a8cdba80fc9559b02700b1f715fb94b81fb2b43d2ce14ea1d2c7693"
+      },
+      {
+        "path": "docs/CONTENT-CONSTANTS-2026-11-20.md",
+        "bytes": 14252,
+        "sha256": "f8427c0fedf2ad7e88570eb98f8dfc84c99891440c425ac47db1e0eaefc3b206"
+      },
+      {
+        "path": "docs/DETAIL.md",
+        "bytes": 41302,
+        "sha256": "7550b48a6dc0e3e642a8389d415affa24b47b20627af022ab28cb2d19a717352"
+      },
+      {
+        "path": "docs/INDEPENDENT-REBUILD-2026-11-20.md",
+        "bytes": 11090,
+        "sha256": "5826e0767b1aeaba43e1953cb738115b56327e23743a7f63657687fb0e1aa8b9"
+      },
+      {
+        "path": "docs/LEGAL-NOTICE-2026-11-18.md",
+        "bytes": 28846,
+        "sha256": "7d8bd70ddfd3428a746039275dc27f5e8bbd7c505891d265c1aeff4d381db61b"
+      },
+      {
+        "path": "docs/PET-BRIEF-0.3.0-COMPAT-2026-11-20.md",
+        "bytes": 15069,
+        "sha256": "5a88b71389006c34dc3980531dff45a211b44b31ade414b69f1fa9a8b02b6474"
+      },
+      {
+        "path": "docs/PUBLIC-REPO-SYNC-2026-11-20.md",
+        "bytes": 6914,
+        "sha256": "5e66826fa4010c09c97a97bbd80c80fcbb1c9597833d4e0b6f0dbc337734f119"
+      },
+      {
+        "path": "docs/RELEASE-HYGIENE.md",
+        "bytes": 12642,
+        "sha256": "a41a0160c0774e9182718bae71c0611d22d6a92d96d8dac5b4eb8453c13e23d1"
+      },
+      {
+        "path": "icon.png",
+        "bytes": 1891,
+        "sha256": "207135059430dd4b782e688273c4cf191a259e1e9e0c268c7c5d0eecac1d4eae"
+      },
+      {
+        "path": "index.js",
+        "bytes": 36779,
+        "sha256": "79014d9fc82a42f027e28b17986798ff4c0b21fb30ec9240279579d3dc5ce709"
+      },
+      {
+        "path": "locale/en.json",
+        "bytes": 3434,
+        "sha256": "d4540c81d31350c1d2f92ac181e3a88260d8941a391c0b3c9c5718a51b939e83"
+      },
+      {
+        "path": "locale/zh.json",
+        "bytes": 3040,
+        "sha256": "70474a63ec337ca755877e9ea733a76a8c8a8d520b2154c0d888cf4add28e910"
+      },
+      {
+        "path": "package.json",
+        "bytes": 2964,
+        "sha256": "0a47302a1933dc6101ae4f5fc68938b7025e03e63cacff7f43eed3debfe1e4b3"
+      }
+    ]
+  },
+  "animSpec": {
+    "path": "scripts/spec/anim-spec.json",
+    "bytes": 65138,
+    "sha256": "289f30fb8e77da1438c2c3b7f87f37117fab1252d38264a077ddcfc710de640b",
+    "schema": "dsh-famling/anim-spec",
+    "version": 1,
+    "selfSha256": "2202d70648bce3d0b4a6e79efd367e5a4d39fc88d9553b0b3b85d6b683041e86",
+    "sourceSha256": "e00eb36d21e103f9822b4e85e78629ae43fab9388fcd8a6427670039487bc5c0",
+    "characters": {
+      "cat": 74,
+      "dog": 70,
+      "human": 68
+    }
+  },
+  "contentExtension": {
+    "module": "content-extension.mjs",
+    "version": 3,
+    "packSchemaVersion": 3,
+    "sha256": "f5eea63bf17cec1fe6d008ebad2b1df795c2c99eb7b308172ee5ccae1c2f2770"
+  },
+  "notes": [
+    "Unsigned evidence artifact: this manifest proves file identity only, never publisher authenticity.",
+    "Paths are package-relative POSIX paths; no absolute paths, host names or user data are recorded.",
+    "Packed list = package.json files allowlist expansion plus npm always-included files (scripts/check-package.mjs is the single expansion implementation).",
+    "Verify with: node scripts/plugin-manifest.mjs --verify"
+  ]
+}

@@ -79,7 +79,7 @@ if (IS_CHILD) {
     const { spec } = readAnimationSpec(ROOT)
     const result = validateEmbeddedAgainstSpec({ pluginRoot: ROOT, spec })
     assert.equal(result.ok, true, 'child copy keeps the vendored spec green: ' + result.errors.join('; '))
-    assert.equal(result.stats.frames, 208, 'child copy still validates 208 frames from the vendored spec')
+    assert.equal(result.stats.frames, 212, 'child copy still validates 212 frames from the vendored spec')
   })
 } else {
   /** Run the clean-checkout CLI in JSON mode and parse its summary. */
@@ -147,7 +147,7 @@ if (IS_CHILD) {
       const { spec } = readAnimationSpec(destination)
       const embedded = validateEmbeddedAgainstSpec({ pluginRoot: destination, spec })
       assert.equal(embedded.ok, true, 'exported tree validates its committed animation artifacts: ' + embedded.errors.join('; '))
-      assert.equal(embedded.stats.frames, 208, 'exported tree verifies 208 frames')
+      assert.equal(embedded.stats.frames, 212, 'exported tree verifies 212 frames')
       assert.ok(statSync(join(destination, 'package-lock.json')).size > 100, 'exported LOCK is a real file')
     } finally {
       const absolute = resolve(parent)

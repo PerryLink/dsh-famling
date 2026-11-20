@@ -1,9 +1,9 @@
 {
   "characters": {
     "cat": {
-      "base64Chars": 91324,
+      "base64Chars": 93916,
       "chunkFile": "client.anims.cat.js",
-      "chunkSha256": "4e73d7f271f38dd4923626b8453e463eeed075f93c07982e8eca744de1a46540",
+      "chunkSha256": "9342f85820d8a434526841277c1c7b39b9a48bef520c05536159b33f45912e78",
       "clips": {
         "attack": {
           "category": "combat",
@@ -80,7 +80,7 @@
         },
         "idle": {
           "category": "idle",
-          "durationMs": 1000,
+          "durationMs": 1333,
           "fps": 6,
           "frames": [
             "cat/idle/0",
@@ -88,7 +88,9 @@
             "cat/idle/2",
             "cat/idle/3",
             "cat/idle/4",
-            "cat/idle/5"
+            "cat/idle/5",
+            "cat/idle/6",
+            "cat/idle/7"
           ],
           "layer": "base",
           "loop": true,
@@ -96,8 +98,8 @@
         },
         "idle_blink": {
           "category": "idle",
-          "durationMs": 250,
-          "fps": 12,
+          "durationMs": 750,
+          "fps": 4,
           "frames": [
             "cat/idle_blink/0",
             "cat/idle_blink/1",
@@ -221,11 +223,13 @@
       },
       "embeddedFrameSha256": [
         "30615e34d12f0f73426c08c3640d8215b362e2d93dca63da4bf0ce424aaee44c",
-        "2cd7b5155ca377e94c212c76d21a00515fec66a4f662d2a40a4c3c4eff40f843",
-        "eb9bb7067820bda0d8cd534218c40880a8e958b7f83d7358eedb76b4762424d4",
-        "0e872e9f9fab6864ec51c10ef76e23e017d678951e617c5b9c73026678b1199c",
-        "825b6b2e841a9a07cbf163f58acf6f12b551fc6b4a6f9c7c017d42b6a06d3565",
-        "d1b381b387b398998f756b2d7b83eec8471f5f8a5998777fd9862f5c10c09904",
+        "b6577606f58eb93a747a8cb36486b279b45ab91e0359ff60ef125a262222cc9e",
+        "39b3297279303973662ddd7c9c42d1c67de44b33db8fdb60ab7cf8f76b172f59",
+        "0fd718b2b33bc4bc34848b50da382004d11c0398ac4e6cb80e8992a1cff7559e",
+        "d176dead5fbf2a0a157869b9cf4b0033a4eeffd6d1a4301c9d13c5e81e2db4df",
+        "3fd3d357d3ea5d6d7a60c230c692fbb37a2aa0da81fe4ce8feb2e966b899f3d9",
+        "14f04ff6fb47e94bebe4520681a15c8c86b134c8d1008d52fba5c13727a4a655",
+        "3b8570649924c1c77368ad7c886e0a669222b0c02643fb783824284e11e4ec7b",
         "507e0fd5d03bc4840d2b58574882e0b6fb54622635686c0f0873f33c7cd0de06",
         "18973cb8bcc531cf5f6a2c8631e8cdcdbe39d1d3a76805df0c0889565a014efe",
         "460516cbf2366501b3c597996d5f933dbf1b8dfcbe6305a9ac58b7f1ae3bffcd",
@@ -293,7 +297,7 @@
         "8adba3e783536e2364134db3e420ec3826a82d5680f3195e758e1f53cee21a4a",
         "d4b5351e980aba5d5751228803ef328e585625a4ec24df809a4a1fca2cc4e081"
       ],
-      "frames": 72,
+      "frames": 74,
       "regions": {
         "actions": [
           {
@@ -450,9 +454,9 @@
       }
     },
     "dog": {
-      "base64Chars": 71584,
+      "base64Chars": 73644,
       "chunkFile": "client.anims.dog.js",
-      "chunkSha256": "0971be9b8f4f25907c9b161a0d4aa0eb699e03434cf594b88edcf78d47d08cd0",
+      "chunkSha256": "160a1d06725cf07d21061f890baff47d86f76aaf3dd38e09c73714bc492759e4",
       "clips": {
         "attack": {
           "category": "combat",
@@ -529,7 +533,7 @@
         },
         "idle": {
           "category": "idle",
-          "durationMs": 1000,
+          "durationMs": 1333,
           "fps": 6,
           "frames": [
             "dog/idle/0",
@@ -537,7 +541,9 @@
             "dog/idle/2",
             "dog/idle/3",
             "dog/idle/4",
-            "dog/idle/5"
+            "dog/idle/5",
+            "dog/idle/6",
+            "dog/idle/7"
           ],
           "layer": "base",
           "loop": true,
@@ -545,8 +551,8 @@
         },
         "idle_blink": {
           "category": "idle",
-          "durationMs": 250,
-          "fps": 12,
+          "durationMs": 375,
+          "fps": 8,
           "frames": [
             "dog/idle_blink/0",
             "dog/idle_blink/1",
@@ -654,11 +660,13 @@
       },
       "embeddedFrameSha256": [
         "00ae0fd3c6f6deedbaeeb23037c5d4dbdf9d8336e4309ffe6c8542c8df2030b9",
-        "01b61796808ff8e2213972916e622e2762f67c384174ab6e1dcc5e2e1ed132f8",
-        "7dd506de4f1125dcf6f29f368b242c1c400dc270380b2c2563937aea8dbe117c",
-        "2ad1116b1556d63401853dbfbf93738ee801b2d80599c9544ba2042876538383",
-        "4553e9d348918ccad490daffa85cce418d632ca3f8e20639972a62a2599e666c",
-        "b5a955a462decef7127c96305136f670b2c94b64b91f25fb5fc0cf7f8096b121",
+        "079c28e20b381549ef869b1f425a759a61e3e8576a06f7672f05ab50f82bcca2",
+        "14398273ebf7963061d8e84d76cf0e21f1674b004112be6ea309f4055d39541b",
+        "993972599307dd6cd059ad23177cd8f5c5f001941f8ad23d5d6ad6909b706a20",
+        "f4b77bebeeb32f6a14ea09df3098a434e330f92540b9c4aeebab43581241a100",
+        "ecc11daf77ee8d5bcea0d3c76a2f5c3fa1aa1ad6928a93892686e6ed77c61c30",
+        "18f88d0435c8acce2e5908d4aafd1a9b0c57e3fb5b31e56114af7234b7c2fd23",
+        "1f3d82a42260965e6de570fefc5e8084905bcc749b313fe3719ef439452a84af",
         "071a7bc6b69b96f6cd6df09130211f9288803efe2e2ebd50e24ca6febcdaea6a",
         "dd92bcc41e772b150f2b5a0816f7d436285f0b0c6860ba3a639fb84d57591225",
         "cddfcf6231707019d3864bb6e0dd776c0c792cbedaaab1e1387dc33c92cbf147",
@@ -722,7 +730,7 @@
         "4100eb079346390b3d5e6f08035bf0c381206da7d234da5170e469aa2df1418b",
         "3066eae8c3633b2b2cb7e7b179ea9087091c1a6e3780b3d0953dbbc7aaea0214"
       ],
-      "frames": 68,
+      "frames": 70,
       "regions": {
         "actions": [
           {
@@ -883,7 +891,7 @@
     "human": {
       "base64Chars": 55324,
       "chunkFile": "client.anims.human.js",
-      "chunkSha256": "744f5d1f781a8e7cf95e63e1cba2809c014eceb8596aa6acb82ed282d43df441",
+      "chunkSha256": "c1278a5242ed2ba8a07f310304749fb7686b66e11b20afd21935439c139c33ae",
       "clips": {
         "attack": {
           "category": "combat",
@@ -1340,11 +1348,13 @@
       "chase_tail/chase_tail_04.png": "fc5a885675236bde72884c85ad129917aee3907ca4c187feb4b305bb96e728b5",
       "chase_tail/chase_tail_05.png": "92618d6e21f00f35780e4602527f66759764a5c2cfbb607fbc4381202491d0af",
       "idle/idle_00.png": "f8063a0ba2e36f9f918141223f32fb61937f52eb348c0c515c87af9937fa4ab3",
-      "idle/idle_01.png": "b308673c6c421d81f2ee57d734b129141b9b85f2c3ac7b0e8dd56e810521172f",
-      "idle/idle_02.png": "3d4a356ca31d2679018c561ba4f46702e8a7a3f42bb5af6a269d1882da097ff6",
-      "idle/idle_03.png": "85efa9b12383d268971455b368ef992c664165a92ad88d3f3c236ee80eb15b27",
-      "idle/idle_04.png": "7e5aa03ecee5fe595b55afeef0ea328343ad604a770f05a0138673645e8d8a7d",
-      "idle/idle_05.png": "27485a8b38e4398820b0c5fe94038984a75692f8cb443f34417b9e5776970ffb",
+      "idle/idle_01.png": "119109d9298a842b16bc8fb51ae25b14bb12172c4c29505bd2a63093b39aabed",
+      "idle/idle_02.png": "ee7b95a720bab745ced2d53d4f1c98fb68419bfc23d0893d8e41838971cb66c4",
+      "idle/idle_03.png": "0aa052db1c3ed932baddac457d7a1ad1f953a035e9b6e851e72525267b967d92",
+      "idle/idle_04.png": "7f2e4f137d9aeaeeb4c64d865d7ae0c4e8587b6a011e49969fa62a788cefe005",
+      "idle/idle_05.png": "97d7cdced2e49d4ee718237e3347f38c55331dd72ad778a464fb6f960eddab85",
+      "idle/idle_06.png": "55ca6c2f1a478f1e4e16d0dd34a205aa1a1b40ed323dfa26c1a666071ff1b976",
+      "idle/idle_07.png": "690b7fc82e39c525e77177e7c23e2927777e8a40334392ae8d868405477f0c85",
       "idle_blink/idle_blink_00.png": "41cb22832b1c2db68089946448746cc618aec456a24644dfdbcd3291cdf1d538",
       "idle_blink/idle_blink_01.png": "6e078a3d16bd621105318b8ead8529d2273d8e881770635ad750ebd6e11bfd07",
       "idle_blink/idle_blink_02.png": "fd212b96397fcb486e9be4427f2316cc7fcd43a398b72d71999d748b1d2137ed",
@@ -1414,11 +1424,13 @@
       "chase_tail/chase_tail_04.png": "4f3a999d3bd721765838eb8cb7368697ca5dec062babeb639ba3ba7f4eef8945",
       "chase_tail/chase_tail_05.png": "144e2c8d1d3581c610bf7f2265ffcbb0be82dcb60c509440d272241d87cc7f0e",
       "idle/idle_00.png": "26acc6be9bbd376d6a1af8dd04efb1b4eb2cff49e9e58b4ab3f716aea32093e1",
-      "idle/idle_01.png": "fea94cdf4fb6f10ca2bb4fed330afb9f1e0d8063759d201802a8930939b4668b",
-      "idle/idle_02.png": "3414ff5c0496cd383dbf1a6407d96253306d4b47050c4da3e5cce5eb9deef689",
-      "idle/idle_03.png": "411130b1574538d32a3ab87f077df53385a4082d7cb2f6dbdac2fa8962cfb623",
-      "idle/idle_04.png": "9c06711f682b3fa029ae5b5ee338dfb0925f41fcd5a58fc0b8da50433f2888ae",
-      "idle/idle_05.png": "e94141f487f81c7eedc2aa163a486bacc6c7f5f1b8030b6aa02a9b753caa9cd1",
+      "idle/idle_01.png": "ca7a576e86f56ed49604bc5c573f30f918a726d152bc5d2082dc4ad8d21a34e5",
+      "idle/idle_02.png": "30cbac943b022d995c71adf3a6e9af3bf46c82863f0a75ec87d38de56f3be888",
+      "idle/idle_03.png": "2acbfaa0cf16d1599156c6a322bcc5bf2250c383c00acf2bfe8304deb28b0bfb",
+      "idle/idle_04.png": "2fecc5fd207964c61eaa9da56ad89cbb037331213b14dcdad9a6f34516a2ee67",
+      "idle/idle_05.png": "72af917899078051fd51d8e9d12383adf84b2fa6120f2265f3114d47c597983d",
+      "idle/idle_06.png": "e3c3b27b0155af1509ee249eaa014ffdd3c440e06bc81cf1c391c6ff153174f8",
+      "idle/idle_07.png": "d6b8e5ed45388db484135abf4a16dbf771c6017f49da2366139b4388aaa8689f",
       "idle_blink/idle_blink_00.png": "c87f1e10cc0b457371a4501e32d60111bced98ce546b448438dbf9e8af4645e5",
       "idle_blink/idle_blink_01.png": "782eb2b0abb588a2c8c70ec82f9040a80257e3444372e5af5e49c5edb978c61a",
       "idle_blink/idle_blink_02.png": "6049adc18d946cb3518cc9418acae61b09a06f35228822b87fc29e7447d8a462",
@@ -1533,7 +1545,7 @@
     "frames": "famling public/assets/pet/anim/{human,cat,dog}",
     "regions": "famling public/characters/{pet-tinglan-anim,pet-cat,pet-dog}/regions.json"
   },
-  "sourceSha256": "6928ab16e122138b4f052f558e4582127e499ac111e4b186fcc0ae4b16252313",
-  "specSha256": "bccb5c3b96349836177c06d0cb893e16f7c3a7369764a655203418610eb69433",
+  "sourceSha256": "e00eb36d21e103f9822b4e85e78629ae43fab9388fcd8a6427670039487bc5c0",
+  "specSha256": "2202d70648bce3d0b4a6e79efd367e5a4d39fc88d9553b0b3b85d6b683041e86",
   "specVersion": 1
 }

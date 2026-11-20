@@ -71,7 +71,7 @@ test('vendored spec locks all three characters, all frames and the source frame 
     assert.equal(character.regions.canvas[1], 96, kind + ': 96px canvas')
     totalFrames += character.frames
   }
-  assert.equal(totalFrames, 208, 'dog/human 68 + cat 72 = 208 frames')
+  assert.equal(totalFrames, 212, 'human 68 + cat 74 + dog 70 = 212 frames')
 })
 
 test('committed client.js and lazy chunks match the vendored spec', () => {
@@ -79,7 +79,7 @@ test('committed client.js and lazy chunks match the vendored spec', () => {
   const result = validateEmbeddedAgainstSpec({ pluginRoot: ROOT, spec })
   assert.equal(result.ok, true, result.errors.join('; '))
   assert.equal(result.stats.characters, 3, 'three characters validated')
-  assert.equal(result.stats.frames, 208, 'all 208 frames validated')
+  assert.equal(result.stats.frames, 212, 'all 212 frames validated')
   const clientSource = readFileSync(join(ROOT, 'client.js'), 'utf8')
   assert.ok(clientSource.includes('// source-sha256: ' + spec.sourceSha256), 'client.js carries the spec source digest')
   for (const kind of SPEC_CHARACTERS) {

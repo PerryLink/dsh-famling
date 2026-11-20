@@ -148,7 +148,7 @@ const FROZEN_STORAGE_KEYS = [
   'dsh-famling/market/catalog', 'dsh-famling.market',
 ]
 const FROZEN_TERMS = { tos: '2026-11-20.1', tts: '2026-11-17.4', asr: '2026-11-17.3', roleplay: '2026-11-17.4' }
-const FROZEN_FRAME_TOTALS = { dog: 68, cat: 72, human: 68 }
+const FROZEN_FRAME_TOTALS = { dog: 70, cat: 74, human: 68 }
 const FROZEN_CLIP_IDS = [
   'idle', 'idle_blink', 'walk', 'run', 'pat_head', 'ball_throw',
   'ball_chase', 'paw_face', 'scratch', 'stand_wag', 'chase_tail', 'attack',
@@ -298,7 +298,7 @@ test('the v3 content-extension contract keeps the shared declaration and frozen 
 test('sprite chunks, item counts and event->clip table are frozen', () => {
   assert.ok(header, 'generated anims header exists')
   assert.equal(header.clips, 12)
-  assert.equal(header.frames, 208)
+  assert.equal(header.frames, 212)
   assert.deepEqual(anims.CHARACTER_IDS, FROZEN_CHARACTER_IDS)
   assert.deepEqual(Object.keys(anims.CHARACTER_CHUNKS), FROZEN_CHARACTER_IDS)
   for (const character of FROZEN_CHARACTER_IDS) {

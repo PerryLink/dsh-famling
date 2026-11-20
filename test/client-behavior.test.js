@@ -210,6 +210,7 @@ function createHarness(options = {}) {
   const fetchCalls = []
   const documentStub = {
     baseURI: 'http://localhost/',
+    visibilityState: 'visible',
     addEventListener(type, fn) { listeners.set(type, fn) },
     removeEventListener(type) { listeners.delete(type) },
   }
@@ -357,7 +358,7 @@ function createHarness(options = {}) {
   const businessCalls = () => fetchCalls.filter((call) => {
     try { const op = JSON.parse(call.init && call.init.body).op; return op !== 'hello' && op !== 'probe' } catch { return true }
   })
-  return { ui, speech, fetchCalls, businessCalls, hostCalls: () => fetchCalls.filter((call) => businessCalls().indexOf(call) === -1), storage, timers, asyncCalls, module: moduleObject, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
+  return { ui, speech, fetchCalls, businessCalls, hostCalls: () => fetchCalls.filter((call) => businessCalls().indexOf(call) === -1), storage, timers, asyncCalls, module: moduleObject, document: documentStub, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
 }
 
 function idleSrc(kind) {
@@ -1145,13 +1146,15 @@ test('region taps map head/body/tail to clips and random lines from that region 
 })
 
 test('repeated taps on the same region pick a different line from its says', () => {
-  const { ui, timers } = createHarness({ character: 'cat', settings: { motion: true } })
+  const { ui, timers, setNow } = createHarness({ character: 'cat', settings: { motion: true } })
   ui.clickPetAt(50, 35)
   ui.render()
   const says = regionSays('cat', 'head')
   const first = ui.text(ui.findBubble())
   assert.ok(says.includes(first), 'first head line comes from head says')
   finishClip(ui, timers, 'cat', 'pat_head')
+  // The repeat-tap cooldown is 1.2s, so the second tap happens in real time.
+  setNow(new Date(2026, 4, 1, 12, 0, 2, 0))
   ui.clickPetAt(50, 35)
   ui.render()
   const second = ui.text(ui.findBubble())
@@ -1235,6 +1238,79 @@ test('region taps still react during the idle blink phase', () => {
   ui.render()
   assert.equal(petImage(ui).props.src, clipSrc('cat', 'pat_head'), 'head tap reacts while blinking')
   assert.ok(regionSays('cat', 'head').includes(ui.text(ui.findBubble())), 'blink-phase tap still uses the head says')
+})
+
+test('a hidden tab pauses frame scheduling and resumes on the idle clip', () => {
+  const harness = createHarness({ character: 'cat', settings: { motion: true } })
+  const { ui, documentListeners, timers } = harness
+  const pet = () => petImage(ui).props.src
+  assert.equal(pet(), idleSrc('cat'), 'the idle clip starts on the first frame')
+  ui.clickPetAt(50, 35)
+  ui.render()
+  assert.equal(pet(), clipSrc('cat', 'pat_head'), 'a region clip is playing before the tab hides')
+  const staleTimers = timers.timeouts.slice()
+  const scheduled = timers.timeouts.length
+  harness.document.visibilityState = 'hidden'
+  documentListeners.get('visibilitychange')()
+  ui.render()
+  const frozen = pet()
+  for (const timer of staleTimers) timer.fn()
+  ui.render()
+  assert.equal(pet(), frozen, 'frame timers left over from before the hide never repaint')
+  assert.equal(timers.timeouts.length, scheduled, 'no frame timer is re-armed while hidden')
+  harness.document.visibilityState = 'visible'
+  documentListeners.get('visibilitychange')()
+  ui.render()
+  assert.equal(pet(), idleSrc('cat'), 'resuming shows the idle clip, not the interrupted one')
+  assert.ok(timers.timeouts.length > scheduled, 'frame scheduling resumes when the tab is visible again')
+})
+
+test('repeat region taps are coalesced and saturate into the subtle blink reaction', () => {
+  const { ui, timers, setNow } = createHarness({ character: 'cat', settings: { motion: true } })
+  const start = new Date(2026, 4, 1, 12, 0, 0, 0).getTime()
+  const at = (offset) => setNow(start + offset)
+  // Region taps only react from idle, so each full clip is played to its end.
+  const tap = () => { ui.clickPetAt(50, 35); ui.render() }
+  tap()
+  finishClip(ui, timers, 'cat', 'pat_head')
+  const says = regionSays('cat', 'head')
+  const first = ui.text(ui.findBubble())
+  assert.ok(says.includes(first), 'the first tap answers with the region clip and line')
+  at(300)
+  tap()
+  assert.equal(ui.text(ui.findBubble()), first, 'a repeat tap inside 1.2s is ignored')
+  at(1300)
+  tap()
+  finishClip(ui, timers, 'cat', 'pat_head')
+  assert.notEqual(ui.text(ui.findBubble()), first, 'after 1.2s the tap answers with a fresh line')
+  at(2600)
+  tap()
+  finishClip(ui, timers, 'cat', 'pat_head')
+  at(3900)
+  tap()
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle_blink'), 'the 4th tap in 10s degrades to the existing blink clip')
+  const saturated = ui.text(ui.findBubble())
+  assert.ok(says.includes(saturated), 'the saturated reaction keeps an existing region line')
+  finishClip(ui, timers, 'cat', 'idle_blink')
+  at(5000)
+  tap()
+  assert.equal(ui.text(ui.findBubble()), saturated, 'saturated taps coalesce for 2.5s')
+  at(6400)
+  tap()
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'idle_blink'), 'saturated taps keep the subtle reaction')
+})
+
+test('menu actions always answer while region taps are cooling down', () => {
+  const { ui, setNow } = createHarness({ character: 'cat', settings: { motion: true } })
+  const tap = () => { ui.clickPetAt(50, 35); ui.render() }
+  tap()
+  tap()
+  setNow(new Date(2026, 4, 1, 12, 0, 5, 0))
+  openInteractions(ui)
+  const says = actionSays('cat', 'pat')
+  clickMenuItemExact(ui, '摸头')
+  assert.equal(petImage(ui).props.src, clipSrc('cat', 'pat_head'), 'the menu action always plays its clip')
+  assert.ok(says.includes(ui.text(ui.findBubble())), 'the menu action always answers with its line')
 })
 
 test('a missing lazy chunk degrades to the transparent placeholder and the menu still works', () => {
@@ -1388,7 +1464,7 @@ test('right-click menu follows the DSH host day/night tokens, never the role the
   for (const role of ['human', 'cat', 'dog']) {
     const { ui } = createHarness({ role })
     const style = openMenuAt(ui).props.style
-    assert.match(style.background, /var\(--dsw-alias-bg-elevated, var\(--dsw-alias-bg-layer-1, light-dark\(#ffffff, #1f2329\)\)\)/, role + ': host elevated surface with a light/dark fallback')
+    assert.match(style.background, /var\(--dsw-alias-bg-layer-1, light-dark\(#ffffff, #1f2329\)\)/, role + ': host layer-1 surface with a light/dark fallback')
     assert.match(style.color, /var\(--dsw-alias-label-primary, light-dark\(/, role + ': host primary label colour')
     assert.match(style.border, /var\(--dsw-alias-border-l2, light-dark\(/, role + ': host border with a light/dark fallback')
     assert.equal(style.background.includes('--dsh-famling-panel-bg'), false, role + ': menu never inherits the role panel theme')
@@ -1535,6 +1611,7 @@ test('first run shows a dismissible safety card exactly once and keeps a local a
   assert.ok(text.includes('模型供应商'), 'card states where chat text goes')
   assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'card lists crisis resources')
   assert.ok(text.includes('请勿发送密码'), 'card warns against secrets/private data')
+  assert.ok(text.includes('点角色 = 互动') && text.includes('Shift+F10'), 'card coaches the two core interactions')
   assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'nothing is acknowledged before the click')
   assert.equal(businessCalls().length, 0, 'the card makes no bridge business request')
   ui.clickText('我知道了')
@@ -1554,6 +1631,7 @@ test('the first-run card also exists in English with the same disclosure and res
   const text = ui.text(card)
   assert.ok(text.includes('model provider'), 'sending destination is disclosed')
   assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'crisis resources are listed')
+  assert.ok(text.includes('Click the character to play') && text.includes('Shift+F10'), 'English coach line matches the Chinese one')
 })
 
 test('the chat input panel discloses the sending destination and crisis resources', () => {
