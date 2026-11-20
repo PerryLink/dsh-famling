@@ -42,7 +42,38 @@ window.__ModuleLoader__.load({
       },
       compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
     }
-    const PLUGIN_VERSION = '0.10.9'
+    const PLUGIN_VERSION = '0.10.10'
+    // MB-014 (0.10.10): versioned TTS/ASR consent. This bundle is the canonical
+    // declaration text shown in the consent dialog (zh authoritative + en); the
+    // entry chunk pins its SHA-256 plus a version. Any wording change MUST bump
+    // that version/hash so old consents become invalid and re-prompt.
+    const CONSENT_TEXTS = {
+      tts: '开启语音朗读前需独立确认：使用浏览器系统语音，不是 DeepSeek stella/tide；回复文本会被朗读，可随时关闭。',
+      ttsEn: 'Voice playback needs separate confirmation: it uses the browser system voice, not DeepSeek stella/tide; replies may be read aloud and can be switched off.',
+      asr: '语音输入前需独立确认：浏览器语音识别可能把音频发送给浏览器厂商；仅在你点击麦克风后录音，可随时关闭。',
+      asrEn: 'Voice input needs separate confirmation: browser speech recognition may send audio to the browser vendor; the microphone starts only after your click and can be switched off.',
+    }
+    // Frozen duplicate of the client.js CONSENT_DECLARATION anchor (parity test
+    // asserts equality; a wording change bumps both version/hash in lockstep).
+    const CONSENT_DECLARATION = { version: '2026-11-20.1', hash: '63c90be7a04e5e229c0a64d3996d743fd4f52a139f7e8401ba1a5a989f338e70' }
+    const CONSENT_KEY = 'dsh-famling/consent/v2'
+    const LEGACY_CONSENT_KEY = 'dsh-famling/consent/v1'
+    // Migrate the legacy boolean consent once, lazily here so the first-screen
+    // entry keeps its budget. v1 has no version/hash, so it can never be verified
+    // against the current declaration: keep it only as a withdrawn record
+    // (fail-closed) and let the user re-confirm through the dialog.
+    try {
+      const legacy = localStorage.getItem(LEGACY_CONSENT_KEY)
+      if (legacy !== null) {
+        const old = JSON.parse(legacy) || {}
+        const next = { schema: 2, migratedFrom: 'consent/v1' }
+        try { Object.assign(next, JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}')) } catch {}
+        next.schema = 2
+        for (const kind of ['tts', 'asr']) if (!next[kind] && old[kind] === true) next[kind] = { version: 'legacy-v1', hash: 'legacy-v1', acceptedAt: null, withdrawn: true }
+        localStorage.setItem(CONSENT_KEY, JSON.stringify(next))
+        localStorage.removeItem(LEGACY_CONSENT_KEY)
+      }
+    } catch {}
 
     const STRINGS = {
       zh: {
@@ -70,7 +101,7 @@ window.__ModuleLoader__.load({
         motionSystemReduce: '系统已请求减少动态', motionSystemAllow: '系统未请求减少动态',
         hide: '暂时隐藏', hideHour: '隐藏 1 小时', hideTomorrow: '隐藏到明天',
         hideHint: '隐藏期间不显示角色与气泡；可点「显示」提前恢复，或到时间自动恢复。',
-        consentAsr: '语音输入前需独立确认：浏览器语音识别可能把音频发送给浏览器厂商；仅在你点击麦克风后录音，可随时关闭。',
+        consentAsr: CONSENT_TEXTS.asr,
         allow: '同意并开启', cancel: '暂不开启',
         sound: '语音朗读', mic: '语音输入',
         notice: '使用限制与版本',
@@ -93,6 +124,7 @@ window.__ModuleLoader__.load({
         chatHint: '默认开启：聊天文本经 DSH Host 发送给 DSH 中配置的模型供应商；关闭后不发送任何聊天文本（提醒仍可用）。',
         boundaryHint: '本插件只运行在 DSH 内：模型、Key、会话与供应商数据由 DSH 和你配置的供应商管理；插件不保存聊天记录。',
         clearLocal: '清除本机设置与同意', clearHint: '仅删除本插件在浏览器 localStorage 的 dsh-famling/* 键（设置、形象、外观、同意记录）；不改 DSH 宿主数据或供应商侧数据。',
+        withdrawConsent: '撤回语音同意', withdrawHint: '仅把已保存的 TTS/ASR 同意标记为已撤回并关闭语音；设置与其它数据保留，可随时重新同意。', consentMeta: '声明版本',
         firstRunTitle: '首次使用说明', firstRunAck: '我知道了',
         where: '发送去向：文本会经 DSH Host 发给 DSH 中配置的模型供应商；请勿发送密码、他人隐私或客户资料。',
         crisisLine: '心理危机可联系 12356（心理援助）；紧急情况 110（报警）/ 120（急救），或信任的人与专业机构。',
@@ -111,7 +143,7 @@ window.__ModuleLoader__.load({
         voiceGroup: '声音（TTS 策略）', dialogueGroup: '对话模式', themeGroup: '气泡 / 面板主题', backgroundGroup: '背景', fontGroup: '字体',
         voiceList: '声音（系统）', voiceSystem: '系统默认声音', voiceEmpty: '浏览器暂未提供声音列表。',
         voiceSilent: '塞尔凯克卷毛猫 / 金毛只用「心里话」思考气泡，没有语音（不会调用浏览器 TTS）。',
-        consentTts: '开启语音朗读前需独立确认：使用浏览器系统语音，不是 DeepSeek stella/tide；回复文本会被朗读，可随时关闭。',
+        consentTts: CONSENT_TEXTS.tts,
         dialogueModes: { standard: { name: '标准', desc: '完整回话与气泡' }, brief: { name: '简短', desc: '过滤过长回话' }, quiet: { name: '安静', desc: '降低气泡出现频率' } },
         themes: { default: { name: '默认', desc: '白底深色字' }, paper: { name: '纸张', desc: '暖米色纸感气泡' }, night: { name: '夜间', desc: '深色气泡与面板' } },
         backgrounds: { transparent: '透明', paper: '纸张', dark: '暗色' }, backgroundDescriptions: { transparent: '透明，不画背板', paper: '暖白纸张背板', dark: '深色背板' },
@@ -157,7 +189,7 @@ window.__ModuleLoader__.load({
         motionSystemReduce: 'the system requests reduced motion', motionSystemAllow: 'the system does not request reduced motion',
         hide: 'Hide temporarily', hideHour: 'Hide for 1 hour', hideTomorrow: 'Hide until tomorrow',
         hideHint: 'While hidden the character and bubbles are not shown; click "Show" to restore early or wait for the deadline.',
-        consentAsr: 'Voice input needs separate confirmation: browser speech recognition may send audio to the browser vendor; the microphone starts only after your click and can be switched off.',
+        consentAsr: CONSENT_TEXTS.asrEn,
         allow: 'Agree and enable', cancel: 'Not now',
         sound: 'Voice', mic: 'Voice input',
         notice: 'Usage & version',
@@ -180,6 +212,7 @@ window.__ModuleLoader__.load({
         chatHint: 'On by default: chat text goes through the DSH Host to the model provider configured in DSH; when off no chat text is sent (reminders still work).',
         boundaryHint: 'This plugin only runs inside DSH: model, key, session and provider data are managed by DSH and your provider; the plugin stores no chat history.',
         clearLocal: 'Clear local settings & consent', clearHint: 'Deletes only this plugin\'s dsh-famling/* local storage keys (settings, character, appearance, consent); DSH host data and provider-side data are untouched.',
+        withdrawConsent: 'Withdraw voice consent', withdrawHint: 'Only marks the stored TTS/ASR consent as withdrawn and switches voice off; settings and other data stay, and you can consent again at any time.', consentMeta: 'Declaration version',
         firstRunTitle: 'First-run notice', firstRunAck: 'Got it',
         where: 'Where it goes: text is sent through the DSH Host to the model provider configured in DSH; never send passwords, private data of others, or client material.',
         crisisLine: 'Mental-health crisis: contact 12356 (psychological assistance); emergencies 110 (police) / 120 (ambulance), or a trusted person and a professional service.',
@@ -198,7 +231,7 @@ window.__ModuleLoader__.load({
         voiceGroup: 'Voice (TTS policy)', dialogueGroup: 'Dialogue mode', themeGroup: 'Bubble / panel theme', backgroundGroup: 'Background', fontGroup: 'Font',
         voiceList: 'Voice (system)', voiceSystem: 'System default voice', voiceEmpty: 'The browser exposes no voices yet.',
         voiceSilent: 'The Selkirk Rex cat and Golden Retriever only use silent thought bubbles; browser TTS is never called for them.',
-        consentTts: 'Voice playback needs separate confirmation: it uses the browser system voice, not DeepSeek stella/tide; replies may be read aloud and can be switched off.',
+        consentTts: CONSENT_TEXTS.ttsEn,
         dialogueModes: { standard: { name: 'Standard', desc: 'Full replies and bubbles' }, brief: { name: 'Brief', desc: 'Filters over-long replies' }, quiet: { name: 'Quiet', desc: 'Fewer ambient bubbles' } },
         themes: { default: { name: 'Default', desc: 'White bubble with dark text' }, paper: { name: 'Paper', desc: 'Warm paper-toned bubbles' }, night: { name: 'Night', desc: 'Dark bubbles and panels' } },
         backgrounds: { transparent: 'Transparent', paper: 'Paper', dark: 'Dark' }, backgroundDescriptions: { transparent: 'Transparent backdrop', paper: 'Warm paper backdrop', dark: 'Dark backdrop' },
@@ -454,7 +487,7 @@ window.__ModuleLoader__.load({
      *  because hooks cannot be added conditionally inside this factory). */
     function createSettingsPanel(props) {
       const {
-        lang, character, roleId, canTts, ttsConsent, voices, settings, setSettings, menuButton,
+        lang, character, roleId, canTts, ttsConsent, asrConsent, voices, settings, setSettings, menuButton,
         dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, host, onProbeHost, advancedOpen,
         aiNotice, useRestrictions, onToggleAdvanced, updateSetting,
         localDataCleared, onToggleChat, onClearLocalData,
@@ -471,7 +504,7 @@ window.__ModuleLoader__.load({
       const role = ROLE_BUNDLES[roleId] || ROLE_BUNDLES.human
       const roleName = (T.characters || {})[role.character] || role.character
       const counts = (brief && brief.counts) || { today: 0, commitments: 0 }
-      const storageKeys = ['dsh-famling/first-run/v1', 'dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/hidden-until', 'dsh-famling/consent/v1'].concat(scaleCatalog ? scaleCatalog.storageKeys : [])
+      const storageKeys = ['dsh-famling/first-run/v1', 'dsh-famling/menu', 'dsh-famling/role', 'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/dialogue', 'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font', 'dsh-famling/hidden-until', 'dsh-famling/consent/v2', 'dsh-famling/consent/v1'].concat(scaleCatalog ? scaleCatalog.storageKeys : [])
       const box = panelBox || { zoom: 1, width: 310, maxHeight: 680 }
       const scale = scaleCatalog || null
       const percent = (value) => Math.round(value * 100) + '%'
@@ -567,6 +600,7 @@ window.__ModuleLoader__.load({
       // its sessions and the model provider's data are owned and kept by them.
       const clearLocal = () => {
         for (const key of storageKeys) { try { localStorage.removeItem(key) } catch {} }
+        try { window.speechSynthesis?.cancel() } catch {}
         onClearLocalData()
       }
       const data = section(T, T.dataGroup, 'data', [
@@ -574,6 +608,11 @@ window.__ModuleLoader__.load({
         h('p', { key: 'where', style: { margin: '4px 0 0', ...captionStyle() } }, T.where),
         h('p', { key: 'crisis', style: { margin: '4px 0 0', ...captionStyle() } }, T.crisisLine),
         h('p', { key: 'boundary', style: { margin: '4px 0 0', ...captionStyle() } }, T.boundaryHint),
+        ttsConsent || asrConsent ? h('div', { key: 'withdraw', style: { marginTop: 6 } }, [
+          h('button', { key: 'button', type: 'button', onClick: () => { saveConsent('withdraw'); onClearLocalData(true) }, style: { ...buttonBase, padding: '4px 8px', fontSize: 11 } }, T.withdrawConsent),
+          h('p', { key: 'hint', style: { margin: '5px 0 0', ...captionStyle() } }, T.withdrawHint),
+          h('p', { key: 'meta', style: { margin: '3px 0 0', ...captionStyle() } }, T.consentMeta + ' ' + CONSENT_DECLARATION.version + ' · SHA-256 ' + CONSENT_DECLARATION.hash.slice(0, 16) + '…'),
+        ]) : null,
         h('button', { key: 'clear', type: 'button', onClick: clearLocal, style: { ...buttonBase, marginTop: 6, padding: '4px 8px', fontSize: 11, border: '1px solid #a63d35' } }, T.clearLocal),
         h('p', { key: 'clearHint', style: { margin: '5px 0 0', ...captionStyle() } }, T.clearHint),
         localDataCleared ? h('p', { key: 'clearStatus', role: 'status', style: { margin: '5px 0 0', fontSize: 11, color: 'var(--dsh-famling-accent, #7aa2ff)' } }, T.clearDone) : null,
@@ -748,6 +787,7 @@ window.__ModuleLoader__.load({
       }, [
         h('strong', { key: 't', style: { display: 'block', marginBottom: 8 } }, kind === 'tts' ? T.sound : T.mic),
         h('p', { key: 'text', style: { margin: '0 0 10px' } }, kind === 'tts' ? T.consentTts : T.consentAsr),
+        h('p', { key: 'meta', style: { margin: '0 0 10px', ...captionStyle() } }, T.consentMeta + ' ' + CONSENT_DECLARATION.version + ' · SHA-256 ' + CONSENT_DECLARATION.hash.slice(0, 16) + '…'),
         h('div', { key: 'actions', style: { display: 'flex', gap: 6, justifyContent: 'flex-end' } }, [
           h('button', { key: 'cancel', type: 'button', onClick: onCancel, style: { ...buttonBase, padding: '5px 8px' } }, T.cancel),
           h('button', { key: 'allow', type: 'button', onClick: onAllow, style: { ...buttonBase, padding: '5px 8px' } }, T.allow),
@@ -788,6 +828,27 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    return { createContentCenter, createSettingsPanel, createFirstRunNotice, createInputPanel, createConsentDialog, createNoticePanel }
+    /**
+     * Persist one versioned consent decision (MB-014): accepting writes
+     * {version,hash,acceptedAt,withdrawn:false}; "withdraw" flips every existing
+     * record to withdrawn:true while keeping its evidence fields.
+     * @param {'tts'|'asr'|'withdraw'} kind Decision kind.
+     * @returns {boolean} True when the record was written.
+     */
+    function saveConsent(kind) {
+      try {
+        const store = JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') || {}
+        store.schema = 2
+        if (kind === 'withdraw') {
+          for (const item of ['tts', 'asr']) if (store[item]) store[item] = { ...store[item], withdrawn: true }
+        } else {
+          store[kind] = { version: CONSENT_DECLARATION.version, hash: CONSENT_DECLARATION.hash, acceptedAt: new Date().toISOString(), withdrawn: false }
+        }
+        localStorage.setItem(CONSENT_KEY, JSON.stringify(store))
+        return true
+      } catch { return false }
+    }
+
+    return { createContentCenter, createSettingsPanel, createFirstRunNotice, createInputPanel, createConsentDialog, createNoticePanel, saveConsent }
   },
 })

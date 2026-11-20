@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.10.9",
+  "version": "0.10.10",
   "private": false,
   "type": "module",
   "scripts": {

@@ -17,8 +17,9 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
-## 当前实现（0.10.9）
+## 当前实现（0.10.10）
 
+- 0.10.10 版本化 TTS/ASR 同意（MB-014 / E1）：同意从 `{tts, asr}` 布尔升级为 `dsh-famling/consent/v2` 的逐项 `{version, hash, acceptedAt, withdrawn}` 记录；TTS/ASR 声明的中文（权威）+ 英文 canonical bundle 由 `client.js` 冻结 SHA-256 与日期版本（`2026-11-20.1`），版本或哈希任一不符即 **fail-closed 重弹**，绝不复用旧同意。旧 `dsh-famling/consent/v1` 布尔在懒加载 `client.content.js` 首次加载时一次性迁移为 `withdrawn: true` 记录并删除旧键（旧值无版本/哈希，无法验证 → 必须重新确认）。设置「数据与边界」新增**「撤回语音同意」**（写 `withdrawn: true`、保留 acceptedAt/version/hash 证据、关闭语音并停止 TTS/录音；可随时重新同意），同意弹窗与设置显示声明版本 + SHA-256 前缀；「清除本机设置与同意」仍删除全部 `dsh-famling/*` 键（含 v1/v2）。约定：声明文本任一措辞变化必须同时 bump 版本与哈希（`test/parity-contract.test.js` 重算 canonical bundle 哈希并与入口/懒加载两处冻结锚点比对；`test/client-behavior.test.js` 覆盖接受/迁移/陈旧版本或哈希/撤回/清除，`test/client-static.test.js` 冻结接线）。插件声明版本是插件自有浏览器 TTS/ASR 文本版本（`2026-11-20.1`），与 famling 的 TTS/ASR terms 版本不同源；parity 测试只冻结 famling terms 版本与共享内容语义锚点，不把两套不同来源的声明混成同一版本号。
 - 0.10.9 v3 合规字段（MB-032/033 / E3）：content-extension **仍为 v3（不升 v4）**，以**追加可选字段**补齐 `license`（`spdx` / `attribution`，可选 `url` / `file`）、`aiProvenance`（`generated` / `disclosure`，可选 `tools`）与 pack 级 `compatibility`（`minPluginVersion` / 可选 `maxPluginVersion`）；`usageDeclaration` 可追加 canonical `statement` / `statementRef` / `statementSha256`（与 client `SHARED_CONTENT_SEMANTICS` 同源，声明值必须逐字一致）。pre-0.10.9 v3 pack 仍通过校验（缺字段只进 `warnings`，不改变 `ok`）；Host 可用 `validateContentPack(pack, { requireCompliance: true })` 对不受信 pack **fail-closed**，并用 `{ pluginVersion }` 校验兼容区间；hello/probe 的契约 revision 保持 3，老 Host 不受影响。「内容包」页展示内置包的许可 / AI 来源 / 兼容性；双端 parity 测试冻结锚点。版本真值同步至 0.10.9。
 - 0.10.7 Host 能力协商（MB-034 / E3-T2）：插件主机半不再把 `llm`/`schedule` 当必需注入（`inject = ['connection']`），最小 Host 上仍能激活；客户端挂载后向同源 bridge 发一次 **`hello`（wire 2）**，Host 返回插件版本、bridge wire 版本、**content-extension v3** 契约、宿主版本及来源、可选服务能力矩阵与逐项 `probes`。缺 `llm` 时聊天、缺 `schedule` 时提醒在 **UI 与发送路径双端降级**（本地明示、不调用模型、不伪造回复）；老 Host 不响应 hello 时回退「兼容模式」并保留旧行为；版本/契约不一致只提示、不崩溃。设置 →「高级 / 调试」显示握手状态、宿主版本、桥接/内容契约版本、能力矩阵与「重新检测 Host 能力」（`probe`）。`content-extension.mjs` 保持 **v3 单版本契约**（新增 `CONTENT_EXTENSION_VERSION` / `CONTENT_EXTENSION_COMPATIBILITY` / `isContentExtensionCompatible`，hello 的 `contract.contentExtension` 直接取该模块）。测试见 `test/host-bridge.test.js` 与 `test/client-behavior.test.js`。
 - 0.10.6 低打扰（E7 剩余 / P-04）：设置弹窗新增「**低打扰**」分组——**安静时段**（默认 22:00–08:00 开启，可改起止时间或整体关闭；时段内自动气泡与随机微动作 = 0，点击、菜单互动与聊天回复仍照常回应；`start === end` 视为关闭，避免手滑造成 24h 静默）、**动画偏好**（跟随系统 `prefers-reduced-motion` / 允许动画 / 减少动态；旧 `motion` 布尔值一次性迁移）、**暂时隐藏**（右键「更多」或设置内隐藏 1 小时 / 到明天；状态持久化到 `dsh-famling/hidden-until`，只留一个 ≥24px 的「显示」恢复控件，到点自动恢复）。自动微动作间隔由 11–20s 提高到 **≥60s**；静音只停语音（气泡字幕保留，正在朗读立即停止）。输入面板 / 同意弹窗 / 使用限制弹窗与新增低打扰 UI 均在懒加载 `client.content.js`，首屏预算保持 96 KiB 以内。测试见 `test/client-lowdisturb.test.js` 与 `test/client-behavior.test.js`。
@@ -31,11 +32,11 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - 输入面板：人物右侧展开文本框 + 语音输入按钮（浏览器 SpeechRecognition），预留 `window.__DSH_FAMLING_BRIDGE__` 给 DSH/Advisers Host。面板内常驻 AI 声明 + 发送去向 + 危机资源三行说明（0.10.2，见「聊天安全地板」）。
 - 聊天安全地板（0.10.2 / E3）：Host `op:"chat"` 在**任何模型调用之前**做本地危机关键词短路（自伤/自杀、伤害他人、家暴/性侵、急症）；命中返回固定资源文案（12356 心理援助 / 110 报警 / 120 急救 / 信任的人与专业机构），**不调用 `ctx.llm.stream`、不回显原文、不落盘**，固定文案明确「不是诊断」，误报可忽略。实现与可审计导出：`index.js` 的 `CRISIS_KEYWORDS` / `crisisKeyword`；响应 `meta.safety = "crisis-local-resource"`、`llmCalls: 0`。
 - 发送去向与首启告知（0.10.2 / MB-021）：输入面板 AI 声明与设置「数据与边界」明确「聊天为工作助手型 AI 回复，文本经 DSH Host 发给 DSH 中配置的模型供应商；勿发密码/隐私/客户资料」；首次安装显示**一次性、可关闭、非阻断**卡片（只写本地 `dsh-famling/first-run/v1`，不联网），卡片 UI 放在懒加载 `client.content.js`，不进首屏预算。
-- 清除与撤回（0.10.2 / MB-022）：设置 →「数据与边界」→「清除本机设置与同意」只删除本插件在浏览器 `localStorage` 的 `dsh-famling/*` 键（设置、形象、外观、同意记录；等同撤回 TTS/ASR 同意）；**不改** DSH 宿主数据、会话与供应商侧数据，同处展示与 DSH 的边界说明。
+- 清除与撤回（0.10.2 / MB-022；0.10.10 / MB-014 版本化）：设置 →「数据与边界」→「清除本机设置与同意」只删除本插件在浏览器 `localStorage` 的 `dsh-famling/*` 键（设置、形象、外观、首启确认、v1/v2 同意记录；等同全量撤回 TTS/ASR 同意）；同处另有独立的**「撤回语音同意」**——只把已存记录标记为 `withdrawn: true` 并关闭语音/停止 TTS/录音，保留设置与最小证据字段，可随时重新同意。两项操作都**不改** DSH 宿主数据、会话与供应商侧数据，同处展示与 DSH 的边界说明。
 - AI 聊天开关（0.10.2 / MB-024）：设置内可关闭聊天；关闭后输入面板不发送任何聊天文本（提醒创建仍可用），状态持久化在 `dsh-famling/settings.chat`（默认开启，开启即披露发送去向）。
 - 互动面板（0.8.3）：直接读嵌入的 `ANIMS[character].actions`（来自与独立 famling 共用的 `regions.json`），按形象渲染物种专属动作——汀岚：摸头 / 递纸 / 挥手 / 整理蝴蝶结 / 聊两句；塞尔凯克卷毛猫：摸头 / 伸懒腰 / 洗脸 / 追尾巴 / 跑一跑；金毛：摸头 / 丢球·捡球 / 捡球 / 追尾巴 / 跑一跑（丢球后 500ms 自动接追球）。猫和人没有球类/捡球动作，绝不会把 A 角色的动作放到 B 角色身上。
 - 内容中心（0.10.0）：**角色就是主题**。一级 tabs 只有 **角色 / 自定义 / 内容包 / 市场**；角色卡展示角色名、一句说明、声音 / 对话 / 外观摘要，点击「一键应用」同时设置 character、voice(TTS 策略)、dialogue mode、theme/background/font，并写入 `dsh-famling/role`；自定义页在选中角色基础上逐项覆盖并支持「恢复角色默认」；内容包页只展示内置内容、声明检查与预留导入接口；市场页只显示「远程市场接口已预留，服务器未配置」，不联网、不伪造商品。内容中心 UI 本身是懒加载的包内 chunk `client.content.js`（与统一设置弹窗共用，首次打开才下载，不预加载任何角色动画 chunk）。
-- 设置（0.10.1）：统一的**设置弹窗**集中所有可调项——语音朗读（仅汀岚；首次开启仍走独立同意弹窗）、**低打扰（安静时段 / 动画偏好 / 暂时隐藏，0.10.6）**、说话气泡、**显示菜单按钮**（默认关闭，开启后角色旁出现「⋯」触发器）、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口与「恢复角色默认」；底部「高级 / 调试」折叠分组显示版本、当前状态与本地存储键。菜单按钮偏好持久化到 `dsh-famling/menu`（只存开关；菜单展开与子页是临时状态，每次打开都从一级开始）。其余持久化沿用旧键：`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`，并新增 `dsh-famling/role` 记录当前角色主题；加载时用角色 bundle 回填缺失组件，显式组件键优先。
+- 设置（0.10.1）：统一的**设置弹窗**集中所有可调项——语音朗读（仅汀岚；首次开启仍走独立同意弹窗）、**低打扰（安静时段 / 动画偏好 / 暂时隐藏，0.10.6）**、说话气泡、**显示菜单按钮**（默认关闭，开启后角色旁出现「⋯」触发器）、Advisers 摘要、对话模式、气泡/面板主题、背景、字体/字号/行高、内容与角色入口与「恢复角色默认」；底部「高级 / 调试」折叠分组显示版本、当前状态与本地存储键。菜单按钮偏好持久化到 `dsh-famling/menu`（只存开关；菜单展开与子页是临时状态，每次打开都从一级开始）。其余持久化沿用旧键：`dsh-famling/character`、`dsh-famling/settings`（`voiceURI`）、`dsh-famling/dialogue`、`dsh-famling/theme`、`dsh-famling/background`、`dsh-famling/font`，并新增 `dsh-famling/role` 记录当前角色主题；TTS/ASR 同意记录（0.10.10）存 `dsh-famling/consent/v2`（逐项 `{version,hash,acceptedAt,withdrawn}`；旧 v1 在设置 chunk 首次加载时迁移后删除）；加载时用角色 bundle 回填缺失组件，显式组件键优先。
 - 气泡（0.8.3）：点击区域或动作时，从该区域/动作自己的 `says` 数组随机挑一句（同一位置连续点击不会重复同一句）；**汀岚**的台词是实心 speech 气泡，可配合浏览器 TTS（保留原有独立同意）；**塞尔凯克卷毛猫（卷毛灰白）/金毛**只用空心 thought 气泡，永不调用 `speechSynthesis`，内容中心的声音区对它们只显示「思考气泡，无语音」；切到猫/狗时若正在朗读会立即停止。气泡默认白底 `#ffffff`、深色 `#111111` 字、灰色实线/虚线边框（内容中心可切 paper / night 主题），不常驻、不遮挡人物。
 - 聊天人格随形象切换（0.8.1）：输入面板的聊天请求会带当前形象（`human`/`cat`/`dog`，缺省 `human`）；Host 按形象选择 system prompt，切猫/狗后回复语气随之变化。
 - 输入面板的 LLM/TTS/ASR/记忆需要 Host 桥接；未接入时如实提示，不伪造回复。
@@ -70,9 +71,9 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 | 暂时隐藏 | 关闭 | 「更多 → 暂时隐藏 1 小时 / 暂时隐藏到明天」或设置内同名按钮；隐藏后不渲染角色与气泡，只保留一个 ≥24×24px 的「显示」恢复控件；到截止时间自动恢复。 | `dsh-famling/hidden-until`（毫秒时间戳） |
 | 静音 | 关闭 | 只停浏览器 TTS：气泡字幕保留，正在朗读会立即 cancel；猫/狗仍只用空心 thought 气泡且永不 TTS。 | `dsh-famling/settings.sound` |
 
-- 清理入口「清除本机设置与同意」同时删除 `hidden-until`；设置「高级 / 调试」的存储键列表会列出它。
-- 全部文案与控件在懒加载 `client.content.js`（输入面板/同意弹窗/使用限制弹窗也自 0.10.6 起移入该 chunk），入口 `client.js` 保持 96 KiB 首屏预算内。
-- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 200 项全绿。
+- 清理入口「清除本机设置与同意」同时删除 `hidden-until` 与 v1/v2 同意记录；设置「高级 / 调试」的存储键列表会列出它们。
+- 全部文案与控件在懒加载 `client.content.js`（输入面板/同意弹窗/使用限制弹窗也自 0.10.6 起移入该 chunk；0.10.10 的旧同意迁移与「撤回语音同意」也在该 chunk），入口 `client.js` 保持 96 KiB 首屏预算内。
+- 测试：`test/client-lowdisturb.test.js`（纯模型：时间解析、22:00/08:00 边界、非法时段回退、start===end、auto/on/off 优先级、隐藏截止/过期/损坏存储、静态接线）与 `test/client-behavior.test.js`（fake clock：安静时段状态/持久化/非法时间保留；安静时段停微动作但点击仍回应；系统 reduce-motion 与显式覆盖；两种隐藏、提前恢复、到点自动恢复、重载保持；设置内隐藏）；`npm test` 合计 227 项全绿。
 
 ## Host 能力协商 hello/probe（0.10.7，MB-034 / E3-T2）
 
@@ -94,11 +95,11 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 ## 多角色动画数据（0.8.0）
 
-三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **95.2 KiB**（0.10.7 实测；gzip 27.2 KiB，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.0%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 156.9 KiB，全部角色加载后才约 342.5 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 0.10.9 合规元数据展示）只在首次安装或首次打开弹窗时下载（68.1 KiB，gzip 19.1 KiB，0.10.9 实测）：
+三套 96×96 像素动画包（各 12 clip；帧数按 manifest：dog 68 / cat 72 / human 68，共 208 帧）按角色拆成懒加载 chunk（0.8.6）：入口 `client.js` **95.2 KiB**（0.10.10 实测 97,508 B；gzip 27.1 KiB，< 96 KiB 首屏预算——0.10.1 为右键分级菜单由 72→78 KiB、0.10.4 为四层缩放模型由 78→96 KiB，仍比拆分前 314.8 KiB 基线小 69.0%），`client.anims.human.js`/`cat`/`dog` 在首次显示对应角色时才由 DSH `require.async` 拉取；首帧约 156.9 KiB，全部角色加载后才约 342.5 KiB。`client.content.js`（内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 0.10.9 合规元数据展示 + 0.10.10 版本化同意/撤回）只在首次安装或首次打开弹窗时下载（72.2 KiB，gzip 20.5 KiB，0.10.10 实测）：
 
 - 数据源：私有仓 `desktop-games/public/assets/pet/anim/{human,cat,dog}/`（`manifest.json` + 帧 PNG）。
 - 生成器：`scripts/embed-anims.mjs` —— 读取 manifest/PNG、校验三套 clip 契约、把 RGBA 帧**无损**重编码为最小位深索引 PNG（硬 alpha 保留，体积约减半），再按 marker 注入 `client.js`。**禁止手改生成块**，改数据重跑脚本即可。
-- 体积（0.10.9 实测）：源 351.6 KiB → 入口 `client.js` 95.2 KiB / 97,472 B（gzip 27.2 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 chunk 68.1 KiB（gzip 19.1 KiB）按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**（0.10.6/0.10.7 未再上调）；首启卡、设置内容、低打扰 UI 与输入/同意弹窗仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.97%**（< 31% 门禁），首帧 156.9 KiB = 基线的 **51.1%**（< 52% 门禁）。
+- 体积（0.10.10 实测）：源 351.6 KiB → 入口 `client.js` 95.2 KiB / 97,508 B（gzip 27.1 KiB）；3 个角色 chunk 合计约 247 KiB（human 61.7 / cat 108.0 / dog 77.6 KiB）；内容中心 + 设置 + 首启卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意 chunk 72.2 KiB（gzip 20.5 KiB）按需加载。首屏预算 0.10.1 由 72 KiB 上调到 **78 KiB**（右键分级菜单必须在首屏可用）、0.10.4 因四层缩放模型与面板贴合上调到 **96 KiB**（0.10.6/0.10.7 未再上调）；首启卡、设置内容、低打扰 UI 与输入/同意弹窗仍全部在懒加载 chunk，sprite payload 仍在角色 chunk：入口 = 拆分前审计基线的 **30.98%**（< 31% 门禁），首帧 156.9 KiB = 基线的 **51.1%**（< 52% 门禁）。
 - 重新生成：`npm run embed:anims`；只校验不写：`node scripts/embed-anims.mjs --check`；`npm run verify:anims`；量化：`npm run measure:bundle`。
 - 校验：`scripts/verify-anims.mjs` 校验角色/clip、按 manifest 的逐角色帧数、`holdMs`/`durationMs` 时长一致性、PNG 尺寸与可见像素、气泡/TTS 策略、动作映射与 i18n key，并检查 `client.content.js` 存在、四个一级 tabs、无 fetch/外部 URL，并在私有资产可用时逐字节比对嵌入块是否过期。
 - 静态 QA：`node scripts/embed-anims.mjs --qa` 生成 `scripts/qa/anim-data.js`，浏览器直接打开 `scripts/qa/index.html` 可切角色、播 12 个 clip、看实心/空心气泡并跑数据自检，不需要重启 DSH。
@@ -243,7 +244,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `op:"chat"` → Host `ctx.llm.stream`；provider/model 来自 DSH 默认模型选择或本插件 Config，**不写死**（Key 只在 Host）；system prompt 按请求的 `character` 选择人格（非法/缺失回退 `human`）
 - `op:"brief"` → 只读 `~/.advisers/pet-brief.json`，只投影计数/今天/承诺，不代传 Advisers TOS
 - `op:"task"` → `ctx.schedule.create` 一次性提醒（绝对时间；不自己实现定时器）
-- TTS/ASR 各自独立同意；默认关闭；浏览器语音会明确说明音频去向
+- TTS/ASR 各自独立同意；默认关闭；浏览器语音会明确说明音频去向；同意记录带声明版本 + SHA-256 + acceptedAt + withdrawn（0.10.10），可单独撤回
 - **LLM 聊天已接入 Host bridge**（`op:"chat"` 经 DSH `ctx.llm.stream`，内容会发送给所配置的模型服务商）；TTS/ASR 是浏览器本地能力、各自独立同意；**记忆写入仍未实现**。下一步见 `docs/DSH-FAMLING-BRIDGE-2026-11-17.md`。
 - 数据流披露：聊天文本经 DSH Host 发往 DSH 中配置的模型供应商；插件本身不接收、不存储 API Key、不保存聊天记录；`brief` 只读本机 `~/.advisers`，不上传。**危机关键词命中时文本不会离开本机**（本地短路，不调模型）；设置内「AI 聊天」开关关闭后不发送任何聊天文本；「清除本机设置与同意」只删本插件浏览器键，DSH 宿主/会话/供应商数据不受影响。
 
@@ -287,7 +288,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 3. 启用 `dsh-famling`，刷新 Web UI；
 4. 查看左侧栏底部账号区域下方是否出现 `汀岚`。
 
-## 发布与包卫生（0.10.9 工作树，MB-094 残余，2026-11-20）
+## 发布与包卫生（0.10.10 工作树，MB-094 残余，2026-11-20）
 
 本插件以 npm tarball 分发，所以 `package.json` 的元数据与 `files` 白名单就是发布面；这些规则由脚本门禁强制，不是约定：
 
@@ -303,13 +304,13 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）
 - `node --check content-extension.mjs`（内容扩展契约，纯数据/无副作用）
 - `node --check index.js`
-- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试 + 发布卫生（元数据 / files 白名单 / prepack 接线 / 打包清单）测试，**200 项**，不调用真实模型）
+- `npm test`（`node --test test/`：Host 桥接 fake-context 测试 + **Host 能力协商 hello/probe/降级（0.10.7）** + 客户端生成块/多角色行为测试 + 极简 UI/右键分级菜单/设置弹窗/键盘测试 + 内容中心四分类/角色 bundle/共享 rolePresets 对齐/内容扩展 v3 契约与 0.10.9 合规字段（license / aiProvenance / compatibility、向后兼容、严格模式）测试 + 插件安全地板（危机短路/发送去向/首启卡/清除撤回/聊天开关/版本真值）测试 + 版本化同意（0.10.10 / MB-014：接受/迁移/陈旧版本或哈希/撤回/清除、canonical 哈希与双端锚点冻结）测试 + 发布卫生（元数据 / files 白名单 / prepack 接线 / 打包清单）测试，**227 项**，不调用真实模型）
 - `npm run check:package`（静态发布卫生：repository/homepage/bugs 一致、files 无重复且存在、禁止项、exports 全覆盖）
 - `npm run verify:package`（静态 + `npm pack --dry-run --json`：实际 tarball 清单必须与白名单展开完全相等）
 - `npm run release:check`（发布前总门禁 = test + check + verify + verify:package）
 - `npm run check`（= `check:anims`：嵌入块与私有动画包一致）
 - `npm run verify`（= `verify:anims`：3 角色 × 12 clip、按 manifest 的帧数 68/72/68=208 与 holdMs 时长、点击区域契约、气泡/TTS 策略、动作映射、内容中心四 tabs / 声明检查 / 无 fetch 门禁、首屏 96 KiB 预算）
-- `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示 chunk 68.1 KiB 等实测）
+- `npm run measure:bundle`（入口 95.2 KiB / 内容+设置+首启卡+输入/同意弹窗+Host 能力面板+合规元数据展示+版本化同意 chunk 72.2 KiB 等实测）
 - 版本真值：`package.json` 是唯一来源；`node test/version-truth.test.js --write` 从 package.json 重新生成 `client.js`/`client.content.js` 的 `PLUGIN_VERSION` 常量（zh/en 标签由它派生）、README「当前实现」、LEGAL-NOTICE「适用插件版本」与 `locale/*.json` 的 `meta.version`，`npm test` 会校验它们全部一致（含安全地板文档真值）。
 - `npm run qa:anims` 后浏览器打开 `scripts/qa/index.html`（静态 QA，不重启 DSH）
 - 插件详情/图标：`locale/zh.json`、`locale/en.json`、`icon.png`

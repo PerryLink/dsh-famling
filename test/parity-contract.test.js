@@ -142,7 +142,7 @@ const FROZEN_REGION_EVENTS = {
 }
 const FROZEN_STORAGE_KEYS = [
   'dsh-famling/character', 'dsh-famling/settings', 'dsh-famling/first-run/v1',
-  'dsh-famling/consent/v1', 'dsh-famling/dialogue', 'dsh-famling/role',
+  'dsh-famling/consent/v2', 'dsh-famling/dialogue', 'dsh-famling/role',
   'dsh-famling/theme', 'dsh-famling/background', 'dsh-famling/font',
   'dsh-famling/menu', 'dsh-famling/hidden-until', 'dsh-famling/scale', 'dsh-famling/text-scale',
   'dsh-famling/market/catalog', 'dsh-famling.market',
@@ -312,6 +312,35 @@ test('sprite chunks, item counts and event->clip table are frozen', () => {
   for (const clip of Object.values(FROZEN_EVENT_CLIPS)) {
     if (clip !== null) assert.ok(FROZEN_CLIP_IDS.includes(clip), 'event target is a known clip: ' + clip)
   }
+})
+
+/* MB-014: entry and lazy chunk must pin the same versioned consent declaration. */
+function evalObjectLiteral(source, declaration) {
+  const start = source.indexOf(declaration)
+  assert.ok(start >= 0, 'object literal exists: ' + declaration)
+  const from = source.indexOf('{', start)
+  const to = source.indexOf('\n    }', from)
+  assert.ok(from > start && to > from, 'object literal is closed: ' + declaration)
+  return new Function('return (' + source.slice(from, to + '\n    }'.length) + ')')()
+}
+
+test('versioned consent anchors match the canonical declaration texts (MB-014)', () => {
+  const entryAnchor = /const CONSENT_DECLARATION = \{ version: '([^']+)', hash: '([0-9a-f]{64})' \}/.exec(clientSource)
+  assert.ok(entryAnchor, 'client.js pins the consent declaration')
+  const chunkAnchor = /const CONSENT_DECLARATION = \{ version: '([^']+)', hash: '([0-9a-f]{64})' \}/.exec(contentChunkSource)
+  assert.ok(chunkAnchor, 'client.content.js pins the same consent declaration')
+  assert.deepEqual([...chunkAnchor].slice(1), [...entryAnchor].slice(1), 'entry and lazy chunk anchors agree')
+  assert.match(entryAnchor[1], /^\d{4}-\d{2}-\d{2}\.\d+$/, 'the declaration version is date-versioned')
+  const texts = evalObjectLiteral(contentChunkSource, 'const CONSENT_TEXTS = ')
+  assert.deepEqual(Object.keys(texts), ['tts', 'ttsEn', 'asr', 'asrEn'], 'canonical zh+en declarations are frozen')
+  const canonical = [texts.tts, texts.ttsEn, texts.asr, texts.asrEn].join('\n')
+  const sha = createHash('sha256').update(canonical, 'utf8').digest('hex')
+  assert.equal(sha, entryAnchor[2], 'the pinned hash covers the canonical declaration text bundle')
+  for (const [kind, field] of [['tts', 'consentTts'], ['asr', 'consentAsr']]) {
+    assert.ok(contentChunkSource.includes(field + ': CONSENT_TEXTS.' + kind + ','), field + ' uses the canonical zh text')
+  }
+  assert.ok(contentChunkSource.includes('consentTts: CONSENT_TEXTS.ttsEn'), 'en TTS copy uses the canonical translation')
+  assert.ok(contentChunkSource.includes('consentAsr: CONSENT_TEXTS.asrEn'), 'en ASR copy uses the canonical translation')
 })
 
 test('storage keys stay in the plugin namespace with the frozen list', () => {

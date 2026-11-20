@@ -12,6 +12,12 @@ const clientSource = readFileSync(CLIENT_PATH, 'utf8')
 const embedded = loadClientData(clientSource)
 // The shown version must follow package.json (the single version truth).
 const PLUGIN_VERSION = JSON.parse(readFileSync(join(dirname(CLIENT_PATH), 'package.json'), 'utf8')).version
+// MB-014: the entry pins the versioned consent declaration; seed records from it.
+const CONSENT_ANCHOR = /const CONSENT_DECLARATION = \{ version: '([^']+)', hash: '([0-9a-f]{64})' \}/.exec(clientSource)
+assert.ok(CONSENT_ANCHOR, 'client.js pins the versioned consent declaration')
+const CONSENT_VERSION = CONSENT_ANCHOR[1]
+const CONSENT_HASH = CONSENT_ANCHOR[2]
+function consentRecord() { return { version: CONSENT_VERSION, hash: CONSENT_HASH, acceptedAt: '2026-05-01T04:00:00.000Z', withdrawn: false } }
 
 function flattenChildren(values, target) {
   for (const value of values) {
@@ -172,7 +178,17 @@ function createUi(Component, ReactRuntime) {
 function createHarness(options = {}) {
   const storage = new Map()
   storage.set('dsh-famling/settings', JSON.stringify({ sound: true, motion: false, bubble: true, ...(options.settings || {}) }))
-  storage.set('dsh-famling/consent/v1', JSON.stringify({ tts: true, asr: false, ...(options.consent || {}) }))
+  const consent = { tts: true, asr: false, ...(options.consent || {}) }
+  if (options.legacyConsent !== undefined) {
+    storage.set('dsh-famling/consent/v1', JSON.stringify(options.legacyConsent))
+  } else if (options.consentRecords !== undefined) {
+    storage.set('dsh-famling/consent/v2', JSON.stringify(options.consentRecords))
+  } else {
+    const records = { schema: 2 }
+    if (consent.tts) records.tts = consentRecord()
+    if (consent.asr) records.asr = consentRecord()
+    storage.set('dsh-famling/consent/v2', JSON.stringify(records))
+  }
   if (options.character) storage.set('dsh-famling/character', options.character)
   if (options.role) storage.set('dsh-famling/role', options.role)
   if (options.dialogue) storage.set('dsh-famling/dialogue', options.dialogue)
@@ -448,6 +464,7 @@ function openContent(ui, tab) {
 function openSettings(ui) { openMenuAt(ui); clickMenu(ui, '设置') }
 function contentDialog(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '内容中心')[0] }
 function settingsDialog(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === '设置')[0] }
+function consentDialog(ui) { return ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-modal'] === true)[0] }
 function closeActiveDialog(ui) { ui.click(ui.findButtonByAria('关闭')); ui.render() }
 function checkboxByLabel(ui, label) {
   const wrap = ui.findAll((node) => node.type === 'label' && ui.text(node).includes(label))[0]
@@ -1667,7 +1684,7 @@ test('settings can re-probe the Host with op:probe', async () => {
 
 test('clearing local settings and consent empties only dsh-famling/* keys and withdraws consent', () => {
   const { ui, storage } = createHarness()
-  assert.ok(storage.get('dsh-famling/consent/v1'), 'consent exists before the clear')
+  assert.ok(storage.get('dsh-famling/consent/v2'), 'versioned consent exists before the clear')
   openSettings(ui)
   ui.clickText('清除本机设置与同意')
   ui.render()
@@ -1675,6 +1692,90 @@ test('clearing local settings and consent empties only dsh-famling/* keys and wi
   assert.deepEqual(remaining, [], 'every dsh-famling/* key is gone (settings + consent withdrawn)')
   assert.ok(ui.text(settingsDialog(ui)).includes('已清除'), 'the settings panel reports the clear')
   assert.ok(ui.text(settingsDialog(ui)).includes('DSH'), 'the DSH boundary note stays visible')
+})
+
+/* ==================== MB-014: versioned TTS/ASR consent ==================== */
+test('accepting TTS consent stores a versioned, hashed and timestamped record', () => {
+  const { ui, storage } = createHarness({ consent: { tts: false }, settings: { sound: false } })
+  openSettings(ui)
+  ui.change(checkboxByLabel(ui, '声音'), true)
+  ui.render()
+  const dialog = consentDialog(ui)
+  assert.ok(dialog, 'TTS consent dialog is mounted')
+  assert.ok(ui.text(dialog).includes(CONSENT_VERSION), 'dialog shows the declaration version')
+  assert.ok(ui.text(dialog).includes(CONSENT_HASH.slice(0, 16)), 'dialog shows the declaration SHA-256 prefix')
+  ui.click(ui.findButtonExact('同意并开启'))
+  ui.render()
+  const stored = JSON.parse(storage.get('dsh-famling/consent/v2'))
+  assert.equal(stored.schema, 2)
+  assert.deepEqual(Object.keys(stored.tts).sort(), ['acceptedAt', 'hash', 'version', 'withdrawn'])
+  assert.equal(stored.tts.version, CONSENT_VERSION)
+  assert.equal(stored.tts.hash, CONSENT_HASH)
+  assert.match(stored.tts.acceptedAt, /^\d{4}-\d{2}-\d{2}T/)
+  assert.equal(stored.tts.withdrawn, false)
+  assert.equal(storage.has('dsh-famling/consent/v1'), false, 'the legacy boolean key is not written')
+})
+
+test('legacy boolean consent is migrated to withdrawn records and re-prompts', () => {
+  const { ui, storage, speech } = createHarness({ legacyConsent: { tts: true, asr: true }, settings: { sound: false } })
+  openSettings(ui)
+  assert.equal(storage.has('dsh-famling/consent/v1'), false, 'legacy v1 is removed after migration')
+  const migrated = JSON.parse(storage.get('dsh-famling/consent/v2'))
+  for (const kind of ['tts', 'asr']) {
+    assert.equal(migrated[kind].version, 'legacy-v1')
+    assert.equal(migrated[kind].withdrawn, true, kind + ': unverifiable consent is withdrawn (fail-closed)')
+    assert.equal(migrated[kind].acceptedAt, null)
+  }
+  assert.ok(ui.text(settingsDialog(ui)).includes('独立确认'), 'settings asks for independent confirmation again')
+  ui.change(checkboxByLabel(ui, '声音'), true)
+  ui.render()
+  assert.ok(consentDialog(ui), 'enabling voice re-prompts after the migration')
+  assert.equal(speech.speak.length, 0, 'nothing is spoken from an unverified legacy consent')
+})
+
+test('a stale version or hash invalidates stored consent instead of granting it', () => {
+  for (const broken of [{ version: 'stale-version' }, { hash: 'f'.repeat(64) }]) {
+    const { ui, speech } = createHarness({ consentRecords: { schema: 2, tts: { ...consentRecord(), ...broken } }, settings: { sound: false } })
+    openSettings(ui)
+    ui.change(checkboxByLabel(ui, '声音'), true)
+    ui.render()
+    assert.ok(consentDialog(ui), 'a stale record re-prompts: ' + Object.keys(broken)[0])
+    assert.equal(speech.speak.length, 0)
+  }
+})
+
+test('ASR consent is recorded independently with the same versioned shape', () => {
+  const { ui, storage } = createHarness()
+  openInputPanel(ui)
+  ui.click(ui.findButtonByAria('语音输入'))
+  ui.render()
+  assert.ok(consentDialog(ui), 'ASR consent dialog is mounted')
+  ui.click(ui.findButtonExact('同意并开启'))
+  ui.render()
+  const stored = JSON.parse(storage.get('dsh-famling/consent/v2'))
+  assert.equal(stored.asr.withdrawn, false, 'ASR gets its own non-withdrawn record')
+  assert.equal(stored.asr.hash, CONSENT_HASH)
+  assert.equal(stored.tts.version, CONSENT_VERSION, 'the existing TTS consent record is preserved')
+})
+
+test('withdrawing voice consent keeps a withdrawn record, switches voice off and stops TTS', () => {
+  const { ui, storage, speech } = createHarness({ consent: { asr: true }, settings: { sound: true } })
+  openSettings(ui)
+  ui.clickText('撤回语音同意')
+  ui.render()
+  const stored = JSON.parse(storage.get('dsh-famling/consent/v2'))
+  assert.equal(stored.tts.withdrawn, true, 'the TTS record is marked withdrawn')
+  assert.equal(stored.asr.withdrawn, true, 'the ASR record is withdrawn too')
+  assert.equal(stored.tts.version, CONSENT_VERSION, 'withdrawal keeps the evidence fields')
+  assert.equal(stored.tts.acceptedAt, consentRecord().acceptedAt, 'acceptedAt is preserved')
+  assert.equal(JSON.parse(storage.get('dsh-famling/settings')).sound, false, 'voice is switched off')
+  assert.ok(speech.cancel >= 1, 'a running utterance is cancelled')
+  closeActiveDialog(ui)
+  const spoken = speech.speak.length
+  ui.clickPetAt(50, 35)
+  ui.render()
+  assert.ok(ui.findBubble(), 'the caption bubble still works')
+  assert.equal(speech.speak.length, spoken, 'withdrawn TTS is never called again')
 })
 
 test('stored background and font choices are restored on the next render', () => {

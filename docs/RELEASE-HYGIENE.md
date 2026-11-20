@@ -1,6 +1,6 @@
 # 发布与包卫生（MB-094 残余，2026-11-20）
 
-> **状态：已在 0.10.9 工作树落地，不改客户端行为、不改版本号、未发布。**
+> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 仅追加版本化同意（MB-014）与版本真值同步，未真实发布。**
 > 本文与 `scripts/check-package.mjs`、`test/package-hygiene.test.js`、`package.json` 的
 > `repository` / `homepage` / `bugs` / `prepack` 合成一组可复核的发布卫生证据；
 > 外部链路（npm publish / provenance / 真实 CI / 公网可达性）**未在本轮执行**，见 §5。
@@ -102,7 +102,7 @@ package.json
 
 | 项 | 状态 | 原因 / 后续 |
 | --- | --- | --- |
-| `npm publish`（真实版本 ≥0.10.9） | **未做** | 需要 npm 账号/2FA 与发布授权；本轮只做发布卫生与本地门禁 |
+| `npm publish`（真实版本 ≥0.10.10） | **未做** | 需要 npm 账号/2FA 与发布授权；本轮只做发布卫生与本地门禁 |
 | npm provenance / trusted publishing | **未做** | 需要 GitHub Actions + OIDC + 公开仓；插件目录无 `.git`/CI |
 | `npm deprecate dsh-famling@0.0.1` 等占位版本 | **未做** | 需要 npm 发布权限；占位包不阻塞本地门禁 |
 | 插件 CI workflow（`.github/workflows`） | **未做** | 本任务的授权写范围不含 `.github`；门槛命令已封装成 `release:check`，接 CI 时直接调用 |

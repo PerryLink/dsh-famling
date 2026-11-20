@@ -8,6 +8,9 @@ import { CLIENT_PATH } from '../scripts/embed-anims.mjs'
 
 const clientSource = readFileSync(CLIENT_PATH, 'utf8')
 const contentSource = readFileSync(join(dirname(CLIENT_PATH), 'client.content.js'), 'utf8')
+// MB-014: seed a valid versioned consent record from the entry anchor.
+const CONSENT_ANCHOR = /const CONSENT_DECLARATION = \{ version: '([^']+)', hash: '([0-9a-f]{64})' \}/.exec(clientSource)
+assert.ok(CONSENT_ANCHOR, 'client.js pins the versioned consent declaration')
 
 /* ==================== pure four-level scale model ==================== */
 
@@ -357,7 +360,11 @@ function createUi(Component, ReactRuntime) {
 function createHarness(options = {}) {
   const storage = new Map()
   storage.set('dsh-famling/settings', JSON.stringify({ sound: true, motion: false, bubble: true, ...(options.settings || {}) }))
-  storage.set('dsh-famling/consent/v1', JSON.stringify({ tts: true, asr: false, ...(options.consent || {}) }))
+  const consent = { tts: true, asr: false, ...(options.consent || {}) }
+  const consentRecords = { schema: 2 }
+  if (consent.tts) consentRecords.tts = { version: CONSENT_ANCHOR[1], hash: CONSENT_ANCHOR[2], acceptedAt: '2026-05-01T04:00:00.000Z', withdrawn: false }
+  if (consent.asr) consentRecords.asr = { version: CONSENT_ANCHOR[1], hash: CONSENT_ANCHOR[2], acceptedAt: '2026-05-01T04:00:00.000Z', withdrawn: false }
+  storage.set('dsh-famling/consent/v2', JSON.stringify(consentRecords))
   if (options.character) storage.set('dsh-famling/character', options.character)
   if (options.menu) storage.set('dsh-famling/menu', JSON.stringify(options.menu))
   if (!options.firstRun) storage.set('dsh-famling/first-run/v1', '1')

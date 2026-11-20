@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
     const CHARACTER_POLICY = {"human":{"canTts":true,"bubble":"speech"},"cat":{"canTts":false,"bubble":"thought"},"dog":{"canTts":false,"bubble":"thought"}}
     const CHARACTER_CHUNKS = {"human":"./client.anims.human.js","cat":"./client.anims.cat.js","dog":"./client.anims.dog.js"}
     // <dsh-famling:anims:end>
-    const PLUGIN_VERSION = '0.10.9'
+    const PLUGIN_VERSION = '0.10.10'
     const BRIDGE_WIRE_VERSION = 2
     const SIZE = 72
     const CHARACTER_KEY = 'dsh-famling/character'
@@ -562,9 +562,14 @@ window.__ModuleLoader__.load({
     }
     // MB-021: one-time local first-run flag; only "1" counts, no network.
     const FIRST_RUN_KEY = 'dsh-famling/first-run/v1'
-    const CONSENT_KEY = 'dsh-famling/consent/v1'
+    // MB-014: versioned {version,hash,acceptedAt,withdrawn} consent; legacy 'dsh-famling/consent/v1' is migrated by the settings chunk.
+    const CONSENT_KEY = 'dsh-famling/consent/v2'
+    const CONSENT_DECLARATION = { version: '2026-11-20.1', hash: '63c90be7a04e5e229c0a64d3996d743fd4f52a139f7e8401ba1a5a989f338e70' }
     function loadConsent() {
-      try { return { tts: false, asr: false, ...JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') } } catch { return { tts: false, asr: false } }
+      let stored = {}
+      try { stored = JSON.parse(localStorage.getItem(CONSENT_KEY) || '{}') || {} } catch {}
+      const valid = (record) => !!record && !record.withdrawn && record.version === CONSENT_DECLARATION.version && record.hash === CONSENT_DECLARATION.hash && typeof record.acceptedAt === 'string'
+      return { tts: valid(stored.tts), asr: valid(stored.asr) }
     }
     // Sidebar menu: right click / Shift+F10 / ContextMenu opens it at level one
     // every time; only the opt-in trigger preference persists (dsh-famling/menu).
@@ -1240,11 +1245,7 @@ window.__ModuleLoader__.load({
       function acceptConsent() {
         const kind = consentKind
         if (!kind) return
-        try {
-          const next = loadConsent()
-          next[kind] = true
-          localStorage.setItem(CONSENT_KEY, JSON.stringify(next))
-        } catch {}
+        panelChunk?.saveConsent?.(kind)
         if (kind === 'tts') { setTtsConsent(true); setSettings((value) => ({ ...value, sound: true })) }
         if (kind === 'asr') { setAsrConsent(true); const action = pendingConsent.current; pendingConsent.current = null; setConsentKind(null); action?.(); return }
         pendingConsent.current = null
@@ -1254,11 +1255,12 @@ window.__ModuleLoader__.load({
         pendingConsent.current = null
         setConsentKind(null)
       }
-      /** MB-022: keys were wiped by the settings chunk; withdraw in-memory consent. */
-      function clearLocalState() {
+      /** MB-022: keys were wiped (or MB-014 consent withdrawn) by the settings chunk. */
+      function clearLocalState(withdraw) {
         setTtsConsent(false)
         setAsrConsent(false)
-        setLocalDataCleared(true)
+        recognitionRef.current?.abort?.()
+        if (withdraw) { if (settings.sound) updateSetting('sound') } else setLocalDataCleared(true)
       }
       /** Manual capability re-probe from settings (Host services can hot-load). */
       function probeHost() {
@@ -1476,7 +1478,7 @@ window.__ModuleLoader__.load({
           ? panelChunk.createSettingsPanel({
               lang: L.lang, aiNotice: L.aiNotice,
               localDataCleared, onToggleChat: () => updateSetting('chat'), onClearLocalData: clearLocalState,
-              character, roleId, canTts, ttsConsent, voices, settings, setSettings,
+              character, roleId, canTts, ttsConsent, asrConsent, voices, settings, setSettings,
               menuButton, dialogueMode, themeId, backgroundId, fontChoice, brief, briefError, host, onProbeHost: probeHost,
               advancedOpen: settingsAdvanced, onToggleAdvanced: () => setSettingsAdvanced((value) => !value),
               updateSetting, setDialogueMode, setThemeId, setBackgroundId, setFontChoice,

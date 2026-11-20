@@ -207,6 +207,19 @@ test('client code enforces the TTS policy guard, persists the character and keep
   assert.ok(clientSource.includes('var(--dsh-famling-bubble-thought-border, #8f8f8f)') && clientSource.includes('var(--dsh-famling-bubble-border, #9a9a9a)'), 'bubble keeps the grey dashed/solid theme borders')
 })
 
+test('TTS/ASR consent is versioned, hashed and withdrawable (MB-014)', () => {
+  assert.ok(clientSource.includes("const CONSENT_KEY = 'dsh-famling/consent/v2'"), 'the entry reads the v2 consent key')
+  assert.ok(clientSource.includes('record.withdrawn'), 'withdrawn records never grant consent')
+  assert.ok(clientSource.includes('record.acceptedAt'), 'acceptedAt is part of the validity check')
+  assert.ok(clientSource.includes('record.version === CONSENT_DECLARATION.version') && clientSource.includes('record.hash === CONSENT_DECLARATION.hash'), 'version and hash must match the frozen declaration')
+  assert.ok(contentSource.includes("const LEGACY_CONSENT_KEY = 'dsh-famling/consent/v1'"), 'the chunk migrates the legacy v1 key')
+  assert.ok(contentSource.includes("version: 'legacy-v1'") && contentSource.includes('withdrawn: true'), 'legacy booleans become withdrawn records')
+  assert.ok(contentSource.includes('withdrawn: false'), 'accept creates a non-withdrawn record')
+  assert.ok(contentSource.includes("saveConsent('withdraw')"), 'the settings UI can withdraw consent')
+  assert.ok(contentSource.includes('撤回语音同意'), 'withdrawal has its own control')
+  assert.ok(contentSource.includes('SHA-256'), 'the dialog/settings disclose the declaration hash')
+})
+
 test('chat payload carries the active character with a human fallback', () => {
   assert.ok(clientSource.includes('function chatCharacter(value)'), 'character normalization helper exists')
   assert.ok(clientSource.includes("return CHARACTER_IDS.includes(value) ? value : 'human'"), 'unknown/missing character falls back to human')
