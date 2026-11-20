@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
       },
       compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
     }
-    const PLUGIN_VERSION = '0.10.10'
+    const PLUGIN_VERSION = '0.10.11'
     // MB-014 (0.10.10): versioned TTS/ASR consent. This bundle is the canonical
     // declaration text shown in the consent dialog (zh authoritative + en); the
     // entry chunk pins its SHA-256 plus a version. Any wording change MUST bump
@@ -137,13 +137,13 @@ window.__ModuleLoader__.load({
         voice: '声音', dialogue: '对话', look: '外观',
         voiceSpeech: '浏览器 TTS', voiceSilent: '无声思考气泡',
         roleReserved: 'Origami 角色包为预留项：素材尚未安装，暂不提供一键应用。',
-        characters: { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛', origami: '折纸' },
-        characterDescriptions: { human: '安静简洁的工作搭子', cat: '懒散高冷的卷毛灰白猫', dog: '友善热情的金毛寻回犬', origami: '预留的折纸角色' },
+        characters: { human: '汀岚', cat: '布偶猫', dog: '金毛', origami: '折纸' },
+        characterDescriptions: { human: '安静简洁的工作搭子', cat: '懒散高冷的蓝重点长毛猫', dog: '友善热情的金毛寻回犬', origami: '预留的折纸角色' },
         customHint: '仅修改当前角色的搭配，不改变角色预设；切换角色会应用新角色的一整套声音 / 对话 / 外观。',
         preset: '角色预设', overridden: '已自定义（覆盖角色预设）', restoreRole: '恢复角色默认',
         voiceGroup: '声音（TTS 策略）', dialogueGroup: '对话模式', themeGroup: '气泡 / 面板主题', backgroundGroup: '背景', fontGroup: '字体',
         voiceList: '声音（系统）', voiceSystem: '系统默认声音', voiceEmpty: '浏览器暂未提供声音列表。',
-        voiceSilent: '塞尔凯克卷毛猫 / 金毛只用「心里话」思考气泡，没有语音（不会调用浏览器 TTS）。',
+        voiceSilent: '布偶猫 / 金毛只用「心里话」思考气泡，没有语音（不会调用浏览器 TTS）。',
         consentTts: CONSENT_TEXTS.tts,
         dialogueModes: { standard: { name: '标准', desc: '完整回话与气泡' }, brief: { name: '简短', desc: '过滤过长回话' }, quiet: { name: '安静', desc: '降低气泡出现频率' } },
         themes: { default: { name: '默认', desc: '白底深色字' }, paper: { name: '纸张', desc: '暖米色纸感气泡' }, night: { name: '夜间', desc: '深色气泡与面板' } },
@@ -226,13 +226,13 @@ window.__ModuleLoader__.load({
         voice: 'Voice', dialogue: 'Dialogue', look: 'Look',
         voiceSpeech: 'browser TTS', voiceSilent: 'silent thought bubbles',
         roleReserved: 'Origami is a reserved role pack: its art is not installed, so one-click apply is disabled.',
-        characters: { human: 'Tinglan', cat: 'Selkirk Rex', dog: 'Golden Retriever', origami: 'Origami' },
-        characterDescriptions: { human: 'Quiet, concise work companion', cat: 'Laid-back, aloof curly grey-white cat', dog: 'Friendly, enthusiastic Golden Retriever', origami: 'Reserved origami role' },
+        characters: { human: 'Tinglan', cat: 'Ragdoll', dog: 'Golden Retriever', origami: 'Origami' },
+        characterDescriptions: { human: 'Quiet, concise work companion', cat: 'Laid-back, aloof blue-point long-haired cat', dog: 'Friendly, enthusiastic Golden Retriever', origami: 'Reserved origami role' },
         customHint: 'Only changes the current role combination; the role preset stays unchanged. Switching roles applies the new role full voice/dialogue/look bundle.',
         preset: 'role preset', overridden: 'customized (overrides the role preset)', restoreRole: 'Restore role defaults',
         voiceGroup: 'Voice (TTS policy)', dialogueGroup: 'Dialogue mode', themeGroup: 'Bubble / panel theme', backgroundGroup: 'Background', fontGroup: 'Font',
         voiceList: 'Voice (system)', voiceSystem: 'System default voice', voiceEmpty: 'The browser exposes no voices yet.',
-        voiceSilent: 'The Selkirk Rex cat and Golden Retriever only use silent thought bubbles; browser TTS is never called for them.',
+        voiceSilent: 'The Ragdoll cat and Golden Retriever only use silent thought bubbles; browser TTS is never called for them.',
         consentTts: CONSENT_TEXTS.ttsEn,
         dialogueModes: { standard: { name: 'Standard', desc: 'Full replies and bubbles' }, brief: { name: 'Brief', desc: 'Filters over-long replies' }, quiet: { name: 'Quiet', desc: 'Fewer ambient bubbles' } },
         themes: { default: { name: 'Default', desc: 'White bubble with dark text' }, paper: { name: 'Paper', desc: 'Warm paper-toned bubbles' }, night: { name: 'Night', desc: 'Dark bubbles and panels' } },

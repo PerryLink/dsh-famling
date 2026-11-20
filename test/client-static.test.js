@@ -290,17 +290,19 @@ test('lazy character chunks register with the DSH module table and hold only the
   }
 })
 
-test('cat label is the Selkirk Rex (curly grey-white) instead of Ragdoll', () => {
-  assert.ok(clientSource.includes("cat: '塞尔凯克卷毛猫'"), 'zh client label')
-  assert.ok(clientSource.includes("cat: 'Selkirk Rex'"), 'en client label')
-  assert.equal(clientSource.includes('布偶猫'), false, 'client source has no stale Ragdoll label')
+test('cat label is the blue-bicolor Ragdoll (the shipped 2026-11-20 cross-repo art), not Selkirk', () => {
+  assert.ok(clientSource.includes("cat: '布偶猫'"), 'zh client label')
+  assert.ok(clientSource.includes("cat: 'Ragdoll'"), 'en client label')
+  assert.equal(clientSource.includes('塞尔凯克'), false, 'client source has no stale Selkirk label')
+  assert.equal(clientSource.includes('Selkirk Rex'), false, 'client source has no stale Selkirk Rex label')
   for (const file of ['README.md', 'docs/DETAIL.md', 'locale/zh.json', 'locale/en.json']) {
     const text = readFileSync(join(PLUGIN_ROOT, file), 'utf8')
-    assert.equal(text.includes('布偶猫'), false, file + ': no stale Ragdoll label')
-    assert.equal(text.includes('Ragdoll'), false, file + ': no stale Ragdoll label')
+    assert.equal(text.includes('塞尔凯克'), false, file + ': no stale Selkirk label')
+    assert.equal(text.includes('Selkirk Rex'), false, file + ': no stale Selkirk Rex label')
+    assert.equal(text.includes('卷毛'), false, file + ': no stale curly-coat copy')
   }
   const zh = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'locale/zh.json'), 'utf8'))
-  assert.match(zh.meta.title, /塞尔凯克卷毛猫/)
+  assert.match(zh.meta.title, /布偶猫/)
 })
 
 test('package version is ' + EXPECTED_VERSION + ', publishes the lazy chunks and the v3 content contract', async () => {

@@ -85,7 +85,7 @@ function crisisReply(text) {
 const SAFETY_BOUNDARY = '不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
 const PERSONAS = {
   human: '你是汀岚，一只安静、简洁的桌面小生灵，也是用户的工作搭子。用中文回答，1-3 句，先给结论；不知道就说不知道。' + SAFETY_BOUNDARY,
-  cat: '你是塞尔凯克卷毛猫（Selkirk Rex，卷毛灰白；AI 桌面伙伴，不是真的猫），一只懒散、高冷的桌面小猫。用中文回答，1-2 句短句；可以轻微傲娇，但不冒犯、不刻薄；不知道就说不知道。' + SAFETY_BOUNDARY,
+  cat: '你是布偶猫（Ragdoll，蓝重点双色、白底长毛；AI 桌面伙伴，不是真的猫），一只懒散、高冷的桌面小猫。用中文回答，1-2 句短句；可以轻微傲娇，但不冒犯、不刻薄；不知道就说不知道。' + SAFETY_BOUNDARY,
   dog: '你是金毛（AI 桌面伙伴，不是真的狗），一只友善、热情的桌面小狗。用中文回答，1-3 句，简单直接；不知道就说不知道。' + SAFETY_BOUNDARY,
 }
 
@@ -289,59 +289,324 @@ function advisersHome() {
     || (process.env.USERPROFILE ? join(process.env.USERPROFILE, '.advisers') : join(process.env.HOME || '', '.advisers'))
 }
 
+/* ---------------------------------------------------------------------------
+ * Pet Brief contract v0.2 - strict, closed-schema validation (fail-closed)
+ * ---------------------------------------------------------------------------
+ * Advisers publishes a read-only projection (~/.advisers/pet-brief.json,
+ * contract v0.2: schemaVersion 2, legacy 1). The bridge only projects counts +
+ * up to three rows, but it still validates the WHOLE document before projecting:
+ * a malformed/tampered file is refused as a whole instead of being trusted
+ * field-by-field. Rules mirror the producer validator plus two consumer-side
+ * hardenings required by the 0.3.0 follow-up:
+ * - TTL upper bound: expiresAt - generatedAt must be > 0 and <= the contract
+ *   5 minutes; generatedAt may not be far in the future (clock-skew guard), so
+ *   a hand-edited file cannot buy an arbitrarily long lifetime;
+ * - counts must be integers 0..10 AND equal the corresponding array length.
+ * Closed schema: unknown root/item/count fields and privacy-forbidden fields
+ * (reasoning/CoT/prompts/keys/tokens/emotional state) are rejected, v0.2
+ * requires displayPolicy, ids are unique per section, strings/enums/confidences
+ * and 10-item/3-line/40-char caps are enforced.
+ *
+ * Fail-closed: any error yields a typed refusal (no partial projection); error
+ * messages carry stable codes only, never brief values or local paths.
+ */
+const PET_BRIEF_MAX_BYTES = 128 * 1024
+const PET_BRIEF_SCHEMA_VERSION = 2
+const PET_BRIEF_LEGACY_SCHEMA_VERSION = 1
+const PET_BRIEF_SOURCE = 'advisers'
+const PET_BRIEF_DISPLAY_POLICIES = ['public', 'private', 'none']
+const PET_BRIEF_DEFAULT_DISPLAY_POLICY = 'private'
+const PET_BRIEF_TTL_MS = 5 * 60_000
+const PET_BRIEF_MAX_CLOCK_SKEW_MS = 60_000
+const PET_BRIEF_MAX_ITEMS = 10
+const PET_BRIEF_MAX_SUGGESTED_LINES = 3
+const PET_BRIEF_MAX_LINE_LENGTH = 40
+const PET_BRIEF_MOODS = ['calm', 'focused', 'concerned', 'pleased']
+const PET_BRIEF_RISK_LEVELS = ['low', 'medium', 'high']
+const PET_BRIEF_TODAY_STATUS = ['open', 'doing', 'done']
+const PET_BRIEF_ROOT_KEYS = [
+  'schemaVersion', 'generatedAt', 'expiresAt', 'source', 'displayPolicy', 'counts',
+  'today', 'commitments', 'risks', 'facts', 'mood', 'suggestedLines', 'redactions',
+]
+const PET_BRIEF_REQUIRED_V02 = PET_BRIEF_ROOT_KEYS.slice()
+const PET_BRIEF_REQUIRED_V01 = PET_BRIEF_ROOT_KEYS.filter((key) => key !== 'displayPolicy')
+const PET_BRIEF_COUNT_KEYS = ['today', 'commitments', 'risks', 'facts']
+const PET_BRIEF_ITEM_KEYS = {
+  today: ['id', 'title', 'status'],
+  commitments: ['id', 'matter', 'who', 'what', 'due', 'risk', 'confidence'],
+  risks: ['id', 'level', 'summary', 'evidence', 'confidence'],
+  facts: ['id', 'subject', 'predicate', 'value', 'confidence'],
+}
+// Contract 2.2 (producer PET_BRIEF_FORBIDDEN_KEYS): matched case-insensitively
+// after removing _/-/spaces, including as a suffix.
+const PET_BRIEF_FORBIDDEN_KEYS = [
+  'reasoning', 'cot', 'chainofthought', 'rawprompt', 'systemprompt',
+  'clientsecret', 'apikey', 'token', 'password',
+  'affection', 'love', 'missedyou', 'streak', 'guilt',
+]
+const PET_BRIEF_ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/
+
+function petBriefIssue(code, path) {
+  return { code, path }
+}
+
+function petBriefIsPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function petBriefNormalizedKey(key) {
+  return String(key).toLowerCase().replace(/[_\-\s]/g, '')
+}
+
+function petBriefCheckForbiddenKeys(value, path, errors) {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => petBriefCheckForbiddenKeys(entry, path + '[' + index + ']', errors))
+    return
+  }
+  if (!petBriefIsPlainObject(value)) return
+  for (const [key, entry] of Object.entries(value)) {
+    const normalized = petBriefNormalizedKey(key)
+    if (PET_BRIEF_FORBIDDEN_KEYS.some((forbidden) => normalized === forbidden || normalized.endsWith(forbidden))) {
+      errors.push(petBriefIssue('E_FORBIDDEN_FIELD', path + '.' + key))
+    }
+    petBriefCheckForbiddenKeys(entry, path + '.' + key, errors)
+  }
+}
+
+function petBriefCheckUnknownKeys(value, allowed, path, errors) {
+  if (!petBriefIsPlainObject(value)) return
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) errors.push(petBriefIssue('E_UNKNOWN_FIELD', path + '.' + key))
+  }
+}
+
+function petBriefCodePointLength(value) {
+  return Array.from(value).length
+}
+
+function petBriefCheckString(value, path, errors, max) {
+  if (typeof value !== 'string') {
+    errors.push(petBriefIssue('E_TYPE', path))
+    return false
+  }
+  const length = petBriefCodePointLength(value)
+  if (length < 1 || length > max) {
+    errors.push(petBriefIssue('E_LENGTH', path))
+    return false
+  }
+  return true
+}
+
+function petBriefCheckConfidence(value, path, errors) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+    errors.push(petBriefIssue('E_CONFIDENCE', path))
+    return false
+  }
+  return true
+}
+
+function petBriefParseInstant(value, path, errors) {
+  if (typeof value !== 'string' || !PET_BRIEF_ISO_WITH_ZONE.test(value)) {
+    errors.push(petBriefIssue('E_TIME_FORMAT', path))
+    return null
+  }
+  const millis = Date.parse(value)
+  if (!Number.isFinite(millis)) {
+    errors.push(petBriefIssue('E_TIME_FORMAT', path))
+    return null
+  }
+  return millis
+}
+
+function petBriefValidateArraySection(brief, section, errors) {
+  const items = brief[section]
+  if (!Array.isArray(items)) {
+    errors.push(petBriefIssue('E_TYPE', '$.' + section))
+    return undefined
+  }
+  if (items.length > PET_BRIEF_MAX_ITEMS) errors.push(petBriefIssue('E_MAX_ITEMS', '$.' + section))
+  const seen = new Set()
+  items.forEach((item, index) => {
+    const path = '$.' + section + '[' + index + ']'
+    if (!petBriefIsPlainObject(item)) {
+      errors.push(petBriefIssue('E_TYPE', path))
+      return
+    }
+    petBriefCheckUnknownKeys(item, PET_BRIEF_ITEM_KEYS[section], path, errors)
+    if (typeof item.id !== 'string' || item.id.length < 1 || petBriefCodePointLength(item.id) > 64) {
+      errors.push(petBriefIssue('E_ID', path + '.id'))
+    } else if (seen.has(item.id)) {
+      errors.push(petBriefIssue('E_DUP_ID', path + '.id'))
+    } else {
+      seen.add(item.id)
+    }
+    if (section === 'today') {
+      petBriefCheckString(item.title, path + '.title', errors, 80)
+      if (!PET_BRIEF_TODAY_STATUS.includes(item.status)) errors.push(petBriefIssue('E_ENUM', path + '.status'))
+    } else if (section === 'commitments') {
+      petBriefCheckString(item.matter, path + '.matter', errors, 64)
+      petBriefCheckString(item.who, path + '.who', errors, 40)
+      petBriefCheckString(item.what, path + '.what', errors, 80)
+      petBriefCheckString(item.due, path + '.due', errors, 32)
+      if (!PET_BRIEF_RISK_LEVELS.includes(item.risk)) errors.push(petBriefIssue('E_ENUM', path + '.risk'))
+      petBriefCheckConfidence(item.confidence, path + '.confidence', errors)
+    } else if (section === 'risks') {
+      if (!PET_BRIEF_RISK_LEVELS.includes(item.level)) errors.push(petBriefIssue('E_ENUM', path + '.level'))
+      petBriefCheckString(item.summary, path + '.summary', errors, 80)
+      petBriefCheckString(item.evidence, path + '.evidence', errors, 64)
+      petBriefCheckConfidence(item.confidence, path + '.confidence', errors)
+    } else {
+      petBriefCheckString(item.subject, path + '.subject', errors, 40)
+      petBriefCheckString(item.predicate, path + '.predicate', errors, 40)
+      petBriefCheckString(item.value, path + '.value', errors, 80)
+      petBriefCheckConfidence(item.confidence, path + '.confidence', errors)
+    }
+  })
+  return items
+}
+
+function petBriefValidateCounts(brief, arrays, errors) {
+  const counts = brief.counts
+  if (!petBriefIsPlainObject(counts)) {
+    errors.push(petBriefIssue('E_TYPE', '$.counts'))
+    return
+  }
+  petBriefCheckUnknownKeys(counts, PET_BRIEF_COUNT_KEYS, '$.counts', errors)
+  for (const section of PET_BRIEF_COUNT_KEYS) {
+    const count = counts[section]
+    if (!Number.isInteger(count) || count < 0 || count > PET_BRIEF_MAX_ITEMS) {
+      errors.push(petBriefIssue('E_COUNTS', '$.counts.' + section))
+      continue
+    }
+    const items = arrays[section]
+    if (Array.isArray(items) && count !== items.length) {
+      errors.push(petBriefIssue('E_COUNTS_MISMATCH', '$.counts.' + section))
+    }
+  }
+}
+
+function petBriefValidateLines(brief, errors) {
+  if (!Array.isArray(brief.suggestedLines)) {
+    errors.push(petBriefIssue('E_TYPE', '$.suggestedLines'))
+  } else {
+    if (brief.suggestedLines.length > PET_BRIEF_MAX_SUGGESTED_LINES) {
+      errors.push(petBriefIssue('E_MAX_LINES', '$.suggestedLines'))
+    }
+    brief.suggestedLines.forEach((line, index) => {
+      petBriefCheckString(line, '$.suggestedLines[' + index + ']', errors, PET_BRIEF_MAX_LINE_LENGTH)
+    })
+  }
+}
+
+function petBriefValidateRedactions(brief, errors) {
+  if (!Array.isArray(brief.redactions)) {
+    errors.push(petBriefIssue('E_TYPE', '$.redactions'))
+  } else {
+    if (brief.redactions.length > PET_BRIEF_MAX_ITEMS) errors.push(petBriefIssue('E_MAX_ITEMS', '$.redactions'))
+    brief.redactions.forEach((note, index) => {
+      petBriefCheckString(note, '$.redactions[' + index + ']', errors, 80)
+    })
+  }
+}
+
+/**
+ * Validate one parsed Pet Brief against contract v0.2 (legacy v0.1 accepted
+ * without displayPolicy) using the strict closed-schema rules above.
+ * @param {unknown} value parsed JSON value.
+ * @param {number} [nowMs] injectable clock (tests); defaults to Date.now().
+ * @returns {{ok: boolean, errors: Array<{code: string, path: string}>, brief?: object}}
+ */
+function validatePetBriefStrict(value, nowMs = Date.now()) {
+  const errors = []
+  if (!petBriefIsPlainObject(value)) {
+    return { ok: false, errors: [petBriefIssue('E_TYPE', '$')], brief: undefined }
+  }
+  petBriefCheckForbiddenKeys(value, '$', errors)
+  const version = value.schemaVersion
+  if (version !== PET_BRIEF_LEGACY_SCHEMA_VERSION && version !== PET_BRIEF_SCHEMA_VERSION) {
+    // Unknown/absent version selects no field set: fail closed without guessing.
+    return { ok: false, errors: [petBriefIssue('E_SCHEMA_VERSION', '$.schemaVersion')], brief: undefined }
+  }
+  petBriefCheckUnknownKeys(value, PET_BRIEF_ROOT_KEYS, '$', errors)
+  const required = version === PET_BRIEF_LEGACY_SCHEMA_VERSION ? PET_BRIEF_REQUIRED_V01 : PET_BRIEF_REQUIRED_V02
+  for (const key of required) {
+    if (value[key] === undefined) errors.push(petBriefIssue('E_REQUIRED', '$.' + key))
+  }
+  if (value.displayPolicy !== undefined && !PET_BRIEF_DISPLAY_POLICIES.includes(value.displayPolicy)) {
+    errors.push(petBriefIssue('E_DISPLAY_POLICY', '$.displayPolicy'))
+  }
+  if (value.source !== PET_BRIEF_SOURCE) errors.push(petBriefIssue('E_SOURCE', '$.source'))
+
+  const generatedMs = petBriefParseInstant(value.generatedAt, '$.generatedAt', errors)
+  const expiresMs = petBriefParseInstant(value.expiresAt, '$.expiresAt', errors)
+  if (generatedMs !== null && expiresMs !== null) {
+    const ttl = expiresMs - generatedMs
+    if (ttl <= 0) {
+      errors.push(petBriefIssue('E_TIME_ORDER', '$.expiresAt'))
+    } else if (ttl > PET_BRIEF_TTL_MS) {
+      // Contract TTL is 5 minutes; a longer window is a tamper/contract signal.
+      errors.push(petBriefIssue('E_TTL', '$.expiresAt'))
+    }
+    if (nowMs >= expiresMs) errors.push(petBriefIssue('E_EXPIRED', '$.expiresAt'))
+    else if (generatedMs > nowMs + PET_BRIEF_MAX_CLOCK_SKEW_MS) {
+      errors.push(petBriefIssue('E_TIME_FUTURE', '$.generatedAt'))
+    }
+  }
+
+  const arrays = {}
+  for (const section of PET_BRIEF_COUNT_KEYS) {
+    arrays[section] = petBriefValidateArraySection(value, section, errors)
+  }
+  petBriefValidateCounts(value, arrays, errors)
+  if (!PET_BRIEF_MOODS.includes(value.mood)) errors.push(petBriefIssue('E_ENUM', '$.mood'))
+  petBriefValidateLines(value, errors)
+  petBriefValidateRedactions(value, errors)
+
+  if (errors.length > 0) return { ok: false, errors, brief: undefined }
+  const displayPolicy = value.displayPolicy === undefined ? PET_BRIEF_DEFAULT_DISPLAY_POLICY : value.displayPolicy
+  return { ok: true, errors, brief: { ...value, displayPolicy } }
+}
+
 async function readBriefProjection() {
   const file = join(advisersHome(), 'pet-brief.json')
   let raw
   try { raw = await readFile(file, 'utf8') } catch { return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is not available.' } }
-  if (Buffer.byteLength(raw, 'utf8') > 128 * 1024) return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is too large.' }
-  let brief
-  try { brief = JSON.parse(raw) } catch { return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is invalid.' } }
-  if (!brief || typeof brief !== 'object' || !Number.isInteger(brief.schemaVersion) || brief.schemaVersion < 1 || brief.schemaVersion > 2) {
-    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief schema is unsupported.' }
+  if (Buffer.byteLength(raw, 'utf8') > PET_BRIEF_MAX_BYTES) {
+    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is too large.' }
   }
-  const displayPolicy = brief.displayPolicy === 'public' || brief.displayPolicy === 'private' || brief.displayPolicy === 'none'
-    ? brief.displayPolicy
-    : 'private'
-  if (displayPolicy === 'none') return { ok: false, code: 'E_MEMORY', message: 'Advisers display policy is none.' }
-  // Pet Brief v0.2 carries a 5-minute TTL; never keep showing an expired
-  // projection (it may contain client/colleague names). Invalid/missing TTL is
-  // treated as unavailable rather than fail-open.
-  const expiresAt = typeof brief.expiresAt === 'string' ? Date.parse(brief.expiresAt) : Number.NaN
-  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is expired or has no valid expiresAt.' }
+  let parsed
+  try { parsed = JSON.parse(raw) } catch { return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is invalid (E_MALFORMED_JSON).' } }
+  const checked = validatePetBriefStrict(parsed)
+  if (!checked.ok) {
+    // Stable codes only: never echo field values, ids, names or local paths.
+    const codes = [...new Set(checked.errors.map((item) => item.code))].slice(0, 3).join(', ')
+    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief is invalid (' + (codes || 'E_SCHEMA') + ').' }
   }
-  if (!brief.counts || typeof brief.counts !== 'object' || Array.isArray(brief.counts)) {
-    return { ok: false, code: 'E_MEMORY', message: 'Advisers Pet Brief has invalid counts.' }
-  }
+  const brief = checked.brief
+  if (brief.displayPolicy === 'none') return { ok: false, code: 'E_MEMORY', message: 'Advisers display policy is none.' }
   const counts = brief.counts
-  for (const key of ['today', 'commitments', 'risks', 'facts']) {
-    const value = counts[key]
-    if (!Number.isInteger(value) || value < 0) {
-      return { ok: false, code: 'E_MEMORY', message: `Advisers Pet Brief counts.${key} is invalid.` }
-    }
-  }
   return {
     ok: true,
     projection: {
       schemaVersion: brief.schemaVersion,
-      displayPolicy,
+      displayPolicy: brief.displayPolicy,
       generatedAt: brief.generatedAt,
       expiresAt: brief.expiresAt,
       counts: {
-        today: Number(counts.today) || 0,
-        commitments: Number(counts.commitments) || 0,
-        risks: Number(counts.risks) || 0,
-        facts: Number(counts.facts) || 0,
+        today: counts.today,
+        commitments: counts.commitments,
+        risks: counts.risks,
+        facts: counts.facts,
       },
-      today: Array.isArray(brief.today) ? brief.today.slice(0, 3).map((item) => ({
-        title: String(item && typeof item.title === 'string' ? item.title : '').slice(0, 60),
-        status: String(item && typeof item.status === 'string' ? item.status : '').slice(0, 20),
-      })) : [],
-      commitments: Array.isArray(brief.commitments) ? brief.commitments.slice(0, 3).map((item) => ({
-        what: String(item && typeof item.what === 'string' ? item.what : '').slice(0, 60),
-        due: String(item && typeof item.due === 'string' ? item.due : '').slice(0, 40),
-        risk: String(item && typeof item.risk === 'string' ? item.risk : '').slice(0, 20),
-      })) : [],
+      today: brief.today.slice(0, 3).map((item) => ({
+        title: item.title.slice(0, 60),
+        status: item.status.slice(0, 20),
+      })),
+      commitments: brief.commitments.slice(0, 3).map((item) => ({
+        what: item.what.slice(0, 60),
+        due: item.due.slice(0, 40),
+        risk: item.risk.slice(0, 20),
+      })),
     },
   }
 }

@@ -15,7 +15,7 @@
 | `homepage` | `https://github.com/PerryLink/dsh-famling#readme` | `metadataProblems` |
 | `bugs` | `https://github.com/PerryLink/dsh-famling/issues` | `metadataProblems` |
 | License | PolyForm-Noncommercial-1.0.0 (`LICENSE`), art CC BY-NC-SA 4.0 (`LICENSE-ART`) | `metadataProblems` / docs |
-| npm package | `dsh-famling` @ `0.10.10`, `private: false`, real release metadata | `check-package` |
+| npm package | `dsh-famling` @ `0.10.11`, `private: false`, real release metadata | `check-package` |
 | Install LOCK | `package-lock.json` (lockfileVersion 3, zero dependencies) | `check-package` + clean checkout |
 | Art lock | `scripts/spec/anim-spec.json` (SHA-256 manifest, no art bytes) | `embed-anims --check` |
 

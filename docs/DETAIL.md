@@ -1,19 +1,19 @@
 # Famling · 汀岚
 
-在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；**0.10.7 起有 Host 能力协商**（bridge wire 2 的 hello/probe 握手、可选 llm/schedule 降级、content-extension v3 契约握手）；**0.10.9 起 content-extension v3 追加可选合规字段**（license / aiProvenance / pack 级 compatibility / canonical usage statement，向后兼容、严格模式可选）；**0.10.10 起 TTS/ASR 同意版本化**（`dsh-famling/consent/v2` 逐项 `{version,hash,acceptedAt,withdrawn}`，旧布尔 v1 一次性迁移为 withdrawn 记录并重弹，设置内可单独「撤回语音同意」）；版本/README/LEGAL/locale/package 真值由测试统一校验。
+在 DSH 左侧栏左下角、账号信息下方显示一个小型 famling 桌宠入口。**0.10.1 起是极简 UI**：默认只渲染角色，角色以外零常驻按钮；右键角色（或 Shift+F10 / ContextMenu）打开分级菜单。**角色就是主题**：内容中心一级分类固定为 角色 / 自定义 / 内容包 / 市场。**0.10.2 起（0.10.3 发布）有插件安全地板**：聊天危机关键词本地短路、发送去向与首启告知、清除本机设置/同意（撤回）、AI 聊天开关；**0.10.4 起有四层缩放**（整体 / UI+文本 / 图像 / 组件，只作用于本插件 widget，不改 DSH 全局主题）；**0.10.6 起有低打扰控制**（安静时段 / 动画偏好 / 暂时隐藏；入口保持 96 KiB 首屏预算）；**0.10.7 起有 Host 能力协商**（bridge wire 2 的 hello/probe 握手、可选 llm/schedule 降级、content-extension v3 契约握手）；**0.10.9 起 content-extension v3 追加可选合规字段**（license / aiProvenance / pack 级 compatibility / canonical usage statement，向后兼容、严格模式可选）；**0.10.10 起 TTS/ASR 同意版本化**（`dsh-famling/consent/v2` 逐项 `{version,hash,acceptedAt,withdrawn}`，旧布尔 v1 一次性迁移为 withdrawn 记录并重弹，设置内可单独「撤回语音同意」）；**0.10.11 起猫像素改为同配色蓝重点双色布偶猫**（16 个 palette hex 不变、palette id `cat-ragdoll-anim@0.1`、72 帧 / 12 clip / 96×96 / 地线 y=89 契约不变），猫 UI 文案统一为「布偶猫」、洗脸台词与猫/狗渲染器标签同步，插件 re-embed cat chunk；版本/README/LEGAL/locale/package 真值由测试统一校验。
 
-- 显示 72px 像素桌宠：汀岚 / 塞尔凯克卷毛猫（卷毛灰白） / 金毛，台词、动作与聊天人格随形象变化。
+- 显示 72px 像素桌宠：汀岚 / 布偶猫（白底蓝重点长毛） / 金毛，台词、动作与聊天人格随形象变化。
 - 动画：每角色 12 clip，帧数按 manifest（dog 68 / cat 72 / human 68，共 208 帧；clip：idle 循环、idle_blink 眨眼、pat_head、ball_throw、ball_chase、paw_face、scratch、stand_wag、chase_tail、walk、run、attack），随机微动作只取本形象的 clip。
-- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.7 实测：入口 **95.2 KiB**（97,472 B，gzip 27.2 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6/0.10.7 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.98%）、首帧约 156.9 KiB、全量约 342.5 KiB；chunk sha256 进入 embed/verify 门禁。
-- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（72.2 KiB，gzip 20.5 KiB，0.10.10 实测；0.10.7 增加 Host 能力面板，0.10.9 增加合规元数据展示，0.10.10 增加旧同意迁移/撤回与 versioned 同意 UI），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
+- 动画按角色懒加载（0.8.6）：入口 client.js 不再内嵌三套 base64；首次显示 human/cat/dog 时通过 DSH `require.async` 拉取 `client.anims.<kind>.js`。0.10.11 实测：入口 **95.0 KiB**（97,278 B，gzip 27.1 KiB；首屏预算 0.10.1 由 72→78 KiB、0.10.4 为四层缩放模型由 78→**96 KiB**，0.10.6/0.10.7 未再上调；sprite payload 仍走懒加载 chunk，入口 = 拆分前审计基线的 30.9%）、首帧约 156.7 KiB、全量约 331.5 KiB；chunk sha256 进入 embed/verify 门禁。
+- 内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件按需加载（0.10.2 引入 chunk，0.10.4 扩容，0.10.6 把输入面板/同意/使用限制弹窗也移入）：`client.content.js` 是包内懒加载 chunk（72.2 KiB，gzip 20.5 KiB，0.10.11 实测；0.10.7 增加 Host 能力面板，0.10.9 增加合规元数据展示，0.10.10 增加旧同意迁移/撤回与 versioned 同意 UI），只在首次安装显示首启安全卡、打开「内容与角色…」「设置…」「聊两句…」「更多 → 使用限制与版本」、或首次需要 TTS/ASR 同意弹窗时通过 `require.async('./client.content.js')` 拉取；角色卡不预加载任何角色动画 chunk。
 - 帧时长（0.8.4）：每帧停留时间读 manifest `holdMs`（缺省 1000/fps），非循环 clip 播完后按 `durationMs`/hold 总和回到 idle；cat 伸懒腰 10 帧 / 3200ms 按 300/300/300/350/400/400/400/350/250/150 逐帧播放。
 - 点击区域（0.8.2）：点击人物头部/身体/尾巴分别触发 pat_head/stand_wag/chase_tail；区域来自与独立 famling 共用的 `regions.json`（96×96 逻辑画布 + idle gating），非 idle/idle_blink 状态或空白区域不动作，不回退随机动作。
 - 随机回话（0.8.3）：每条区域规则与每个互动动作都带 `says` 数组，命中时随机挑一条且连续两次不会重复；气泡文案全量来自共用 `regions.json`。
-- 物种专属互动（0.8.3）：互动菜单由 `ANIMS[character].actions` 数据驱动——汀岚 摸头/递纸/挥手/整理蝴蝶结/聊两句；塞尔凯克卷毛猫 摸头/伸懒腰/洗脸/追尾巴/跑一跑；金毛 摸头/丢球·捡球/捡球/追尾巴/跑一跑（丢球后 500ms 接追球）。猫/人没有球类动作。
+- 物种专属互动（0.8.3）：互动菜单由 `ANIMS[character].actions` 数据驱动——汀岚 摸头/递纸/挥手/整理蝴蝶结/聊两句；布偶猫 摸头/伸懒腰/洗脸/追尾巴/跑一跑；金毛 摸头/丢球·捡球/捡球/追尾巴/跑一跑（丢球后 500ms 接追球）。猫/人没有球类动作。
 - 交互入口（0.10.1）：默认零按钮；右键角色 / Shift+F10 / ContextMenu 打开分级菜单（一级 5 项：聊两句… / 互动 ▸ / 内容与角色… / 设置… / 更多 ▸）。互动页跑本角色真实存在的 clip，仅本地 UI 状态，不调用模型、不上传数据。
 - 聊天人格随形象切换（0.8.1）：输入面板的 `op:"chat"` 请求带当前 `character`（`human`/`cat`/`dog`，缺省或非法回退 `human`）；Host 用 `PERSONAS` 选 system prompt。三条人格共用安全边界：不冒充真人/官方/专业顾问，不诱导依赖/恋爱/付费/未成年人关系，不输出违法/隐私。
 - 聊天安全地板（0.10.2 / MB-020/021/022/024）：`index.js` 在 `ctx.llm.stream` 之前用 `crisisKeyword` 做本地危机关键词短路（自伤/自杀、伤害他人、家暴/性侵、急症；中文短语子串匹配、英文按词首匹配，避免 `scraped` 误命中 `raped`），命中返回固定 12356/110/120/专业机构文案且 `meta.safety="crisis-local-resource"`、`llmCalls:0`、不回显/不落盘/明确「不是诊断」；输入面板常驻 AI 声明含发送去向（文本经 DSH Host 发给 DSH 中配置的模型供应商）与危机求助；设置「数据与边界」含发送去向、危机资源、与 DSH 的边界说明、「AI 聊天」开关、「清除本机设置与同意」（删除本插件 `dsh-famling/*` 浏览器键 = 撤回 TTS/ASR 同意，不改 DSH/供应商数据）；首次安装显示一次性可关闭安全卡（UI 在懒加载 chunk，仅写 `dsh-famling/first-run/v1`）。
-- 语音规则：汀岚可用浏览器 TTS（独立同意）；塞尔凯克卷毛猫/金毛只用空心 thought 气泡，永不调用 `speechSynthesis`。
+- 语音规则：汀岚可用浏览器 TTS（独立同意）；布偶猫/金毛只用空心 thought 气泡，永不调用 `speechSynthesis`。
 - 内容中心（0.10.0）：角色 / 自定义 / 内容包 / 市场 四个一级 tabs；入口在右键菜单「内容与角色…」。设置弹窗（0.10.1）集中所有可调项并含折叠的高级/调试组。切换即时生效、不刷新页面，不改 DSH 全局主题。
 - 内容扩展接口（0.10.0，预留 v3；0.10.9 补可选合规字段）：`content-extension.mjs` 导出 `CONTENT_EXTENSION_POINTS`（七类 kind，含 role + 0.10.9 `compliance` 元数据）、`validateContentPack`、`CONTENT_PACK_EXAMPLE`；纯数据契约，不联网 / 不执行 pack 脚本 / 不注入 HTML / 不加载资产；所有 pack 强制 `usageDeclaration`；0.10.9 起可选 `license` / `aiProvenance` / pack 级 `compatibility` 与 canonical 声明锚点（向后兼容，`requireCompliance` 严格模式可选）；本版本不加载任何 pack。
 - 不宣传 roleplay；不替代独立 famling 应用。
@@ -125,7 +125,7 @@
 
 | Tab | 内容 | 持久化 / 行为 |
 |---|---|---|
-| 角色 | 汀岚 / 塞尔凯克卷毛猫 / 金毛三张角色卡（glyph 头像 + 名称 + 一句说明 + 声音/对话/外观摘要 + 「一键应用」+ ✓ 当前标记） | 一键应用同时设置 character、voice(TTS 策略)、dialogue mode、theme/background/font，并写 `dsh-famling/role`；角色卡不预加载其它角色动画 chunk；origami 仅数据预留，素材未安装，不出卡片。 |
+| 角色 | 汀岚 / 布偶猫 / 金毛三张角色卡（glyph 头像 + 名称 + 一句说明 + 声音/对话/外观摘要 + 「一键应用」+ ✓ 当前标记） | 一键应用同时设置 character、voice(TTS 策略)、dialogue mode、theme/background/font，并写 `dsh-famling/role`；角色卡不预加载其它角色动画 chunk；origami 仅数据预留，素材未安装，不出卡片。 |
 | 自定义 | 声音 / 对话 / 主题 / 背景 / 字体分组紧凑控件（保留 0.9.1 能力：TTS 开关与浏览器 voiceURI、standard/brief/quiet、default/paper/night、transparent/paper/dark、system/serif/mono + 字号/行高） | 顶部说明「仅修改当前角色的搭配，不改变角色预设」并显示「角色预设 / 已自定义」；组件改动只写对应旧键，角色 id 不变；「恢复角色默认」按当前角色 bundle 重置全部组件。 |
 | 内容包 | 已安装内容（当前只有内置包）、v3 声明检查状态、0.10.9 合规元数据展示、资产包导入入口（需 Host 支持） | 显示内置 4 bundle 包与「没有导入的外部内容包」；声明检查：researchOnly=true + 六项禁止用途；合规元数据：内置包的 license（spdx + attribution）/ AI 来源（generated + disclosure）/ compatibility（content-extension v3 + minPluginVersion）；资产包 zip/文件夹清单 + sha256 由 Host 解析，本版本不读取文件、不执行脚本、不加载素材、不联网。 |
 | 市场 | 远程市场占位与接口说明 | 固定显示「远程市场接口已预留，服务器未配置」；展示预留 `catalogUrl` / `configKey` 字段（`dsh-famling/market/catalog` / `dsh-famling.market`）；不发起网络请求、不展示伪造商品。 |
@@ -135,7 +135,7 @@
 | role | character | 声音策略 | 对话 | theme / background / font |
 |---|---|---|---|---|
 | human | 汀岚 | speech，可浏览器 TTS（仍受独立同意） | standard | default / transparent / system |
-| cat | 塞尔凯克卷毛猫 | thought，永不 TTS | standard | night / dark / serif |
+| cat | 布偶猫 | thought，永不 TTS | standard | night / dark / serif |
 | dog | 金毛 | thought，永不 TTS | standard | paper / paper / system |
 | origami | 预留 | thought，永不 TTS | standard | night（共享 high-contrast 显式映射）/ transparent / mono（数据预留，不可应用） |
 
@@ -160,7 +160,7 @@
 
 ### 懒加载与预算
 
-入口 `client.js` 95.2 KiB（0.10.10 实测 97,508 B / gzip 27.1 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.98%，首帧 156.9 KiB = 51.1%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意迁移/撤回 `client.content.js` 72.2 KiB（gzip 20.5 KiB，0.10.10 实测）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
+入口 `client.js` 95.0 KiB（0.10.11 实测 97,278 B / gzip 27.1 KiB）< 96 KiB 首屏预算（0.10.1 由 72→78 KiB，右键菜单必须在首屏可用；0.10.4 四层缩放模型/面板贴合由 78→96 KiB；0.10.6/0.10.7 未再上调预算；sprite payload 仍全部走懒加载 chunk，入口 = 拆分前审计基线的 30.9%，首帧 156.7 KiB = 51.0%）；内容中心 + 统一设置弹窗 + 首启安全卡 + 缩放控件 + 输入/同意/使用限制弹窗 + Host 能力面板 + 合规元数据展示 + 版本化同意迁移/撤回 `client.content.js` 72.2 KiB（gzip 20.5 KiB，0.10.11 实测）首次安装或首次打开才下载；三个角色动画 chunk 仍只在显示对应角色时下载。DSH 模块表通过包内相对 chunk 名 `client.content.js` 解析，不走网络/CDN；chunk 失败时客户端分别显示本地「内容中心加载失败」/「设置面板加载失败」提示，右键菜单、角色互动与聊天仍可用。
 
 ## 内容扩展接口 CONTENT_EXTENSION_POINTS v3（预留）
 

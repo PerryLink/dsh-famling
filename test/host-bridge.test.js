@@ -82,7 +82,7 @@ test('chat follows the DSH profile default model instead of a frozen literal', a
   assert.equal('reasoningEffort' in env.calls.llm[0], false)
 })
 
-const PERSONA_MARKERS = { human: '汀岚', cat: '塞尔凯克卷毛猫', dog: '金毛' }
+const PERSONA_MARKERS = { human: '汀岚', cat: '布偶猫', dog: '金毛' }
 const PERSONA_TRAITS = { human: '工作搭子', cat: '懒散', dog: '友善' }
 const SAFETY_BOUNDARY = '不要声称自己是真人、官方或专业顾问；不要诱导依赖、恋爱、付费或未成年人情感关系；不输出违法、隐私或冒充内容。'
 
@@ -117,7 +117,7 @@ test('chat falls back to the human persona for missing or invalid character valu
     assert.equal(env.calls.llm.length, 1, JSON.stringify(character) + ': one model call')
     const system = env.calls.llm[0].system
     assert.ok(system.includes('汀岚'), JSON.stringify(character) + ': human fallback')
-    assert.equal(system.includes('塞尔凯克卷毛猫'), false, JSON.stringify(character) + ': no cat persona')
+    assert.equal(system.includes('布偶猫'), false, JSON.stringify(character) + ': no cat persona')
     assert.equal(system.includes('金毛'), false, JSON.stringify(character) + ': no dog persona')
   }
 })
@@ -185,21 +185,26 @@ test('echo stays local and never calls the model', async () => {
   assert.equal(env.calls.llm.length, 0)
 })
 
-test('brief projects a pet-brief file from ADVISERS_HOME without leaking extra fields', async () => {
+test('brief projects a valid v0.2 pet-brief file from ADVISERS_HOME without leaking extra fields', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-famling-brief-'))
   const previous = process.env.ADVISERS_HOME
   process.env.ADVISERS_HOME = dir
   try {
+    const now = Date.now()
     await writeFile(join(dir, 'pet-brief.json'), JSON.stringify({
       schemaVersion: 2,
+      source: 'advisers',
       displayPolicy: 'private',
-      generatedAt: '2026-11-18T00:00:00Z',
-      expiresAt: '2099-01-01T00:00:00Z',
-      counts: { today: 2, commitments: 1, risks: 0, facts: 9 },
-      today: [{ title: '写交接', status: 'done' }, { title: '跑测试', status: 'todo' }],
-      commitments: [{ what: '发布核对', due: '2026-11-18', risk: 'low' }],
+      generatedAt: new Date(now - 60_000).toISOString(),
+      expiresAt: new Date(now + 4 * 60_000).toISOString(),
+      counts: { today: 2, commitments: 1, risks: 1, facts: 0 },
+      today: [{ id: 'm1', title: '写交接', status: 'done' }, { id: 'm2', title: '跑测试', status: 'open' }],
+      commitments: [{ id: 'c1', matter: 'm1', who: '某客户', what: '发布核对', due: '2026-11-18', risk: 'low', confidence: 0.9 }],
+      risks: [{ id: 'r1', level: 'medium', summary: '交付前需复核', evidence: 'c1', confidence: 0.8 }],
+      facts: [],
+      mood: 'focused',
       suggestedLines: ['SHOULD NOT LEAK'],
-      evidence: ['SHOULD NOT LEAK'],
+      redactions: ['客户名已替换为“某客户”'],
     }), 'utf8')
     const env = makeContext()
     apply(env.ctx)
@@ -210,7 +215,7 @@ test('brief projects a pet-brief file from ADVISERS_HOME without leaking extra f
     assert.equal(body.brief.counts.today, 2)
     assert.equal(body.brief.today.length, 2)
     assert.equal(body.brief.suggestedLines, undefined)
-    assert.equal(body.brief.evidence, undefined)
+    assert.equal(body.brief.redactions, undefined)
     assert.match(body.reply, /今天 2 项/)
     assert.equal(env.calls.llm.length, 0)
   } finally {
@@ -220,6 +225,42 @@ test('brief projects a pet-brief file from ADVISERS_HOME without leaking extra f
   }
 })
 
+test('brief refuses a tampered/unknown-field file fail-closed instead of projecting a subset', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-famling-brief-tampered-'))
+  const previous = process.env.ADVISERS_HOME
+  process.env.ADVISERS_HOME = dir
+  try {
+    const now = Date.now()
+    await writeFile(join(dir, 'pet-brief.json'), JSON.stringify({
+      schemaVersion: 2,
+      source: 'advisers',
+      displayPolicy: 'private',
+      generatedAt: new Date(now - 60_000).toISOString(),
+      expiresAt: new Date(now + 4 * 60_000).toISOString(),
+      counts: { today: 1, commitments: 0, risks: 0, facts: 0 },
+      today: [{ id: 'm1', title: '标题', status: 'open' }],
+      commitments: [],
+      risks: [],
+      facts: [],
+      mood: 'calm',
+      suggestedLines: [],
+      redactions: [],
+      reasoning: 'hidden chain of thought SHOULD NOT LEAK',
+    }), 'utf8')
+    const env = makeContext()
+    apply(env.ctx)
+    const res = await post(env.route(), { v: 1, op: 'brief' })
+    assert.equal(res.status, 404)
+    const body = await res.json()
+    assert.equal(body.code, 'E_MEMORY')
+    assert.equal(JSON.stringify(body).includes('SHOULD NOT LEAK'), false)
+    assert.equal(JSON.stringify(body).includes('reasoning'), false)
+  } finally {
+    if (previous === undefined) delete process.env.ADVISERS_HOME
+    else process.env.ADVISERS_HOME = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
 test('brief returns 404 when the file is missing', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-famling-nobrief-'))
   const previous = process.env.ADVISERS_HOME
