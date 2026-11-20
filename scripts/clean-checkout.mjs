@@ -173,6 +173,10 @@ export function parseTestSummary(stdout) {
     else {
       const tap = /^not ok \d+ (.+?) # SKIP (.+)$/.exec(line.trim())
       if (tap) skipReasons.push(tap[2].trim())
+      else {
+        const tapOk = /^ok \d+ (.+?) # SKIP (.+)$/.exec(line.trim())
+        if (tapOk) skipReasons.push(tapOk[2].trim())
+      }
     }
   }
   return { tests: number('tests'), pass: number('pass'), fail: number('fail'), skipped: number('skipped'), durationMs: number('duration_ms'), skipReasons }

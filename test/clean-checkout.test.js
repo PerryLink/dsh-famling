@@ -32,8 +32,8 @@ const REBUILD_DOC = join(ROOT, 'docs', 'INDEPENDENT-REBUILD-2026-11-20.md')
 const SYNC_DOC = join(ROOT, 'docs', 'PUBLIC-REPO-SYNC-2026-11-20.md')
 
 test('test summary parser accepts Node 22 TAP output used on non-TTY CI', () => {
-  const tap = '# tests 12\n# pass 10\n# fail 0\n# skipped 2\n# duration_ms 5\n'
-  assert.deepEqual(parseTestSummary(tap), { tests: 12, pass: 10, fail: 0, skipped: 2, durationMs: 5, skipReasons: [] })
+  const tap = '# tests 12\n# pass 10\n# fail 0\n# skipped 2\n# duration_ms 5\nok 1 - cross-repo check # SKIP famling checkout not present\nok 2 - another # SKIP famling checkout not present\n'
+  assert.deepEqual(parseTestSummary(tap), { tests: 12, pass: 10, fail: 0, skipped: 2, durationMs: 5, skipReasons: ['famling checkout not present', 'famling checkout not present'] })
   const spec = '\u2139 tests 3\n\u2139 pass 2\n\u2139 fail 0\n\u2139 skipped 1\n\u2139 duration_ms 4\n'
   assert.equal(parseTestSummary(spec).pass, 2)
 })
