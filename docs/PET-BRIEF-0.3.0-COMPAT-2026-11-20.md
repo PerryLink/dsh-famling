@@ -16,7 +16,7 @@
 | Advisers 仓 HEAD | `e3f440d`（`docs(release): mark 0.3.0 published …`）；`packages/advisers/package.json` = `0.3.0` | `git -C plugins/advisers log -1` |
 | 发布 tag | `v0.3.0`（tag 指向 `1199fbf`；HEAD 是其后的 docs 提交） | `git tag -l / git log` |
 | Pet Brief producer 与 tag 的关系 | `git diff v0.3.0..HEAD -- packages/advisers/lib/pet-brief.js …` **为空**（producer 代码 = 发布 tag） | 本机 git |
-| dsh-famling | `0.10.11`；bridge wire 2；bridge route `/api/famling/bridge` | `package.json`、`index.js` |
+| dsh-famling | `0.10.12`；bridge wire 2；bridge route `/api/famling/bridge` | `package.json`、`index.js` |
 
 > 注：Advisers 仓内 `docs/PET-BRIEF-PRODUCER.md:117,136` 仍写着「随 `advisers@0.2.0` 发布 / 当前 0.2.1」，0.3.0 发布未同步这两处包版本引用（契约版本本身未变）。这属于 producer 仓文档滞后，不在本插件写范围。
 

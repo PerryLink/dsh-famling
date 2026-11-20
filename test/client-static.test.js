@@ -359,6 +359,21 @@ test('right-click menu is hierarchical, fixed/clamped and fully keyboard driven'
   assert.equal(/(?:src|href)\s*[:=]\s*['"]https?:\/\//.test(clientSource), false, 'no external asset URL')
 })
 
+test('menu, triggers and buttons paint from the DSH host theme, not the role theme', () => {
+  const menuStart = clientSource.indexOf("key: 'menu', ref: menuRef")
+  const menuEnd = clientSource.indexOf('currentMenuItems.map')
+  assert.ok(menuStart > 0 && menuEnd > menuStart, 'menu node block exists')
+  const menuBlock = clientSource.slice(menuStart, menuEnd)
+  assert.ok(menuBlock.includes('var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329)))'), 'menu surface uses the host raised tokens with a light-dark fallback')
+  assert.ok(menuBlock.includes('var(--dsw-alias-label-primary, light-dark(#0f1115, #f5f7fa))'), 'menu text uses the host primary label')
+  assert.ok(menuBlock.includes('var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.12), rgba(255,255,255,.16)))'), 'menu border uses the host border token')
+  assert.equal(menuBlock.includes('--dsh-famling-panel-bg'), false, 'the menu never reads the role night/paper panel background')
+  assert.equal(menuBlock.includes('--dsh-famling-panel-text'), false, 'the menu never reads the role panel text')
+  assert.ok(clientSource.includes('var(--dsw-alias-state-business-primary, light-dark(#4176e6, #7aaaff))'), 'active menu items use the host accent')
+  assert.ok(clientSource.includes('var(--dsw-alias-label-primary-inverted, light-dark(#ffffff, #1c1c1e))'), 'active menu items use the inverted host label')
+  assert.ok(clientSource.includes('var(--dsw-alias-button-elevated-fill, light-dark(rgba(0,0,0,.04), rgba(255,255,255,.08)))'), 'button fill fallback adapts to day/night')
+  assert.ok(clientSource.includes("colorScheme: 'inherit'"), 'the widget root inherits the DSH palette selector so light-dark() follows day/night')
+})
 test('lazy panel chunk exposes the four-tab content center and the unified settings popup', () => {
   assert.ok(contentSource.includes("chunk: 'client.content.js'"), 'content chunk registers the package-local chunk name')
   assert.ok(contentSource.includes('function createContentCenter('), 'content chunk exposes the content center factory')
@@ -396,8 +411,8 @@ test('client role bundles and dialogue modes mirror the shared famling content l
   }, 'dialogue modes mirror the shared dialoguePacks values')
   const expected = {
     human: { dialogue: 'standard', theme: 'default', background: 'transparent', family: 'system', canTts: true },
-    cat: { dialogue: 'standard', theme: 'night', background: 'dark', family: 'serif', canTts: false },
-    dog: { dialogue: 'standard', theme: 'paper', background: 'paper', family: 'system', canTts: false },
+    cat: { dialogue: 'standard', theme: 'night', background: 'transparent', family: 'serif', canTts: false },
+    dog: { dialogue: 'standard', theme: 'paper', background: 'transparent', family: 'system', canTts: false },
   }
   for (const [role, values] of Object.entries(expected)) {
     const bundle = data.ROLE_BUNDLES[role]

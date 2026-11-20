@@ -93,8 +93,8 @@ const FROZEN_CHARACTER_ID_MAP = { human: 'humanoid', cat: 'cat', dog: 'dog', ori
 
 const FROZEN_ROLES = {
   human: { character: 'human', canTts: true, mode: 'speech', sound: true, dialogue: 'standard', theme: 'default', background: 'transparent', font: 'system', available: true, libraryCharacter: 'humanoid', libraryTheme: 'default' },
-  cat: { character: 'cat', canTts: false, mode: 'thought', sound: false, dialogue: 'standard', theme: 'night', background: 'dark', font: 'serif', available: true, libraryCharacter: 'cat', libraryTheme: 'night' },
-  dog: { character: 'dog', canTts: false, mode: 'thought', sound: false, dialogue: 'standard', theme: 'paper', background: 'paper', font: 'system', available: true, libraryCharacter: 'dog', libraryTheme: 'paper' },
+  cat: { character: 'cat', canTts: false, mode: 'thought', sound: false, dialogue: 'standard', theme: 'night', background: 'transparent', font: 'serif', available: true, libraryCharacter: 'cat', libraryTheme: 'night' },
+  dog: { character: 'dog', canTts: false, mode: 'thought', sound: false, dialogue: 'standard', theme: 'paper', background: 'transparent', font: 'system', available: true, libraryCharacter: 'dog', libraryTheme: 'paper' },
   origami: { character: 'origami', canTts: true, mode: 'speech', sound: false, dialogue: 'standard', theme: 'night', background: 'transparent', font: 'mono', available: false, libraryCharacter: 'origami', libraryTheme: 'high-contrast' },
 }
 
