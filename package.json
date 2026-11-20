@@ -1,6 +1,6 @@
 {
   "name": "dsh-famling",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "private": false,
   "type": "module",
   "scripts": {
@@ -42,6 +42,7 @@
     "index.js",
     "client.js",
     "client.behavior.js",
+    "client.status.js",
     "client.anims.human.js",
     "client.anims.cat.js",
     "client.anims.dog.js",

@@ -257,7 +257,7 @@ function exportProblems(destination) {
     if (/^node_modules\//.test(file)) problems.push('export contains node_modules file: ' + file)
     if (/^\.git\//.test(file)) problems.push('export contains .git file: ' + file)
   }
-  for (const required of ['package.json', 'package-lock.json', 'README.md', 'LICENSE', 'index.js', 'client.js', 'client.content.js', 'client.behavior.js', 'content-extension.mjs', 'scripts/spec/anim-spec.json', 'scripts/clean-checkout.mjs', 'test/clean-checkout.test.js', 'docs/INDEPENDENT-REBUILD-2026-11-20.md']) {
+  for (const required of ['package.json', 'package-lock.json', 'README.md', 'LICENSE', 'index.js', 'client.js', 'client.content.js', 'client.behavior.js', 'client.status.js', 'content-extension.mjs', 'scripts/spec/anim-spec.json', 'scripts/clean-checkout.mjs', 'test/clean-checkout.test.js', 'docs/INDEPENDENT-REBUILD-2026-11-20.md']) {
     if (!relative.includes(required)) problems.push('export is missing required file: ' + required)
   }
   const report = staticReport(destination)

@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
     const CHARACTER_POLICY = {"human":{"canTts":true,"bubble":"speech"},"cat":{"canTts":false,"bubble":"thought"},"dog":{"canTts":false,"bubble":"thought"}}
     const CHARACTER_CHUNKS = {"human":"./client.anims.human.js","cat":"./client.anims.cat.js","dog":"./client.anims.dog.js"}
     // <dsh-famling:anims:end>
-    const PLUGIN_VERSION = '0.11.1'
+    const PLUGIN_VERSION = '0.12.0'
     const BRIDGE_WIRE_VERSION = 2
     const SIZE = 72
     const CHARACTER_KEY = 'dsh-famling/character'
@@ -365,6 +365,11 @@ window.__ModuleLoader__.load({
     function requestBehaviorChunk(onSettled) {
       requestLazyChunk(behaviorChunk, (module) => module && typeof module.tapPlan === 'function', onSettled)
     }
+    // Host coarse state kit (agent running/idle): lazy, remount-inert on failure.
+    const statusChunk = { file: './client.status.js', module: null, waiting: [] }
+    function requestStatusChunk(onSettled) {
+      requestLazyChunk(statusChunk, (module) => module && typeof module.watchHostStatus === 'function', onSettled)
+    }
     // <dsh-famling:lazy:begin>
     // Lazy per-character sprite chunks (scripts/embed-anims.mjs): offline, on demand.
     const EMPTY_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -607,6 +612,7 @@ window.__ModuleLoader__.load({
       const [taskMode, setTaskMode] = useState(false)
       const [taskAt, setTaskAt] = useState('')
       const [taskText, setTaskText] = useState('')
+      const [firstRunAction, setFirstRunAction] = useState(null) // null | 'busy' | 'done' | 'error'; transient
       // Bumped when a lazy character chunk materializes; playback effects depend
       // on it so the idle/blink/micro timers restart once sprites are present.
       const [animDataVersion, setAnimDataVersion] = useState(0)
@@ -635,6 +641,7 @@ window.__ModuleLoader__.load({
       const [briefError, setBriefError] = useState('')
       const briefHideTimer = useRef(null)
       const bridgeInFlight = useRef(false)
+      const hostStatus = useRef(null)
       // Host hello result: null while probing, { legacy:true } on an older Host.
       const [host, setHost] = useState(null)
       const rootRef = useRef(null)
@@ -812,13 +819,13 @@ window.__ModuleLoader__.load({
         if (!pageVisible || !motionOn || anim !== 'idle' || mode !== null) return undefined
         const microActions = ANIMS[character]?.microActions || []
         if (microActions.length === 0) return undefined
-        // P-04: automatic micro actions are >=60s apart; quiet hours stop them
-        // (the timer re-checks at fire time and retries after the window).
+        // P-04: automatic micro actions are >=60s apart; quiet hours (or a busy
+        // host agent) stop them: the timer re-checks at fire time and retries.
         let alive = true
         let timer = null
         const schedule = () => { timer = setTimeout(() => {
           if (!alive) return
-          if (isQuietHoursActive(settings.quietHours)) { schedule(); return }
+          if (isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy) { schedule(); return }
           playMicroAction(false)
         }, 60000 + Math.random() * 30000) }
         schedule()
@@ -830,7 +837,8 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         let alive = true
         requestBehaviorChunk((module) => { if (alive) setBehavior(module) })
-        return () => { alive = false }
+        requestStatusChunk((chunk) => { if (alive && chunk) hostStatus.current = chunk.watchHostStatus(callBridge) })
+        return () => { alive = false; hostStatus.current?.stop?.(); hostStatus.current = null }
       }, [])
       // Declared after the playback effects: the first pass has no sprites; the
       // chunk settle bumps the version so timers start once with data available.
@@ -903,6 +911,7 @@ window.__ModuleLoader__.load({
         const onVisibility = () => {
           const hiddenNow = document.visibilityState === 'hidden'
           setPageVisible(!hiddenNow)
+          hostStatus.current?.refresh?.(!hiddenNow)
           if (hiddenNow) hide()
           else { setAnim('idle'); setFrameIndex(0) }
         }
@@ -917,7 +926,7 @@ window.__ModuleLoader__.load({
       function say(text, kind = 'speech', source = 'ambient') {
         const dialogue = DIALOGUE_MODES[dialogueMode] || DIALOGUE_MODES.standard
         if (source === 'ambient' && dialogue.bubbleChance < 1 && Math.random() > dialogue.bubbleChance) return
-        if (source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours))) return
+        if (source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy)) return
         const canTts = characterCanTts(characterRef.current)
         const nextKind = canTts ? (kind === 'thought' ? 'thought' : 'speech') : 'thought'
         let line = typeof text === 'string' ? text : String(text == null ? '' : text)
@@ -1236,6 +1245,8 @@ window.__ModuleLoader__.load({
         } catch { say(L.bridgeFailed, 'speech', 'direct') }
         finally { bridgeInFlight.current = false }
       }
+      /** First-run card: open the existing chat panel prefilled; no send, no model call. */
+      function quickChat(text) { setInput(text); showPanel('input') }
       function startRecognition() {
         const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
         if (!Recognition) { say(L.micUnsupported, 'speech', 'direct'); return }
@@ -1376,9 +1387,9 @@ window.__ModuleLoader__.load({
           h('p', { key: 'state', style: { margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--dsw-alias-label-caption, #9aa0a6)' } }, message),
         ])
       }
-      // One-time first-run safety card (MB-021): the card UI + strings live in the
-      // lazy panel chunk, so only the once-per-install notice pays for them.
-      const firstRunPanel = firstRunAck ? null : panelChunk?.createFirstRunNotice?.({ lang: L.lang, aiNotice: L.aiNotice, panelStyle, panelBox, buttonBase, onAck: () => { setFirstRunAck(true); try { localStorage.setItem(FIRST_RUN_KEY, '1') } catch {} } }) || null
+      // One-time first-run safety card (MB-021): UI + strings live in the lazy
+      // panel chunk; it is set aside while another panel is open.
+      const firstRunPanel = firstRunAck || mode !== null ? null : panelChunk?.createFirstRunNotice?.({ lang: L.lang, aiNotice: L.aiNotice, host, quick: firstRunAction, onBridge: callBridge, onQuickState: setFirstRunAction, onQuickChat: quickChat, panelStyle, panelBox, buttonBase, onAck: () => { setFirstRunAck(true); try { localStorage.setItem(FIRST_RUN_KEY, '1') } catch {} } }) || null
       const contentPanel = mode === 'content'
         ? panelChunk && typeof panelChunk.createContentCenter === 'function'
           ? panelChunk.createContentCenter({

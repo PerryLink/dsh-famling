@@ -15,6 +15,8 @@ const contentChunkPath = join(PLUGIN_ROOT, 'client.content.js')
 const contentSource = readFileSync(contentChunkPath, 'utf8')
 const behaviorChunkPath = join(PLUGIN_ROOT, 'client.behavior.js')
 const behaviorSource = readFileSync(behaviorChunkPath, 'utf8')
+const statusChunkPath = join(PLUGIN_ROOT, 'client.status.js')
+const statusSource = readFileSync(statusChunkPath, 'utf8')
 const clientData = loadClientData(clientSource)
 
 // Release pin follows package.json (the single version truth): version-truth
@@ -257,10 +259,13 @@ test('first-screen client.js carries no sprite payload and meets the lazy budget
   assert.ok(entryBytes <= FIRST_SCREEN_BUDGET_BYTES, 'client.js ' + entryBytes + ' B is within the ' + FIRST_SCREEN_BUDGET_BYTES + ' B budget')
   assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.31, 'entry shrinks >69% vs the pre-split audit snapshot')
   assert.ok(entryBytes + humanBytes < AUDIT_BASELINE_BYTES * 0.52, 'first paint (entry + default chunk) shrinks >48% vs the pre-split audit snapshot')
-  // The behavior kit is requested right after mount, so the honest mount payload
-  // also charges it; keep the 52% first-frame gate true under that definition too.
+  // The behavior kit and the host-status kit are both requested right after
+  // mount, so the honest mount payload charges them too. The host-state hook
+  // (0.11.2) adds one small lazy kit, so the mount gate moves 52% -> 54%; the
+  // entry-only 31%/96 KiB gates above are unchanged.
   const behaviorChunkBytes = Buffer.byteLength(readFileSync(behaviorChunkPath, 'utf8'))
-  assert.ok(entryBytes + humanBytes + behaviorChunkBytes < AUDIT_BASELINE_BYTES * 0.52, 'mount payload (entry + default chunk + behavior kit) stays within the 52% first-frame gate')
+  const statusChunkBytes = Buffer.byteLength(readFileSync(statusChunkPath, 'utf8'))
+  assert.ok(entryBytes + humanBytes + behaviorChunkBytes + statusChunkBytes < AUDIT_BASELINE_BYTES * 0.54, 'mount payload (entry + default chunk + behavior kit + host-status kit) stays within the 54% first-frame gate')
   assert.equal(/data:image\/png;base64,[A-Za-z0-9+/]{512,}/.test(clientSource), false, 'no full base64 PNG frame in client.js')
   assert.equal(/[A-Za-z0-9+/]{4096,}={0,2}/.test(clientSource), false, 'no multi-KB base64 literal in client.js')
   assert.ok(clientSource.includes('function requestCharacterChunk(kind, onSettled)'), 'lazy chunk request helper exists')
@@ -321,6 +326,7 @@ test('package version is ' + EXPECTED_VERSION + ', publishes the lazy chunks and
   for (const kind of CHARACTERS) assert.ok(pkg.files.includes(CHUNK_NAMES[kind]), 'package files publishes ' + CHUNK_NAMES[kind])
   assert.ok(pkg.files.includes('client.content.js'), 'package publishes the lazy content-center chunk')
   assert.ok(pkg.files.includes('client.behavior.js'), 'package publishes the lazy behavior kit chunk')
+  assert.ok(pkg.files.includes('client.status.js'), 'package publishes the lazy host-status kit chunk')
   assert.equal(pkg.dsh.client.immediately, false, 'footer pet is not a stage-one registration barrier')
   assert.equal(pkg.scripts['measure:bundle'], 'node scripts/measure-bundle.mjs')
   const module = await import('../index.js')
@@ -339,7 +345,7 @@ test('client.js renders the pet alone: no permanent action buttons and no HTML i
   assert.ok(clientSource.includes('function loadMenuState()'), 'menu button state is loaded from storage')
   assert.ok(clientSource.includes('return { button: false }'), 'the menu button defaults to hidden')
   assert.equal(clientSource.includes(': false, page:'), false, 'open/submenu state is transient, not persisted')
-  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource], ['client.behavior.js', behaviorSource]]) {
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource], ['client.behavior.js', behaviorSource], ['client.status.js', statusSource]]) {
     assert.equal(source.includes('.innerHTML ='), false, name + ': no innerHTML injection')
     assert.equal(/\beval\s*\(|new Function\s*\(/.test(source), false, name + ': no eval/Function')
   }
@@ -405,7 +411,7 @@ test('default panel paints from the real DSH host tokens with a readable light/d
   assert.equal(defaultVars['--dsh-famling-panel-bg'], 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329))', 'panel surface uses the host layer-1 token with a light-dark fallback')
   assert.equal(defaultVars['--dsh-famling-panel-text'], 'var(--dsw-alias-label-primary, light-dark(#111111, #e8e8e8))', 'panel text uses the host primary label with a light-dark fallback')
   assert.equal(defaultVars['--dsh-famling-panel-border'], 'var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.14), rgba(255,255,255,.16)))', 'panel border uses the host border token')
-  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource], ['client.behavior.js', behaviorSource]]) {
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource], ['client.behavior.js', behaviorSource], ['client.status.js', statusSource]]) {
     assert.equal(source.includes('--dsw-alias-bg-elevated'), false, name + ': the phantom host token is gone')
   }
   // Real host-provided pairs and the fallback pairs must stay >= 4.5:1 body text.
@@ -465,6 +471,49 @@ test('lazy behavior chunk registers with the module table and exports the intera
   assert.equal(behaviorSource.includes('document.'), false, 'the behavior kit never touches the document')
 })
 
+
+test('lazy host-status chunk registers with the module table and exports the coarse-state kit', () => {
+  // The DSH module table only serves names matching /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/.
+  assert.match('client.status.js', /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/, 'host-status chunk name is accepted by the DSH module table')
+  const loaded = loadChunkModule(statusChunkPath)
+  assert.equal(loaded.registration.id, 'dsh-famling', 'host-status chunk registers the package module id')
+  assert.equal(loaded.registration.chunk, 'client.status.js', 'host-status chunk field matches the file name')
+  assert.equal(typeof loaded.registration.factory, 'function', 'host-status chunk factory is registered')
+  assert.equal(typeof loaded.exports.watchHostStatus, 'function', 'the chunk exports watchHostStatus()')
+  assert.equal(typeof loaded.exports.readStateReport, 'function', 'the chunk exports its closed-schema reader')
+  // The kit only polls the same-origin bridge through the entry's helper: no
+  // storage, no DOM, no network of its own (the entry owns both).
+  assert.equal(statusSource.includes('localStorage'), false, 'the host-status kit never touches storage')
+  assert.equal(statusSource.includes('document.'), false, 'the host-status kit never touches the document')
+  assert.equal(/(?:fetch|import)\s*\(\s*['\"]https?:\/\//.test(statusSource), false, 'no external fetch/import')
+  assert.equal(/(?:src|href)\s*[:=]\s*['\"]https?:/.test(statusSource), false, 'no external asset URL')
+  assert.equal(/\bsetInterval\b|\beval\s*\(|new Function\s*\(/.test(statusSource), false, 'no setInterval/eval in the lazy kit')
+  assert.ok(clientSource.includes('requestStatusChunk') && clientSource.includes("file: './client.status.js'"), 'the entry loads the kit through one memoized package-local require.async entry')
+  assert.ok(clientSource.includes('watchHostStatus'), 'the entry starts the watcher through the chunk export')
+  assert.equal(clientSource.includes('hostStatus.current?.busy') || clientSource.includes('hostStatus.current?.busy'), true, 'automatic-output suppression reads the coarse busy flag')
+  // The lazy kit stays small: it is charged to the mount payload gate above.
+  assert.ok(Buffer.byteLength(statusSource) < 8 * 1024, 'host-status kit stays a small lazy chunk: ' + Buffer.byteLength(statusSource) + ' B')
+})
+
+test('the host-status reader rejects malformed bridge replies fail-closed', () => {
+  const { readStateReport } = loadChunkModule(statusChunkPath).exports
+  const good = { v: 2, ok: true, op: 'state', available: true, source: 'events', state: 'running', active: 1, updatedAt: 5, lastError: null, transitions: [{ state: 'running', at: 5 }] }
+  // The chunk factory runs in a vm realm: compare fields, never object identity.
+  const valid = readStateReport(good)
+  assert.equal(valid.available, true, 'a valid report is accepted')
+  assert.equal(valid.state, 'running', 'a valid report maps to the coarse state')
+  assert.equal(readStateReport({ ...good, available: false, state: 'unknown' }).available, false, 'unsupported is reported, not guessed')
+  const malformed = [
+    null, undefined, 'state', [], {}, { ok: false, op: 'state' }, { ok: true, op: 'probe', available: true },
+    { ...good, state: 'busy' }, { ...good, active: -1 }, { ...good, active: 65 }, { ...good, active: 1.5 }, { ...good, active: '1' },
+    { ...good, updatedAt: 'now' }, { ...good, updatedAt: -1 },
+    { ...good, lastError: { kind: 'weird', at: 1 } }, { ...good, lastError: { kind: 'auth', at: 'x' } }, { ...good, lastError: { kind: 'auth', at: 1, message: 'SECRET' } },
+    { ...good, transitions: new Array(17).fill({ state: 'idle', at: 1 }) },
+    { ...good, transitions: [{ state: 'busy', at: 1 }] },
+    { ...good, transitions: [{ state: 'idle', at: 'x' }] },
+  ]
+  for (const reply of malformed) assert.equal(readStateReport(reply), null, 'fail-closed: ' + JSON.stringify(reply))
+})
 test('client role bundles and dialogue modes mirror the shared famling content library', (t) => {
   const begin = '// <dsh-famling:content:begin>'
   const end = '// <dsh-famling:content:end>'
@@ -542,7 +591,8 @@ test('role bundles persist every component in the existing keys and record dsh-f
   assert.ok(clientSource.includes('requestCharacterChunk(character'), 'character sprite chunks stay lazy')
   assert.ok(clientSource.includes('canTts && settings.sound && ttsConsent'), 'TTS guard tied to character policy')
   assert.ok(clientSource.includes("source === 'ambient' && dialogue.bubbleChance < 1"), 'shared bubble probability gates automatic/ambient lines only')
-  assert.ok(clientSource.includes("source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours))"), 'quiet mode and quiet hours suppress ambient lines only (shared dialoguePack semantics)')
+  assert.ok(clientSource.includes("source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours)"), 'quiet mode and quiet hours suppress ambient lines only (shared dialoguePack semantics)')
+  assert.ok(clientSource.includes("isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy"), 'a busy host agent reuses the same ambient/micro quiet suppression')
   assert.ok(clientSource.includes("say(line, 'speech', 'interactive')"), 'explicit taps/actions are not chance-gated (shared "explicit interaction bubbles still show")')
   assert.ok(clientSource.includes("line.slice(0, dialogue.maxChars - 1)"), 'brief mode filters over-long replies')
   assert.ok(clientSource.includes('utterance.voice = voice'), 'the selected browser voice is applied to speech')
@@ -796,5 +846,18 @@ test('the chat surfaces disclose the DSH-configured model provider in both langu
   assert.ok(contentSource.includes('onClearLocalData'), 'settings exposes clear-local-data')
   assert.ok(contentSource.includes('createFirstRunNotice'), 'the first-run card comes from the lazy chunk (entry budget)')
   assert.ok(clientSource.includes('FIRST_RUN_KEY'), 'the one-time first-run flag is a local key')
+  // 0.11.2 worktree: the two one-shot first-run actions keep their copy and
+  // their task/bridge orchestration inside the lazy chunk; the entry only
+  // injects state/bridge/chat callbacks and stays inside its byte gates.
+  for (const key of ['firstRunRemindText', 'firstRunChatQuestion', 'firstRunNoSchedule', 'firstRunRemindFailed']) {
+    assert.ok(contentSource.includes(key), 'the first-run action copy lives in the lazy chunk: ' + key)
+  }
+  assert.equal(clientSource.includes('10 分钟后提醒我休息一下'), false, 'the first-run action label does not charge the entry budget')
+  assert.ok(clientSource.includes('onBridge: callBridge') && clientSource.includes('onQuickState: setFirstRunAction'), 'the entry injects the existing bridge and the transient action state into the lazy card')
+  assert.ok(clientSource.includes('onQuickChat: quickChat'), 'the entry injects the existing chat-panel opener')
+  assert.ok(contentSource.includes("op: 'task', text: T.firstRunRemindText"), 'the task payload is built in the lazy chunk')
+  for (const [name, source] of [['client.js', clientSource], ['client.content.js', contentSource]]) {
+    assert.equal(/dsh-famling\/first-run\/v[2-9]/.test(source), false, name + ': quick actions reuse the existing v1 first-run flag and add no new storage key')
+  }
   assert.equal(/https?:\/\//.test(contentSource), false, 'the content chunk stays offline')
 })

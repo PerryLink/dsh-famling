@@ -78,7 +78,7 @@ export const FIRST_SCREEN_BUDGET_BYTES = 96 * 1024
 /** Package-local lazy chunk file names, accepted by the DSH client module table. */
 export const CLIENT_CHUNK_RE = /^client\.anims\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 /** Hand-written package-local lazy chunks the entry loads through require.async. */
-export const LAZY_CHUNKS = Object.freeze(['client.content.js', 'client.behavior.js'])
+export const LAZY_CHUNKS = Object.freeze(['client.content.js', 'client.behavior.js', 'client.status.js'])
 /** Any package-local client chunk file the DSH module table accepts. */
 const MODULE_TABLE_CHUNK_RE = /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 /** Absolute external URLs in a load path would break the offline/no-network contract. */

@@ -249,6 +249,159 @@ function handleProbe(ctx) {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Host coarse Agent state (privacy-minimal, fail-closed)
+ * ---------------------------------------------------------------------------
+ * DSH emits `agent/status` ({ agent, status: 'idle' | 'running' }) on every
+ * lifecycle transition and `agent/error` on a turn/step failure. The pet only
+ * needs "is an agent working", so we retain a bounded ring of transitions
+ * ({ state, at }), a running count and one classified lastError kind. Agent ids,
+ * session ids, messages, prompts, tool arguments and file paths are never read,
+ * stored, logged or projected. A Host without the event API keeps loading the
+ * plugin: `state` then answers available:false instead of faking a status.
+ */
+const HOST_STATE_RING_MAX = 16
+const HOST_STATE_MAX_ACTIVE = 64
+const HOST_STATE_STATES = ['idle', 'running', 'unknown']
+const HOST_STATE_TRANSITIONS = ['idle', 'running']
+const HOST_STATE_ERROR_KINDS = ['aborted', 'auth', 'network', 'rate-limit', 'server', 'timeout', 'tool', 'unknown']
+const HOST_STATE_FIELDS = ['available', 'source', 'state', 'active', 'updatedAt', 'lastError', 'transitions']
+/** Bounded trackers by Host context; a WeakMap never keeps a disposed context alive. */
+const HOST_STATE_TRACKERS = new WeakMap()
+const HOST_STATE_UNAVAILABLE = Object.freeze({
+  available: false,
+  source: 'unsupported',
+  state: 'unknown',
+  active: 0,
+  updatedAt: null,
+  lastError: null,
+  transitions: Object.freeze([]),
+})
+
+/**
+ * Classify one Host error into a stable kind from its name/status/code only.
+ * The error message is deliberately never read: it can carry prompts or tool
+ * output, and the pet only distinguishes coarse failure classes.
+ */
+function hostStateErrorKind(value) {
+  try {
+    if (!value || typeof value !== 'object') return 'unknown'
+    const status = typeof value.status === 'number' ? value.status : (typeof value.code === 'number' ? value.code : NaN)
+    if (status === 401 || status === 403) return 'auth'
+    if (status === 429) return 'rate-limit'
+    if (status >= 500 && status <= 599) return 'server'
+    const errorName = typeof value.name === 'string' ? value.name : ''
+    if (errorName === 'AbortError') return 'aborted'
+    if (errorName === 'TimeoutError') return 'timeout'
+    const code = typeof value.code === 'string' ? value.code.toUpperCase() : ''
+    if (code === 'ETIMEDOUT') return 'timeout'
+    if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'network'
+    if (errorName === 'ToolError' || code.startsWith('TOOL')) return 'tool'
+    return 'unknown'
+  } catch { return 'unknown' }
+}
+
+/** One bounded in-memory tracker: running count, last transition and error kind. */
+function createHostStateTracker(now) {
+  const tracker = { available: false, running: 0, state: 'unknown', updatedAt: null, lastError: null, transitions: [] }
+  tracker.record = (state) => {
+    tracker.state = state
+    tracker.updatedAt = now()
+    tracker.transitions.push({ state, at: tracker.updatedAt })
+    if (tracker.transitions.length > HOST_STATE_RING_MAX) tracker.transitions.shift()
+  }
+  return tracker
+}
+
+/**
+ * Subscribe the coarse tracker to `agent/status` + `agent/error`. Every handler is
+ * wrapped so a malformed payload or a throwing Host event can never break the
+ * Agent loop; a missing/throwing event API leaves the tracker unavailable.
+ */
+function trackHostState(ctx) {
+  const tracker = createHostStateTracker(() => Date.now())
+  if (!ctx || typeof ctx !== 'object') return tracker
+  HOST_STATE_TRACKERS.set(ctx, tracker)
+  if (typeof ctx.on !== 'function') return tracker
+  const disposers = []
+  try {
+    const onStatus = (payload) => {
+      try {
+        const status = payload && payload.status
+        if (status !== 'running' && status !== 'idle') return
+        tracker.running = status === 'running'
+          ? Math.min(tracker.running + 1, HOST_STATE_MAX_ACTIVE)
+          : Math.max(0, tracker.running - 1)
+        tracker.record(tracker.running > 0 ? 'running' : 'idle')
+      } catch {}
+    }
+    const onError = (payload) => {
+      try { tracker.lastError = { kind: hostStateErrorKind(payload && payload.error), at: Date.now() } } catch {}
+    }
+    const offStatus = ctx.on('agent/status', onStatus)
+    const offError = ctx.on('agent/error', onError)
+    if (typeof offStatus === 'function') disposers.push(offStatus)
+    if (typeof offError === 'function') disposers.push(offError)
+    tracker.available = true
+  } catch {
+    tracker.available = false
+    return tracker
+  }
+  try {
+    if (typeof ctx.effect === 'function') {
+      ctx.effect(() => () => {
+        for (const dispose of disposers) { try { dispose() } catch {} }
+      }, 'dsh-famling: host agent state')
+    }
+  } catch {}
+  return tracker
+}
+
+/**
+ * Closed-schema validation of one coarse state report (fail-closed: any unknown
+ * key, enum, type or bound rejects the whole report instead of projecting it).
+ */
+function hostStateReportValid(report) {
+  if (!report || typeof report !== 'object' || Array.isArray(report)) return false
+  for (const key of Object.keys(report)) if (!HOST_STATE_FIELDS.includes(key)) return false
+  if (report.available !== true || report.source !== 'events') return false
+  if (!HOST_STATE_STATES.includes(report.state)) return false
+  if (!Number.isInteger(report.active) || report.active < 0 || report.active > HOST_STATE_MAX_ACTIVE) return false
+  if (report.updatedAt !== null && (!Number.isInteger(report.updatedAt) || report.updatedAt < 0)) return false
+  if (report.lastError !== null) {
+    const lastError = report.lastError
+    if (!lastError || typeof lastError !== 'object' || Array.isArray(lastError)) return false
+    if (Object.keys(lastError).length !== 2) return false
+    if (!HOST_STATE_ERROR_KINDS.includes(lastError.kind) || !Number.isInteger(lastError.at) || lastError.at < 0) return false
+  }
+  if (!Array.isArray(report.transitions) || report.transitions.length > HOST_STATE_RING_MAX) return false
+  for (const entry of report.transitions) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).length !== 2) return false
+    if (!HOST_STATE_TRANSITIONS.includes(entry.state) || !Number.isInteger(entry.at) || entry.at < 0) return false
+  }
+  return true
+}
+
+/** Snapshot the tracker for the `state` op; an unavailable or invalid snapshot fails closed. */
+function hostStateSnapshot(ctx) {
+  const tracker = HOST_STATE_TRACKERS.get(ctx)
+  if (!tracker || tracker.available !== true) return HOST_STATE_UNAVAILABLE
+  const report = {
+    available: true,
+    source: 'events',
+    state: tracker.state,
+    active: tracker.running,
+    updatedAt: tracker.updatedAt,
+    lastError: tracker.lastError,
+    transitions: tracker.transitions.slice(-HOST_STATE_RING_MAX),
+  }
+  return hostStateReportValid(report) ? report : HOST_STATE_UNAVAILABLE
+}
+
+/** `state`: read-only coarse Agent state for quiet/pose hints (wire 2). */
+function handleState(ctx) {
+  return { v: BRIDGE_WIRE_VERSION, ok: true, op: 'state', ...hostStateSnapshot(ctx) }
+}
 /**
  * Read the current DSH default model selection (the profile setting / model
  * picker) from the Host. This is the normal source: pet chat must follow the
@@ -650,10 +803,11 @@ async function handleBridge(ctx, request, config) {
   try { payload = JSON.parse(text) } catch { return error('E_INPUT', 'Invalid JSON.') }
   if (!payload || !WIRE_VERSIONS.includes(payload.v) || typeof payload.op !== 'string') return error('E_INPUT', 'Invalid bridge request.')
   const op = payload.op
-  if (!['echo', 'chat', 'brief', 'task', 'task-delete', 'hello', 'probe'].includes(op)) return error('E_OP', 'Unsupported operation.')
+  if (!['echo', 'chat', 'brief', 'task', 'task-delete', 'hello', 'probe', 'state'].includes(op)) return error('E_OP', 'Unsupported operation.')
   // New capability ops require wire 2; legacy ops keep working on wire 1 and 2.
-  if (op === 'hello' || op === 'probe') {
-    if (payload.v < BRIDGE_WIRE_VERSION) return error('E_WIRE', 'hello/probe require bridge wire 2.', 426)
+  if (op === 'hello' || op === 'probe' || op === 'state') {
+    if (payload.v < BRIDGE_WIRE_VERSION) return error('E_WIRE', 'hello/probe/state require bridge wire 2.', 426)
+    if (op === 'state') return json(200, handleState(ctx))
     return json(200, op === 'hello' ? handleHello(ctx, payload) : handleProbe(ctx))
   }
   // Host capability snapshot for this request; optional services are read at
@@ -744,6 +898,9 @@ async function handleBridge(ctx, request, config) {
  */
 export function apply(ctx, config) {
   configSelection(config) // fail fast on a half-configured override
+  // Coarse Agent lifecycle subscription: an optional Host API that never blocks
+  // activation (a Host without it degrades to available:false on `state`).
+  try { trackHostState(ctx) } catch {}
   return ctx.effect(() => ctx.connection.fetch.register({
     path: BRIDGE_PATH,
     methods: ['POST'],

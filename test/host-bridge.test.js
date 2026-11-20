@@ -53,6 +53,22 @@ function makeContext({ selection = { provider: 'profile-provider', model: 'profi
   return { ctx, calls, route: () => registered }
 }
 
+/** Extend a fake Host context with the cordis event API (agent lifecycle events). */
+function makeEventContext(options = {}) {
+  const env = makeContext()
+  const handlers = new Map()
+  env.ctx.on = (event, handler) => {
+    if (options.onThrows) throw new Error('the Host has no event API')
+    if (options.subscribeThrows && event === 'agent/status') throw options.subscribeThrows
+    const list = handlers.get(event) || []
+    list.push(handler)
+    handlers.set(event, list)
+    return () => { handlers.set(event, (handlers.get(event) || []).filter((fn) => fn !== handler)) }
+  }
+  env.emit = (event, payload) => { for (const handler of (handlers.get(event) || [])) handler(payload) }
+  env.handlers = handlers
+  return env
+}
 async function post(route, payload, init = {}) {
   return route.fetch(new Request('http://localhost' + BRIDGE_PATH, {
     method: 'POST',
@@ -489,6 +505,149 @@ test('hello/probe require wire 2 while legacy ops keep wire 1 and 2', async () =
   assert.equal((await oldHello.json()).code, 'E_WIRE')
   assert.equal((await post(env.route(), { v: 2, op: 'echo', text: 'two' })).status, 200, 'wire 2 still runs legacy ops')
   assert.equal((await post(env.route(), { v: 1, op: 'chat', text: '你好' })).status, 200, 'wire 1 chat is unchanged')
+})
+
+/* ==================== 0.11.2: coarse Host agent state hook (host half) ==================== */
+
+test('a Host without the event API activates and reports state unsupported, not faked', async () => {
+  const env = makeContext() // no ctx.on: the pre-0.2 Host shape
+  assert.doesNotThrow(() => apply(env.ctx), 'the plugin still activates without the event API')
+  const res = await post(env.route(), { v: 2, op: 'state' })
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.equal(body.ok, true)
+  assert.equal(body.op, 'state')
+  assert.equal(body.available, false, 'missing event API is available:false, never a guess')
+  assert.equal(body.source, 'unsupported')
+  assert.equal(body.state, 'unknown')
+  assert.deepEqual(body.transitions, [])
+  assert.equal(body.lastError, null)
+  assert.equal(body.active, 0)
+  assert.equal(body.updatedAt, null)
+})
+
+test('agent/status transitions are tracked as bounded coarse state', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const first = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(first.available, true, 'event API present -> available')
+  assert.equal(first.source, 'events')
+  assert.equal(first.state, 'unknown', 'no transition yet: unknown, not idle')
+  env.emit('agent/status', { agent: { id: 'a1' }, status: 'running' })
+  const running = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(running.state, 'running')
+  assert.equal(running.active, 1)
+  assert.ok(Number.isInteger(running.updatedAt) && running.updatedAt > 0)
+  assert.deepEqual(running.transitions, [{ state: 'running', at: running.updatedAt }])
+  env.emit('agent/status', { agent: { id: 'a1' }, status: 'idle' })
+  const idle = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(idle.state, 'idle')
+  assert.equal(idle.active, 0)
+  assert.equal(idle.transitions.length, 2)
+})
+
+test('concurrent agents stay counted and an extra idle never goes negative', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  env.emit('agent/status', { status: 'running' })
+  env.emit('agent/status', { status: 'running' })
+  assert.equal((await (await post(env.route(), { v: 2, op: 'state' })).json()).active, 2)
+  env.emit('agent/status', { status: 'idle' })
+  const one = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(one.active, 1)
+  assert.equal(one.state, 'running', 'a second agent still works')
+  env.emit('agent/status', { status: 'idle' })
+  env.emit('agent/status', { status: 'idle' })
+  env.emit('agent/status', { status: 'idle' })
+  const none = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(none.active, 0, 'extra idle events never make the count negative')
+  assert.equal(none.state, 'idle')
+})
+
+test('the transition ring is bounded and keeps the newest transitions last', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  for (let index = 0; index < 40; index += 1) env.emit('agent/status', { status: index % 2 === 0 ? 'running' : 'idle' })
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.ok(body.transitions.length <= 16, 'ring stays bounded: ' + body.transitions.length)
+  assert.equal(body.transitions.length, 16, 'full bounded ring')
+  assert.equal(body.transitions[0].state, 'running', 'oldest kept transition')
+  assert.equal(body.transitions[body.transitions.length - 1].state, 'idle', 'newest transition is last')
+  for (let index = 1; index < body.transitions.length; index += 1) assert.notEqual(body.transitions[index].state, body.transitions[index - 1].state, 'alternating transitions are preserved in order')
+  for (const entry of body.transitions) assert.deepEqual(Object.keys(entry).sort(), ['at', 'state'], 'a ring entry is only state + timestamp')
+})
+
+test('agent/error is classified into a bounded kind without leaking its message', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const cases = [
+    [{ name: 'AbortError', message: 'SECRET-PROMPT-TEXT' }, 'aborted'],
+    [{ name: 'TimeoutError' }, 'timeout'],
+    [{ status: 401, message: 'SECRET-PROMPT-TEXT' }, 'auth'],
+    [{ status: 429 }, 'rate-limit'],
+    [{ status: 503 }, 'server'],
+    [{ code: 'ECONNRESET' }, 'network'],
+    [{ code: 'ETIMEDOUT' }, 'timeout'],
+    [{ name: 'ToolError' }, 'tool'],
+    [{ name: 'RandomError', message: 'SECRET-PROMPT-TEXT' }, 'unknown'],
+    [null, 'unknown'],
+  ]
+  for (const [error, kind] of cases) {
+    env.emit('agent/error', { agent: { id: 'a1' }, turn: 1, step: 1, error })
+    const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+    assert.equal(body.lastError.kind, kind, JSON.stringify(error) + ' -> ' + kind)
+    assert.ok(Number.isInteger(body.lastError.at))
+    assert.equal(JSON.stringify(body).includes('SECRET-PROMPT-TEXT'), false, 'the error message is never projected')
+  }
+})
+
+test('state answers with a closed schema: no ids, no messages, only the declared fields', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  env.emit('agent/status', { agent: { id: 'agent-xyz' }, status: 'running', message: { text: 'SECRET-PROMPT-TEXT' } })
+  env.emit('agent/error', { agent: { id: 'agent-xyz' }, error: { message: 'SECRET-PROMPT-TEXT' } })
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(Object.keys(body).sort(), ['active', 'available', 'lastError', 'ok', 'op', 'source', 'state', 'transitions', 'updatedAt', 'v'])
+  assert.equal(JSON.stringify(body).includes('agent-xyz'), false, 'no agent id is stored or projected')
+  assert.equal(JSON.stringify(body).includes('SECRET-PROMPT-TEXT'), false, 'no message text is stored or projected')
+})
+
+test('a throwing event API degrades to available:false and never blocks the bridge', async () => {
+  const throwing = makeEventContext({ onThrows: true })
+  assert.doesNotThrow(() => apply(throwing.ctx), 'subscription failure must not block activation')
+  assert.ok(throwing.route(), 'the authenticated bridge route is still registered')
+  const body = await (await post(throwing.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.available, false)
+  assert.equal(body.source, 'unsupported')
+  const echo = await post(throwing.route(), { v: 1, op: 'echo', text: 'ping' })
+  assert.equal(echo.status, 200, 'other bridge operations keep working')
+  const partial = makeEventContext({ subscribeThrows: new Error('agent/status subscription rejected') })
+  assert.doesNotThrow(() => apply(partial.ctx))
+  assert.equal((await (await post(partial.route(), { v: 2, op: 'state' })).json()).available, false)
+})
+
+test('malformed event payloads are ignored instead of corrupting the ring', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  for (const payload of [null, undefined, {}, { status: 'busy' }, { status: 42 }, [], 'running', { get status() { throw new Error('boom') } }]) {
+    assert.doesNotThrow(() => env.emit('agent/status', payload))
+    assert.doesNotThrow(() => env.emit('agent/error', payload))
+  }
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.available, true)
+  assert.equal(body.state, 'unknown', 'invalid payloads are ignored, not recorded')
+  assert.deepEqual(body.transitions, [])
+  env.emit('agent/status', { status: 'running' })
+  const after = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(after.state, 'running', 'valid events still work after malformed ones')
+})
+
+test('state requires bridge wire 2 like hello/probe', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const res = await post(env.route(), { v: 1, op: 'state' })
+  assert.equal(res.status, 426)
+  assert.equal((await res.json()).code, 'E_WIRE')
 })
 
 test('crisisKeyword matches specific phrases and documents its public list', () => {

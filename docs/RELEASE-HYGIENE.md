@@ -1,6 +1,6 @@
 # 发布与包卫生（MB-094 残余，2026-11-20）
 
-> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 版本化同意；0.10.11 猫布偶跨仓同步；0.10.12 宿主自适应外观；上述 0.10.x 均未真实发布。0.11.0（2026-11-21）是首次真实 `npm publish`：体验与预算修复 + 猫/狗 idle 帧重嵌入（212 帧）+ PLUGIN-MANIFEST；0.11.1（同日）新增包内懒加载 `client.behavior.js`，入口 97,460→94,491 B。两次均使用本地 npm token 发布，未启用 provenance / trusted publishing；公开仓 CI 以实际 run 为准。**
+> **状态：发布卫生机制已在 0.10.9 工作树落地；0.10.10 版本化同意；0.10.11 猫布偶跨仓同步；0.10.12 宿主自适应外观；上述 0.10.x 均未真实发布。0.11.0（2026-11-21）是首次真实 `npm publish`：体验与预算修复 + 猫/狗 idle 帧重嵌入（212 帧）+ PLUGIN-MANIFEST；0.11.1（同日）新增包内懒加载 `client.behavior.js`，入口 97,460→94,491 B。两次均使用本地 npm token 发布，未启用 provenance / trusted publishing；公开仓 CI 以实际 run 为准。工作树 **0.12.0（未发版，版本号仍 0.11.1 待 root 统一 bump）** 新增宿主粗状态钩子（bridge `op:"state"` + 懒加载 `client.status.js`）：入口 94,491→95,148 B、`files` 24→25；未发布、未启用签名/provenance。**
 > 本文与 `scripts/check-package.mjs`、`test/package-hygiene.test.js`、`package.json` 的
 > `repository` / `homepage` / `bugs` / `prepack` 合成一组可复核的发布卫生证据；
 > 外部链路（npm publish / provenance / 真实 CI / 公网可达性）**未在本轮执行**，见 §5。
@@ -177,7 +177,7 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | 未做 / 不声称 | provenance、trusted publishing、GitHub 公开仓 CI 首个真实 run（以公开仓推送后的实际 run 为准）、任何签名/合规结论 |
 | 发布内容 | 0.11.0 体验与预算修复（宿主面板对比度、隐藏标签页暂停、首启 coach、点击冷却）+ 猫/狗 idle 重嵌入（212 帧）+ `PLUGIN-MANIFEST.json`；无新增数据收集/网络/权限/存储键 |
 
-> **发布面已前移（2026-11-21，未发版）**：入口预算治理后工作树的 pack 清单是 24 files / tarball ≈318.9 KiB / unpacked ≈740 KiB（精确值随文档字节浮动）、入口 94,491 B，与上表已发布 0.11.0 tarball（23 files / 322,561 B / 入口 97,460 B）**不再一致**。上表保留为首发史实；下一次对外发布必须 bump 版本（如 0.11.1）并重新 `npm publish`，不得把当前工作树当作已发布的 0.11.0 内容宣称；C1 联合证据里的插件字节以 `PLUGIN-MANIFEST.json` 重新生成后的 digest 为准。
+> **发布面（2026-11-21）**：**0.12.0 已于 2026-11-21 发布**（见 §8.2）：新增 bridge `op:"state"` + 懒加载 `client.status.js`（宿主粗状态轮询）与 task-21 首启安全卡两个一次性有用动作（提醒 / 预填提问；无新增存储键/网络），`files` 25 项；tarball 336,041 B / unpacked 786,146 B、入口 95,533 B。上表保留 0.11.0/0.11.1 发布史实；C1 联合证据里的插件字节以 `PLUGIN-MANIFEST.json` 的最终 digest 为准。
 
 ### 8.1 0.11.1（2026-11-21）
 
@@ -191,4 +191,26 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | npm shasum | `aa5b6887ee9cfe2dddba6ea32df1a3f7dd1baf06` |
 | 相对 0.11.0 | 入口 97,460→94,491 B（−2,969 B）：新增包内懒加载 `client.behavior.js`（命中/冷却/饱和/随机回话/帧时长）；`files` 23→24；无 runtime 契约变更、无新增存储键/网络/权限 |
 | 未做 / 不声称 | provenance、trusted publishing、签名/合规；公开仓 CI 结果以实际 run 为准 |
+
+### 8.2 0.12.0（2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | `0.12.0`（registry `latest` = `0.12.0`） |
+| registry 时间 | `2026-11-20T18:26:10.002Z`（UTC；= 2026-11-21 02:26 +08） |
+| 发布方式 | 本地 `npm publish --tag latest --access public`；未启用 provenance / trusted publishing |
+| tarball | `dsh-famling-0.12.0.tgz`；336,041 B；25 files；unpacked 786,146 B |
+| tarball sha256（本地同打包器计算） | `ce25390d7dd8214367be75ceecec04205983a1ddbddb5968e75c799844291a4b` |
+| npm shasum | `2f771058984c3f4d35553545c3c870493bd8d0cb` |
+| 内容 | 入口预算治理（94,491 B 基线 → 95,533 B，新增 lazy `client.behavior.js` 5,768 B + `client.status.js` 4,099 B）；宿主 `agent/status` 粗状态桥（`op:"state"`，有界环/闭合 schema/fail-closed）；首启安全卡两个一次性有用动作（10 分钟休息提醒 / 预填工作问题，不自动发送）；`files` 24→25；无新增存储键/权限/遥测。 |
+| 未做 / 不声称 | provenance、trusted publishing、签名/合规/DLC/市场/私有仓真实 CI；公开仓 CI 以实际 run 为准 |
+
+### 8.2 0.12.0 工作树（未发版，2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 状态 | **未 `npm publish`**；版本号仍 `0.11.1`，由 root 统一 bump 后再发布 |
+| 相对 0.11.1 | 新增 bridge `op:"state"`（wire 2，宿主粗状态）+ 懒加载 `client.status.js` + task-21 首启安全卡两个一次性有用动作（「10 分钟后提醒我休息一下」复用既有 `op:"task"`、「问一句工作问题」只预填不发送；无新增常驻 UI / 存储键 / 网络 / 权限 / 遥测）；入口 94,491→**95,533 B**（+1,042 B，其中 task-21 +385 B；gzip 27,409 B / brotli 22,906 B）；懒加载 `client.content.js` 74,189→79,094 B（task-21 +4,905 B，不计入首屏/挂载门禁）；`files` 24→25；`PLUGIN-MANIFEST.json` 已按工作树重新生成 |
+| 门禁 | `npm test` 306/306 绿；真实挂载载荷 163,463→168,604 B = 53.57%，首帧门禁 52%→**54%**（status kit 计入真实挂载下载；入口 31% / 96 KiB 门禁不变，余量 2,043 B / 2,771 B；mount 门禁余 1,367 B） |
+| 未做 / 不声称 | provenance、trusted publishing、signed/合规结论、公开仓 CI 实测 run |
 

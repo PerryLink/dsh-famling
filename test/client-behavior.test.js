@@ -208,6 +208,8 @@ function createHarness(options = {}) {
   const speech = { speak: [], cancel: 0 }
   const listeners = new Map()
   const fetchCalls = []
+  // Coarse host-state pulls are capability/hint traffic, not user data traffic.
+  const stateCalls = []
   const documentStub = {
     baseURI: 'http://localhost/',
     visibilityState: 'visible',
@@ -281,6 +283,13 @@ function createHarness(options = {}) {
         if (!reply) return { ok: false, status: 404, async json() { return { v: 1, ok: false, code: 'E_OP', message: 'Unsupported operation.' } } }
         return { ok: true, async json() { return reply } }
       }
+      if (payload.op === 'task' && options.taskFail) return { ok: false, status: 503, async json() { return { v: 1, ok: false, code: 'E_TASK', message: 'DSH schedule could not create the reminder.' } } }
+      if (payload.op === 'state') {
+        stateCalls.push(payload)
+        const reply = typeof options.hostState === 'function' ? options.hostState(payload) : (options.hostState === undefined ? { v: 2, ok: true, op: 'state', available: true, source: 'events', state: options.hostBusy ? 'running' : 'idle', active: options.hostBusy ? 1 : 0, updatedAt: 1, lastError: null, transitions: [] } : options.hostState)
+        if (!reply) return { ok: false, status: 404, async json() { return { v: 1, ok: false, code: 'E_OP', message: 'Unsupported operation.' } } }
+        return { ok: true, async json() { return reply } }
+      }
       return {
         ok: true,
         async json() { return { v: 1, ok: true, reply: options.reply || '我在这里。', bubbleKind: options.bubbleKind || 'speech' } },
@@ -313,7 +322,7 @@ function createHarness(options = {}) {
   }
   const asyncCalls = []
   // Per-chunk failure switches plus the shared failChunks list.
-  const failOptions = { 'client.content.js': 'failContentChunk', 'client.behavior.js': 'failBehaviorChunk' }
+  const failOptions = { 'client.content.js': 'failContentChunk', 'client.behavior.js': 'failBehaviorChunk', 'client.status.js': 'failStatusChunk' }
   requireModule.async = (spec) => {
     const fileName = String(spec).replace(/^\.\//, '')
     asyncCalls.push(fileName)
@@ -321,7 +330,7 @@ function createHarness(options = {}) {
     if ((failOption && options[failOption]) || (Array.isArray(options.failChunks) && options.failChunks.includes(fileName))) {
       return { then(resolve, reject) { reject(new Error('simulated missing lazy chunk: ' + fileName)) } }
     }
-    const lazyChunk = fileName === 'client.content.js' || fileName === 'client.behavior.js'
+    const lazyChunk = fileName === 'client.content.js' || fileName === 'client.behavior.js' || fileName === 'client.status.js'
     if (!lazyChunk && !/^client\.anims\.(human|cat|dog)\.js$/.test(fileName)) throw new Error('unexpected async chunk: ' + spec)
     if (!chunkDefinitions.has(fileName)) {
       const chunkSource = readFileSync(join(dirname(CLIENT_PATH), fileName), 'utf8')
@@ -347,9 +356,9 @@ function createHarness(options = {}) {
   // Business bridge calls only: the mount hello (and a manual probe) are the
   // capability handshake, not user data traffic.
   const businessCalls = () => fetchCalls.filter((call) => {
-    try { const op = JSON.parse(call.init && call.init.body).op; return op !== 'hello' && op !== 'probe' } catch { return true }
+    try { const op = JSON.parse(call.init && call.init.body).op; return op !== 'hello' && op !== 'probe' && op !== 'state' } catch { return true }
   })
-  return { ui, speech, fetchCalls, businessCalls, hostCalls: () => fetchCalls.filter((call) => businessCalls().indexOf(call) === -1), storage, timers, asyncCalls, module: moduleObject, document: documentStub, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
+  return { ui, speech, fetchCalls, stateCalls, businessCalls, hostCalls: () => fetchCalls.filter((call) => businessCalls().indexOf(call) === -1), storage, timers, asyncCalls, module: moduleObject, document: documentStub, documentListeners: listeners, windowListeners, setRandom(fn) { random.fn = fn }, setNow(value) { currentNow = new RealDate(value).getTime() } }
 }
 
 function idleSrc(kind) {
@@ -789,6 +798,106 @@ test('quiet hours stop automatic micro actions but explicit taps still answer', 
   assert.notEqual(petImage(day.ui).props.src, dayIdle, 'micro actions play outside quiet hours')
 })
 
+/* ==================== 0.11.2: coarse host state (client half) ==================== */
+const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve))
+function statusTimers(harness) { return harness.timers.timeouts.filter((timer) => timer.ms === 30000) }
+
+test('the lazy host-status chunk loads after mount and pulls once per 30s', async () => {
+  const harness = createHarness({ now: localTime(12, 0) })
+  assert.ok(harness.asyncCalls.includes('client.status.js'), 'the host-status kit is a package-local lazy chunk')
+  assert.equal(harness.businessCalls().length, 0, 'mounting still sends no bridge business call')
+  const storageBefore = [...harness.storage.keys()].sort()
+  assert.equal(statusTimers(harness).length, 1, 'the first pull is scheduled 30s after mount')
+  statusTimers(harness)[0].fn()
+  await flushMicrotasks()
+  assert.equal(harness.stateCalls.length, 1, 'one coarse state pull per tick')
+  assert.deepEqual(harness.stateCalls[0], { v: 2, op: 'state' }, 'the poll asks only for the coarse state')
+  assert.equal(statusTimers(harness).length, 2, 'the next tick is scheduled')
+  assert.deepEqual([...harness.storage.keys()].sort(), storageBefore, 'polling writes nothing to storage')
+})
+
+test('a missing host-status chunk degrades to the shipped behavior', () => {
+  const harness = createHarness({ failStatusChunk: true, now: localTime(12, 0) })
+  assert.equal(statusTimers(harness).length, 0, 'no poll timer without the chunk')
+  assert.equal(harness.businessCalls().length, 0, 'no bridge business call without the chunk')
+  assert.ok(petImage(harness.ui), 'the pet still renders (no throw, no blocked mount)')
+})
+
+test('a running host agent quiets automatic actions like the quiet flag', async () => {
+  const busy = createHarness({ now: localTime(12, 0), settings: { motion: true }, hostBusy: true })
+  const busyIdle = petImage(busy.ui).props.src
+  statusTimers(busy)[0].fn()
+  await flushMicrotasks()
+  const timer = microTimer(busy)
+  assert.ok(timer, 'a micro-action timer is scheduled')
+  timer.fn()
+  busy.ui.render()
+  assert.equal(petImage(busy.ui).props.src, busyIdle, 'no automatic micro action while an agent runs')
+  assert.ok(microTimer(busy) && microTimer(busy) !== timer, 'the timer re-checks and retries')
+  busy.ui.clickPetAt(50, 35)
+  busy.ui.render()
+  assert.ok(busy.ui.findBubble(), 'explicit taps still answer while the agent runs')
+  const idle = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  const idleFrame = petImage(idle.ui).props.src
+  statusTimers(idle)[0].fn()
+  await flushMicrotasks()
+  const idleTimer = microTimer(idle)
+  assert.ok(idleTimer)
+  idleTimer.fn()
+  idle.ui.render()
+  assert.notEqual(petImage(idle.ui).props.src, idleFrame, 'an idle host keeps automatic micro actions')
+})
+
+test('visibility changes pause and pull the coarse state exactly once', async () => {
+  const harness = createHarness({ now: localTime(12, 0) })
+  const visibility = harness.documentListeners.get('visibilitychange')
+  assert.equal(typeof visibility, 'function', 'the entry keeps its single visibility listener')
+  harness.document.visibilityState = 'hidden'
+  visibility()
+  statusTimers(harness)[0].fn()
+  await flushMicrotasks()
+  assert.equal(harness.stateCalls.length, 0, 'a hidden tab does not poll')
+  harness.document.visibilityState = 'visible'
+  visibility()
+  await flushMicrotasks()
+  assert.equal(harness.stateCalls.length, 1, 'returning to the tab pulls once')
+  assert.equal(statusTimers(harness).length, 2, 'the 30s cadence resumes')
+})
+
+test('an unsupported state reply stops polling and never invents a status', async () => {
+  const unsupported = { v: 2, ok: true, op: 'state', available: false, source: 'unsupported', state: 'unknown', active: 0, updatedAt: null, lastError: null, transitions: [] }
+  const harness = createHarness({ hostState: unsupported, now: localTime(12, 0) })
+  statusTimers(harness)[0].fn()
+  await flushMicrotasks()
+  assert.equal(harness.stateCalls.length, 1)
+  assert.equal(statusTimers(harness).length, 1, 'no retry is scheduled for an unsupported host')
+  assert.equal(harness.timers.intervals.length, 0, 'no fixed setInterval is used for polling')
+})
+
+test('silent retries are capped when the state route keeps failing', async () => {
+  const harness = createHarness({ hostState: null, now: localTime(12, 0) })
+  let fired = 0
+  while (statusTimers(harness).length > fired) {
+    statusTimers(harness)[fired].fn()
+    fired += 1
+    await flushMicrotasks()
+  }
+  assert.equal(fired, 4, 'initial pull + 3 silent retries')
+  assert.equal(statusTimers(harness).length, 4, 'polling stops after the retry cap')
+})
+
+test('a malformed state reply is ignored instead of mapped to quiet', async () => {
+  const malformed = { v: 2, ok: true, op: 'state', available: true, source: 'events', state: 'busy', active: '1', updatedAt: null, lastError: null, transitions: [] }
+  const harness = createHarness({ hostState: malformed, now: localTime(12, 0), settings: { motion: true } })
+  const idleFrame = petImage(harness.ui).props.src
+  statusTimers(harness)[0].fn()
+  await flushMicrotasks()
+  const timer = microTimer(harness)
+  assert.ok(timer)
+  timer.fn()
+  harness.ui.render()
+  assert.notEqual(petImage(harness.ui).props.src, idleFrame, 'an invalid report never quiets the pet')
+})
 test('motion preference follows prefers-reduced-motion by default and explicit on/off wins', () => {
   const reducedAuto = createHarness({ reduceMotion: true, settings: { motionMode: 'auto' } })
   assert.equal(hasFrameTimer(reducedAuto), false, 'auto + reduce -> frame animation off')
@@ -1635,6 +1744,122 @@ test('the first-run card also exists in English with the same disclosure and res
   assert.ok(text.includes('model provider'), 'sending destination is disclosed')
   assert.ok(text.includes('12356') && text.includes('110') && text.includes('120'), 'crisis resources are listed')
   assert.ok(text.includes('Click the character to play') && text.includes('Shift+F10'), 'English coach line matches the Chinese one')
+})
+
+/* ---------- 0.11.2 worktree: one-shot useful actions on the first-run card ---------- */
+function firstRunRemindButton(ui) { return ui.findButtonExact('10 分钟后提醒我休息一下') }
+function firstRunChatButton(ui) { return ui.findButtonExact('问一句工作问题') }
+
+test('the first-run card offers two optional one-shot actions and does nothing by itself', () => {
+  const { ui, storage, businessCalls } = createHarness({ firstRun: true })
+  const card = firstRunDialog(ui)
+  assert.ok(card, 'fresh install shows the card')
+  const text = ui.text(card)
+  assert.ok(text.includes('可选'), 'the actions are labelled optional')
+  assert.ok(text.includes('只做一次') && text.includes('直接关闭'), 'the card states they are one-shot and skippable')
+  assert.ok(text.includes('10 分钟后提醒我休息一下'), 'break-reminder action is offered')
+  assert.ok(text.includes('问一句工作问题'), 'work-question action is offered')
+  assert.ok(text.includes('不会自动发送') && text.includes('不会调用模型'), 'the chat action is disclosed as prefill-only')
+  assert.equal(businessCalls().length, 0, 'rendering the card sends no bridge business request')
+  assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'the card is not acknowledged without a click')
+  assert.equal(firstRunRemindButton(ui).props.disabled, false, 'the reminder action starts enabled (Host unknown)')
+  assert.notEqual(firstRunChatButton(ui).props.disabled, true, 'the chat action is enabled')
+})
+
+test('the first-run reminder action reuses the existing task op for one 10-minute reminder', async () => {
+  const { ui, storage, businessCalls } = createHarness({ firstRun: true })
+  const keysBefore = [...storage.keys()].sort()
+  ui.clickExact('10 分钟后提醒我休息一下')
+  await ui.settle()
+  const calls = businessCalls()
+  assert.equal(calls.length, 1, 'exactly one bridge call is made')
+  const payload = JSON.parse(calls[0].init.body)
+  assert.deepEqual(
+    { op: payload.op, v: payload.v, text: payload.text, at: payload.at },
+    { op: 'task', v: 1, text: '休息一下：起来走动、喝口水，回来再继续。', at: '2026-05-01T04:10:00.000Z' },
+    'the existing task op is called once with a now + 10 minute RFC 3339 time',
+  )
+  const card = firstRunDialog(ui)
+  assert.ok(card, 'the card stays until the user acknowledges it')
+  assert.ok(ui.text(card).includes('已创建：10 分钟后提醒你休息一下。'), 'the card reports the created reminder')
+  const button = firstRunRemindButton(ui)
+  assert.equal(button.props.disabled, true, 'the one-shot reminder action cannot fire twice')
+  ui.click(button)
+  await ui.settle()
+  assert.equal(businessCalls().length, 1, 'a repeat click on the done action never creates a second reminder')
+  assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'reminding does not silently acknowledge the card')
+  assert.deepEqual([...storage.keys()].sort(), keysBefore, 'the quick actions add no storage key')
+  assert.equal(ui.findButtonExact('我知道了').props.disabled, undefined, 'the card can still be dismissed')
+})
+
+test('the first-run reminder is disabled and explained when the Host has no schedule service', async () => {
+  const { ui, businessCalls } = createHarness({ firstRun: true, hostCapabilities: { schedule: false }, hostDegraded: ['schedule'] })
+  await ui.settle()
+  const card = firstRunDialog(ui)
+  assert.ok(card, 'the card still renders')
+  assert.ok(ui.text(card).includes('当前 Host 不支持提醒服务'), 'the capability degradation is stated in the card')
+  assert.ok(ui.text(card).includes('此按钮已禁用'), 'the card explains the disabled button')
+  const button = firstRunRemindButton(ui)
+  assert.equal(button.props.disabled, true, 'no reminder control without schedule')
+  ui.click(button)
+  await ui.settle()
+  assert.equal(businessCalls().length, 0, 'a disabled reminder never calls the bridge')
+})
+
+test('a failed reminder creation is reported as a retryable failure, never as a fake success', async () => {
+  const { ui, storage, businessCalls } = createHarness({ firstRun: true, taskFail: true })
+  ui.clickExact('10 分钟后提醒我休息一下')
+  await ui.settle()
+  assert.equal(businessCalls().length, 1, 'the request was attempted once')
+  const card = firstRunDialog(ui)
+  assert.ok(ui.text(card).includes('提醒创建失败（桥接调用失败），可再试一次；不会伪造成功。'), 'the failure is stated honestly')
+  assert.equal(firstRunRemindButton(ui).props.disabled, false, 'a failed action stays retryable')
+  assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'a failure does not acknowledge the card')
+})
+
+test('the first-run chat action only prefills the existing panel: no send, no model call, no ack', () => {
+  const { ui, storage, businessCalls } = createHarness({ firstRun: true })
+  const keysBefore = [...storage.keys()].sort()
+  ui.clickExact('问一句工作问题')
+  ui.render()
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  assert.ok(textarea, 'the existing chat input panel is opened')
+  assert.equal(textarea.props.value, '如何把一长段会议记录整理成三条行动项？', 'a neutral work question is prefilled')
+  assert.equal(businessCalls().length, 0, 'prefilling never sends chat text and never calls a model')
+  assert.equal(firstRunDialog(ui), undefined, 'the notice is set aside while the chat panel is open')
+  assert.equal(storage.has('dsh-famling/first-run/v1'), false, 'opening the chat does not silently acknowledge the notice')
+  assert.deepEqual([...storage.keys()].sort(), keysBefore, 'prefilling adds no storage key')
+  closeActiveDialog(ui)
+  assert.ok(firstRunDialog(ui), 'the notice comes back until it is acknowledged')
+  ui.clickExact('我知道了')
+  ui.render()
+  assert.equal(firstRunDialog(ui), undefined, 'the normal acknowledgement still closes the card')
+  assert.equal(storage.get('dsh-famling/first-run/v1'), '1', 'the existing single first-run flag is reused')
+})
+
+test('both first-run actions are fully localized in English', async () => {
+  const { ui, businessCalls } = createHarness({ firstRun: true, language: 'en-US' })
+  const card = firstRunDialogEn(ui)
+  const text = ui.text(card)
+  assert.ok(text.includes('Remind me to take a break in 10 minutes'), 'English reminder action')
+  assert.ok(text.includes('Ask a work question'), 'English work-question action')
+  assert.ok(text.includes('nothing is sent') && text.includes('no model is called'), 'English prefill disclosure')
+  ui.clickExact('Ask a work question')
+  ui.render()
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  assert.equal(textarea.props.value, 'How can I turn a long meeting transcript into three action items?', 'English sample question is prefilled')
+  assert.equal(businessCalls().length, 0, 'the English chat action sends nothing')
+  ui.click(ui.findButtonByAria('Close'))
+  ui.render()
+  assert.ok(firstRunDialogEn(ui), 'the English notice returns until acknowledged')
+  ui.clickExact('Remind me to take a break in 10 minutes')
+  await ui.settle()
+  const calls = businessCalls()
+  assert.equal(calls.length, 1, 'the English reminder makes one request')
+  const payload = JSON.parse(calls[0].init.body)
+  assert.equal(payload.text, 'Take a short break: stand up, stretch and drink some water, then come back.', 'the English reminder text is sent, not a Chinese literal')
+  assert.equal(payload.at, '2026-05-01T04:10:00.000Z', 'the same now + 10 minute contract')
+  assert.ok(ui.text(firstRunDialogEn(ui)).includes('Created: a break reminder in 10 minutes.'), 'English success state')
 })
 
 test('the chat input panel discloses the sending destination and crisis resources', () => {

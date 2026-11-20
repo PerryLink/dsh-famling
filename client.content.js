@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
       },
       compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
     }
-    const PLUGIN_VERSION = '0.11.1'
+    const PLUGIN_VERSION = '0.12.0'
     // MB-014 (0.10.10): versioned TTS/ASR consent. This bundle is the canonical
     // declaration text shown in the consent dialog (zh authoritative + en); the
     // entry chunk pins its SHA-256 plus a version. Any wording change MUST bump
@@ -128,6 +128,18 @@ window.__ModuleLoader__.load({
         withdrawConsent: '撤回语音同意', withdrawHint: '仅把已保存的 TTS/ASR 同意标记为已撤回并关闭语音；设置与其它数据保留，可随时重新同意。', consentMeta: '声明版本',
         firstRunTitle: '首次使用说明', firstRunAck: '我知道了',
         firstRunCoach: '点角色 = 互动；右键 / Shift+F10 = 菜单。',
+        firstRunActions: '可选：先试一个有用动作',
+        firstRunActionsHint: '两个动作都只做一次；不试也可以，直接关闭这张卡。',
+        firstRunRemind: '10 分钟后提醒我休息一下',
+        firstRunRemindNote: '经 DSH Host 创建一次性提醒，10 分钟后触发。',
+        firstRunRemindBusy: '正在创建提醒…',
+        firstRunRemindDone: '已创建：10 分钟后提醒你休息一下。',
+        firstRunRemindFailed: '提醒创建失败（桥接调用失败），可再试一次；不会伪造成功。',
+        firstRunNoSchedule: '当前 Host 不支持提醒服务（schedule）：此按钮已禁用，不会创建提醒。',
+        firstRunRemindText: '休息一下：起来走动、喝口水，回来再继续。',
+        firstRunChat: '问一句工作问题',
+        firstRunChatNote: '打开聊天输入框并预填示例问题：不会自动发送，也不会调用模型。',
+        firstRunChatQuestion: '如何把一长段会议记录整理成三条行动项？',
         where: '发送去向：文本会经 DSH Host 发给 DSH 中配置的模型供应商；请勿发送密码、他人隐私或客户资料。',
         crisisLine: '心理危机可联系 12356（心理援助）；紧急情况 110（报警）/ 120（急救），或信任的人与专业机构。',
         clearDone: '已清除本机设置与同意（含撤回语音同意）；再次修改设置前不会写回存储。',
@@ -218,6 +230,18 @@ window.__ModuleLoader__.load({
         withdrawConsent: 'Withdraw voice consent', withdrawHint: 'Only marks the stored TTS/ASR consent as withdrawn and switches voice off; settings and other data stay, and you can consent again at any time.', consentMeta: 'Declaration version',
         firstRunTitle: 'First-run notice', firstRunAck: 'Got it',
         firstRunCoach: 'Click the character to play; right-click or Shift+F10 opens the menu.',
+        firstRunActions: 'Optional: try one useful thing',
+        firstRunActionsHint: 'Each action is offered once; you can also skip and just close this card.',
+        firstRunRemind: 'Remind me to take a break in 10 minutes',
+        firstRunRemindNote: 'Creates a one-time reminder through the DSH Host, firing in 10 minutes.',
+        firstRunRemindBusy: 'Creating the reminder…',
+        firstRunRemindDone: 'Created: a break reminder in 10 minutes.',
+        firstRunRemindFailed: 'The reminder was not created (bridge call failed); you can try again. No fake success is shown.',
+        firstRunNoSchedule: 'This Host has no schedule service: the button is disabled and no reminder is created.',
+        firstRunRemindText: 'Take a short break: stand up, stretch and drink some water, then come back.',
+        firstRunChat: 'Ask a work question',
+        firstRunChatNote: 'Opens the chat box with a sample question prefilled: nothing is sent and no model is called.',
+        firstRunChatQuestion: 'How can I turn a long meeting transcript into three action items?',
         where: 'Where it goes: text is sent through the DSH Host to the model provider configured in DSH; never send passwords, private data of others, or client material.',
         crisisLine: 'Mental-health crisis: contact 12356 (psychological assistance); emergencies 110 (police) / 120 (ambulance), or a trusted person and a professional service.',
         clearDone: 'Local settings and consent cleared (voice consent withdrawn); nothing is written back until you change a setting again.',
@@ -817,19 +841,52 @@ window.__ModuleLoader__.load({
      * One-time, dismissible first-run safety card (MB-021). It carries the AI /
      * sending-destination disclosure and the crisis resources, is never modal
      * over the pet, and only writes a single local ack flag (owned by client.js).
+     * The 0.11.2 worktree adds two optional one-shot useful actions: a 10-minute
+     * break reminder through the existing bridge `task` op (the injected onBridge
+     * callback is the entry's callBridge; this chunk still owns no fetch), and a
+     * chat entry that only PREFILLS a neutral work question (never auto-sends,
+     * never calls a model). When the Host reports no schedule service the reminder
+     * control is disabled and the degradation is stated; nothing is fabricated.
      */
     function createFirstRunNotice(props) {
-      const { lang, aiNotice, onAck, panelStyle, panelBox, buttonBase } = props
+      const { lang, aiNotice, host, quick, onBridge, onQuickState, onQuickChat, onAck, panelStyle, panelBox, buttonBase } = props
       const T = STRINGS[lang] || STRINGS.zh
       const note = { margin: '0 0 7px', fontSize: 12, lineHeight: 1.5 }
+      const caption = { margin: '3px 0 0', fontSize: 11, lineHeight: 1.45, color: 'var(--dsw-alias-label-caption, #9aa0a6)' }
       const noticeBox = panelBox || { zoom: 1, width: 300, maxHeight: 640 }
+      const caps = host && host.capabilities && typeof host.capabilities === 'object' ? host.capabilities : null
+      const scheduleOff = Boolean(caps && caps.schedule === false)
+      const busy = quick === 'busy'
+      const done = quick === 'done'
+      const remindDisabled = scheduleOff || busy || done
+      const actionStyle = (disabled) => ({ ...buttonBase, display: 'block', width: '100%', textAlign: 'left', padding: '5px 8px', marginTop: 6, opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'pointer' })
+      // One-shot: reuse the entry's callBridge with the existing task op. The
+      // payload is the same shape sendTask uses; busy/done states disable a retry.
+      const runRemind = () => {
+        if (remindDisabled) return
+        onQuickState('busy')
+        onBridge({ v: 1, op: 'task', text: T.firstRunRemindText, at: new Date(Date.now() + 6e5).toISOString() }, 15000).then(({ ok, result }) => onQuickState(ok && result ? 'done' : 'error'))
+      }
       return h('div', { role: 'dialog', 'aria-label': T.firstRunTitle, style: { ...panelStyle, width: noticeBox.width, maxWidth: noticeBox.width, maxHeight: noticeBox.maxHeight, border: '2px solid #a63d35', overflowY: 'auto', transform: 'scale(' + noticeBox.zoom + ')', transformOrigin: 'left bottom' } }, [
         h('strong', { key: 'title', style: { display: 'block', marginBottom: 7 } }, T.firstRunTitle),
         h('p', { key: 'ai', style: note }, aiNotice || ''),
         h('p', { key: 'where', style: note }, T.where),
         h('p', { key: 'coach', style: note }, T.firstRunCoach),
-        h('p', { key: 'crisis', style: { ...note, margin: '0 0 9px' } }, T.crisisLine),
-        h('button', { key: 'ack', type: 'button', onClick: onAck, style: { ...buttonBase, padding: '5px 9px' } }, T.firstRunAck),
+        h('p', { key: 'crisis', style: note }, T.crisisLine),
+        h('div', { key: 'quick', style: { marginTop: 2, paddingTop: 7, borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(127,127,127,.5))' } }, [
+          h('strong', { key: 'label', style: { display: 'block' } }, T.firstRunActions),
+          h('p', { key: 'hint', style: { ...caption, margin: '2px 0 0' } }, T.firstRunActionsHint),
+          h('button', {
+            key: 'remind', type: 'button', disabled: remindDisabled,
+            'aria-describedby': 'dsh-famling-first-run-remind-state',
+            onClick: runRemind,
+            style: actionStyle(remindDisabled),
+          }, T.firstRunRemind),
+          h('p', { key: 'remind-state', id: 'dsh-famling-first-run-remind-state', role: 'status', style: caption }, scheduleOff ? T.firstRunNoSchedule : busy ? T.firstRunRemindBusy : done ? T.firstRunRemindDone : quick === 'error' ? T.firstRunRemindFailed : T.firstRunRemindNote),
+          h('button', { key: 'chat', type: 'button', onClick: () => onQuickChat(T.firstRunChatQuestion), style: actionStyle(false) }, T.firstRunChat),
+          h('p', { key: 'chat-note', style: caption }, T.firstRunChatNote),
+        ]),
+        h('button', { key: 'ack', type: 'button', onClick: onAck, style: { ...buttonBase, padding: '5px 9px', marginTop: 9 } }, T.firstRunAck),
       ])
     }
 

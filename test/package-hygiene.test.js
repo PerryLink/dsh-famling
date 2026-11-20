@@ -93,7 +93,7 @@ test('files allowlist is duplicate-free, exists and never ships test/ or scripts
 test('the packed set covers runtime entries, legal/docs files and every export', () => {
   const expected = expectedPacked(pkg, ROOT)
   assert.deepEqual(expected.problems, [])
-  for (const required of ['index.js', 'client.js', 'client.content.js', 'client.behavior.js', 'client.anims.human.js', 'client.anims.cat.js', 'client.anims.dog.js', 'content-extension.mjs', 'cordis.patch.yml', 'icon.png', 'README.md', 'LICENSE', 'LICENSE-ART', 'NOTICE', 'docs/DETAIL.md', 'docs/LEGAL-NOTICE-2026-11-18.md', 'docs/RELEASE-HYGIENE.md', 'locale/en.json', 'locale/zh.json', 'package.json']) {
+  for (const required of ['index.js', 'client.js', 'client.content.js', 'client.behavior.js', 'client.status.js', 'client.anims.human.js', 'client.anims.cat.js', 'client.anims.dog.js', 'content-extension.mjs', 'cordis.patch.yml', 'icon.png', 'README.md', 'LICENSE', 'LICENSE-ART', 'NOTICE', 'docs/DETAIL.md', 'docs/LEGAL-NOTICE-2026-11-18.md', 'docs/RELEASE-HYGIENE.md', 'locale/en.json', 'locale/zh.json', 'package.json']) {
     assert.ok(expected.paths.includes(required), 'packed: ' + required)
   }
 })
