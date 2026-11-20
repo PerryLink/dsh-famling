@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-20T18:27:52.312Z",
+  "generatedAt": "2026-11-20T18:32:50.664Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {

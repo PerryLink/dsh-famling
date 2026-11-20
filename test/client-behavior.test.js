@@ -1767,7 +1767,8 @@ test('the first-run card offers two optional one-shot actions and does nothing b
 })
 
 test('the first-run reminder action reuses the existing task op for one 10-minute reminder', async () => {
-  const { ui, storage, businessCalls } = createHarness({ firstRun: true })
+  // Pin the fake clock to a UTC instant so the RFC3339 assertion is timezone-independent (CI runs UTC).
+  const { ui, storage, businessCalls } = createHarness({ firstRun: true, now: '2026-05-01T04:00:00.000Z' })
   const keysBefore = [...storage.keys()].sort()
   ui.clickExact('10 分钟后提醒我休息一下')
   await ui.settle()
@@ -1838,7 +1839,7 @@ test('the first-run chat action only prefills the existing panel: no send, no mo
 })
 
 test('both first-run actions are fully localized in English', async () => {
-  const { ui, businessCalls } = createHarness({ firstRun: true, language: 'en-US' })
+  const { ui, businessCalls } = createHarness({ firstRun: true, language: 'en-US', now: '2026-05-01T04:00:00.000Z' })
   const card = firstRunDialogEn(ui)
   const text = ui.text(card)
   assert.ok(text.includes('Remind me to take a break in 10 minutes'), 'English reminder action')
