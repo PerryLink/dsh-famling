@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-21T10:35:45.698Z",
+  "generatedAt": "2026-11-21T10:41:00.195Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
@@ -12,8 +12,8 @@
   },
   "packed": {
     "count": 37,
-    "totalBytes": 1351109,
-    "digest": "73ae41b42fab053be2d7709766c8feb556642020b4062c7bb4ac6a7a2572c665",
+    "totalBytes": 1351361,
+    "digest": "dc0bc70e1f0c5226885b3b720527b50fe5be3bfa397a386562fd118fe8e6e44a",
     "files": [
       {
         "path": "LICENSE",
@@ -167,8 +167,8 @@
       },
       {
         "path": "docs/market/index.json",
-        "bytes": 11217,
-        "sha256": "7f441c2f4a453b0b95c726b1273b89402f22f759097741488e09823c390bf017"
+        "bytes": 11469,
+        "sha256": "397339f2e20658192b83357d0e1fdc5fe15b127f16c5e60412fd0fa52451671a"
       },
       {
         "path": "docs/market/plugins.txt",
