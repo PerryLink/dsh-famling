@@ -42,7 +42,7 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 
 *结构：挂载 → 互动 → 观测。入口不带精灵帧载荷 —— 只有显示某个角色时才下载对应的角色 chunk；宿主状态是只在本机的有界环形缓冲，不含会话 id、消息或工具参数。图内只有真实的 slot 与 bridge 名称，五语共用同一张结构图。*
 
-## 当前实现（0.13.0）
+## 当前实现（0.13.1）
 
 - 0.11.0 体验与预算修复：面板/同意弹窗默认表面改用宿主真实 token `--dsw-alias-bg-layer-1` + `light-dark()`（宿主 0.2.2-rc.4 无 `--dsw-alias-bg-elevated`，旧回退链会在浅色宿主落深底深字；light/dark 正文对比度 ≥4.5:1，paper/night 仍为显式主题）；`visibilitychange` 隐藏时停止帧调度、不再 setState，恢复后立即回当前角色 idle；首启安全卡新增「点角色 = 互动；右键 / Shift+F10 = 菜单」（一次性、可关、不新增常驻按钮）；区域点击新增 1.2s 冷却、10s 内同区第 4 次起降为既有 `idle_blink` 轻反应（饱和后 2.5s 冷却，菜单动作始终回应）；猫/狗 idle 6→8 帧、猫 `idle_blink` 慢眨眼 4fps、狗 8fps（12 clip 不变；cat 74 / dog 70 / human 68 = 212 帧，chunk 重嵌入）；新增 `PLUGIN-MANIFEST.json`（逐文件 sha256 + 版本/体积摘要）与桌面 `JOINT-EVIDENCE` 联合证据格式。无新增数据收集 / 网络 / 权限 / 常驻 UI；仍是 C1 unsigned 邀请 beta，能力与限制以本 README 与 LEGAL-NOTICE 为准。
 - 0.11.1 入口预算治理（2026-11-21 发布）：新增包内懒加载 `client.behavior.js`（点击区域几何/命中、1.2s 重复点击冷却与饱和降级、随机回话选择、clip 的 `holdMs`/`durationMs` 帧时长），挂载后经 DSH `require.async` 拉取并 memoize；失败时入口回退统一默认帧节奏、区域点击 no-op，不阻塞渲染也不抛错。入口 `client.js` 由 97,460 B / gzip 28,029 B 降到 **94,491 B / gzip 27,087 B / brotli 22,674 B**（净减 2,969 B = 2.90 KiB；31% 门禁 97,576 B 余量 3,085 B，96 KiB 预算余量 3,813 B）；真实挂载总下载（入口 + human + behavior kit）163,463 B = 拆前基线的 **51.93%**（< 52% 首帧门禁）。未改行为语义、存储键、契约与版本（仍 0.11.0）；生成块与 `client.anims.*.js` 未手改。
