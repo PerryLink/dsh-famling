@@ -1,18 +1,26 @@
-# Orca OC / 汀岚 — 桌宠美术与设定许可
+# 汀岚 / Orca OC — dsh-famling 插件美术与设定许可
 
 Status: **按用户 2026-11-16 决定，桌宠素材采用 CC BY-NC-SA 4.0；本条为项目声明，不是律师意见。**
 版权：© 2026 PerryLink。非官方项目，不关联 DeepSeek；角色名/Logo/商标不随本许可授权。
 
+本文件是 **dsh-famling（DSH 客户端插件）** 的 LICENSE-ART。独立桌面应用仓 `PerryLink/famling` 的完整美术许可见该仓同名文件；两者采用同一许可方向（CC BY-NC-SA 4.0），但覆盖对象不同：本文件只覆盖本插件包实际分发的美术。
+
 ## 1. 适用范围
 
-本许可覆盖本仓库/发布物中的 **桌宠美术与设定素材**，包括但不限于：
+本许可覆盖 **dsh-famling 插件包内实际分发的美术与角色素材**（CC BY-NC-SA 4.0），包括：
 
-- `public/characters/**` 中的精灵、立绘、表情、图集、调色板与角色设定文本；
-- `public/assets/pet/**` 中属于本项目的占位/正式桌宠素材；
-- 桌宠页面使用的角色画面、图标、About 图、宣传图（若随包分发）；
-- 由上述素材制作的像素化/裁切/调色/合成版本。
+- `client.anims.human.js`、`client.anims.cat.js`、`client.anims.dog.js` —— 以 base64 内嵌数据形式打包的汀岚 / 布偶猫 / 金毛像素动画帧（源自 `PerryLink/famling` 的动画素材；本包不包含独立 PNG 帧文件）；
+- `icon.png` —— 插件图标 / 汀岚头像（源自 `PerryLink/famling`）；
+- 上述素材的裁切、缩放、调色、编码与内嵌版本，以及 README / `docs/` 中随包分发的角色说明文字。
 
-**不覆盖**：代码（见根 `LICENSE` / `LICENSE-COMMERCIAL.md`，PolyForm Noncommercial 1.0.0）；游戏基座/内核；第三方素材；角色名、产品名、Logo、商标、域名；真人声音/肖像；TTS 音频（见 `docs/legal/TTS-TERMS.md`）；AI 模型/API 服务。
+**不覆盖**：
+- 插件代码（见根 `LICENSE`，PolyForm Noncommercial 1.0.0）；
+- `PerryLink/famling` 独立应用仓中的其他素材与代码（按该仓自身 `LICENSE` / `LICENSE-ART`）；
+- DSH 宿主、Advisers 或其他宿主服务的代码与界面；
+- 第三方字体/音频/模型（本包不打包；浏览器 TTS/ASR 由 DSH 宿主与浏览器提供，按其自身条款）；
+- 角色名、产品名、Logo、商标、域名；真人声音/肖像。
+
+**第三方素材**：本包不打包第三方美术/字体/音频；第三方运行时与宿主边界见 `docs/LEGAL-NOTICE-2026-11-18.md`。
 
 ## 2. 许可
 
@@ -22,7 +30,7 @@ Status: **按用户 2026-11-16 决定，桌宠素材采用 CC BY-NC-SA 4.0；本
 - 法律文本：<https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en>
 - 摘要：<https://creativecommons.org/licenses/by-nc-sa/4.0/>
 - 中文说明：允许在**非商业**目的下复制、分发、改编；必须署名、注明修改、以**相同方式共享**（衍生作品使用相同许可）；不得附加额外法律/技术限制；不得暗示背书。
-- **商业使用不被允许**，除非另行取得书面许可（见 `LICENSE-COMMERCIAL.md`）。
+- **商业使用不被允许**，除非另行取得书面许可（商业授权路径见 `PerryLink/famling` 仓的 `LICENSE-COMMERCIAL.md`；本包内不打包该文件）。
 - 一经发布，本许可不可撤销；NC/SA 条款会约束下游衍生作品。
 
 ## 3. 署名与修改（TASL）
@@ -34,7 +42,7 @@ Status: **按用户 2026-11-16 决定，桌宠素材采用 CC BY-NC-SA 4.0；本
 3. **Source**：本仓库/发布物 URL（或作品页）；
 4. **License**：CC BY-NC-SA 4.0 + 链接；
 5. **Modified**：是否修改及改了什么（像素化/调色/裁切/合成等）；
-6. **AI 披露**：若为 AI 生成/辅助，须标注工具与日期（见 `AI-PROVENANCE.md`）；
+6. **AI 披露**：若为 AI 生成/辅助，须标注工具与日期（见 `PerryLink/famling` 仓的 `AI-PROVENANCE.md`；本包内嵌的猫/狗/汀岚动画帧为确定性程序化生成，见第 6 节）；
 7. **非官方声明**：不得暗示 DeepSeek 官方/合作/背书；不得使用官方 Logo/字标/官方鲸鱼娘形象。
 
 示例：
@@ -43,15 +51,17 @@ Status: **按用户 2026-11-16 决定，桌宠素材采用 CC BY-NC-SA 4.0；本
 
 ## 4. 部分 CC0 素材
 
-作者声明：部分**汀岚**美术在 Pixiv 事先以 CC0 发布（来源：<https://www.pixiv.net/users/131049875>；用户 2026-11-16 明确目前只有汀岚素材；具体文件/帖子待作者补全）。CC0 部分不能被本文件“收回”为 NC-SA；本仓库对**桌宠包内素材**统一按 CC BY-NC-SA 4.0 分发，但下游仍可能依原 CC0 主张权利。猫/狗/人型/UI 不继承该 CC0。逐文件状态见 `ASSET-LICENSES.md`。
+作者声明：部分**汀岚**美术在 Pixiv 事先以 CC0 发布（来源：<https://www.pixiv.net/users/131049875>；用户 2026-11-16 明确目前只有汀岚素材；具体文件/帖子待作者补全）。CC0 部分不能被本文件“收回”为 NC-SA；本仓库对**桌宠包内素材**统一按 CC BY-NC-SA 4.0 分发，但下游仍可能依原 CC0 主张权利。猫/狗/人型/UI 不继承该 CC0。逐文件状态见 `PerryLink/famling` 仓的 `ASSET-LICENSES.md`。
 
 ## 5. 商标/名称
 
-CC BY-NC-SA 4.0 **不授予商标权**。“Orca”不得作产品名/商标（第42类已有在先注册）；“汀岚/Tinglan”等角色名/Logo 的使用边界见 `docs/legal/TRADEMARK-AND-NAMING-POLICY.md`。不得注册/抢注本项目角色名、Logo、域名、包名。
+CC BY-NC-SA 4.0 **不授予商标权**。“Orca”不得作产品名/商标（第42类已有在先注册）；“汀岚/Tinglan”等角色名/Logo 的使用边界见 `PerryLink/famling` 仓的 `docs/legal/TRADEMARK-AND-NAMING-POLICY.md`。不得注册/抢注本项目角色名、Logo、域名、包名。
 
 ## 6. AI 生成物
 
 AI 生成物可版权性存在不确定性；本许可表达共享意愿，不承诺可执行性。发布时须按中国《人工智能生成合成内容标识办法》、平台政策与 EU AI Act 第50条进行 AI 披露。不得把 AI 图伪装成真人手绘/摄影。
+
+本插件包内嵌的猫/狗/汀岚动画帧由确定性 Python/PIL 管线生成（`ai.status=none`，见 `PerryLink/famling` 仓 `ASSET-LICENSES.md`）；`icon.png` 与源角色美术可能为 AI 生成/辅助，披露以源仓 `AI-PROVENANCE.md` 为准。
 
 ## 7. 免责
 

@@ -1,3 +1,10 @@
-dsh-famling — DSH client plugin. Code: PolyForm Noncommercial 1.0.0. Art: CC BY-NC-SA 4.0.
-Avatar/icon: Tinglan art from PerryLink/famling, CC BY-NC-SA 4.0.
+dsh-famling — DSH client plugin.
+Copyright (c) 2026 PerryLink contributors
+Required Notice: Copyright (c) 2026 PerryLink contributors
+
+Code: PolyForm Noncommercial License 1.0.0 (see LICENSE). Art: CC BY-NC-SA 4.0 (see LICENSE-ART).
+Art covered: embedded character animation frames in client.anims.human.js, client.anims.cat.js,
+client.anims.dog.js and icon.png (Tinglan / Famling art by PerryLink, PerryLink/famling).
+No third-party art, fonts or audio are bundled; browser TTS/ASR and model services are provided
+by the DSH host / browser / model provider under their own terms (see docs/LEGAL-NOTICE-2026-11-18.md).
 Unofficial; not affiliated with DeepSeek.

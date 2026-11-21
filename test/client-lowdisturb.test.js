@@ -122,7 +122,7 @@ test('quiet hours / motion / hide stay wired in the entry and lazy settings chun
   assert.ok(clientSource.includes("source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours)"), 'ambient output is gated by quiet hours')
   assert.ok(clientSource.includes('isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy'), 'a busy host agent reuses the quiet-hour suppression')
   assert.ok(clientSource.includes('60000 + Math.random() * 30000'), 'automatic micro actions are >=60s apart')
-  assert.ok(clientSource.includes('if (isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy) { schedule(); return }'), 'micro actions re-check quiet hours and host busy at fire time')
+  assert.ok(clientSource.includes('if (isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy || window.__famlingFocus?.until > Date.now()) { schedule(); return }'), 'micro actions re-check quiet hours, host busy and a memory-only focus session at fire time')
   assert.ok(clientSource.includes('const HIDDEN_KEY = \'dsh-famling/hidden-until\''), 'hidden deadline storage key')
   assert.ok(clientSource.includes('function restoreHidden()'), 'early restore exists')
   assert.ok(clientSource.includes('panelChunk.createInputPanel('), 'input panel renders from the lazy chunk')

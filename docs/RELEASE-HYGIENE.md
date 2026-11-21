@@ -26,6 +26,14 @@
 > `0.0.0-stage` / `0.0.2`）；占位 tarball 的 `homepage` 指向独立应用仓。按 npm 语义，
 > 元数据随下一次**真实发布**的 tarball 生效——本轮不为了刷元数据而发布（也不是本轮授权范围）。
 
+### 1.1 许可文件与发布面（与 `scripts/license-scan.mjs` 对应）
+
+- `license` = `PolyForm-Noncommercial-1.0.0`，与包内 `LICENSE` 标题逐字一致；`NOTICE` 携带 PolyForm 的 `Required Notice: Copyright (c) 2026 PerryLink contributors`（下游再分发必须保留该行）。
+- `LICENSE-ART` 覆盖本包**实际分发**的美术：`client.anims.human.js` / `client.anims.cat.js` / `client.anims.dog.js` 内嵌角色动画帧与 `icon.png`；不再把桌面仓的 `public/characters/**` 等非本包路径写成覆盖范围。
+- `files` 白名单必须覆盖 `LICENSE` / `LICENSE-ART` / `NOTICE` / `README.md` / `docs/LEGAL-NOTICE-2026-11-18.md`；`check-package.mjs` 的 `REQUIRED_PACKED` 把它们当作发布面。
+- 第三方素材：本包不打包第三方美术/字体/音频（浏览器 TTS/ASR、模型服务与 DSH 宿主按各自条款）。
+- 已知发布面缺口：`PLUGIN-MANIFEST.json` 是发布证据工件，不在 npm tarball 内（消费方从 release evidence 获取；是否入包由 root/owner 决定）。
+
 ## 2. `files` 白名单
 
 npm 只打包 `files` 展开后的文件（外加 `package.json` / `README` / `LICENSE` 等 npm 始终包含项）。
@@ -177,7 +185,7 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | 未做 / 不声称 | provenance、trusted publishing、GitHub 公开仓 CI 首个真实 run（以公开仓推送后的实际 run 为准）、任何签名/合规结论 |
 | 发布内容 | 0.11.0 体验与预算修复（宿主面板对比度、隐藏标签页暂停、首启 coach、点击冷却）+ 猫/狗 idle 重嵌入（212 帧）+ `PLUGIN-MANIFEST.json`；无新增数据收集/网络/权限/存储键 |
 
-> **发布面（2026-11-21）**：**0.12.0 已于 2026-11-21 发布**（见 §8.2）：新增 bridge `op:"state"` + 懒加载 `client.status.js`（宿主粗状态轮询）与 task-21 首启安全卡两个一次性有用动作（提醒 / 预填提问；无新增存储键/网络），`files` 25 项；tarball 336,041 B / unpacked 786,146 B、入口 95,533 B。上表保留 0.11.0/0.11.1 发布史实；C1 联合证据里的插件字节以 `PLUGIN-MANIFEST.json` 的最终 digest 为准。
+> **发布面（2026-11-21）**：**0.13.0 已于 2026-11-21 发布**（见 §8.3，新增一起工作专注模式/许可清收/DSH 真机证据文档）；**0.12.0 已于 2026-11-21 发布**（见 §8.2）：新增 bridge `op:"state"` + 懒加载 `client.status.js`（宿主粗状态轮询）与 task-21 首启安全卡两个一次性有用动作（提醒 / 预填提问；无新增存储键/网络），`files` 25 项；tarball 336,041 B / unpacked 786,146 B、入口 95,533 B。上表保留 0.11.0/0.11.1 发布史实；C1 联合证据里的插件字节以 `PLUGIN-MANIFEST.json` 的最终 digest 为准。
 
 ### 8.1 0.11.1（2026-11-21）
 
@@ -205,6 +213,20 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | 内容 | 入口预算治理（94,491 B 基线 → 95,533 B，新增 lazy `client.behavior.js` 5,768 B + `client.status.js` 4,099 B）；宿主 `agent/status` 粗状态桥（`op:"state"`，有界环/闭合 schema/fail-closed）；首启安全卡两个一次性有用动作（10 分钟休息提醒 / 预填工作问题，不自动发送）；`files` 24→25；无新增存储键/权限/遥测。 |
 | 未做 / 不声称 | provenance、trusted publishing、签名/合规/DLC/市场/私有仓真实 CI；公开仓 CI 以实际 run 为准 |
 
+### 8.3 0.13.0（2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | `0.13.0`（registry `latest` = `0.13.0`） |
+| registry 时间 | `2026-11-21T03:31:20.554Z`（UTC；= 2026-11-21 11:31 +08） |
+| 发布方式 | 本地 `npm publish --tag latest --access public`；未启用 provenance / trusted publishing |
+| tarball | `dsh-famling-0.13.0.tgz`；349,068 B；26 files；unpacked 818,485 B |
+| tarball sha256 | `11bd57c0253364b7f412f2b804d1647128e8bdd2338145e33e3d5f043dc65aa9` |
+| npm shasum / integrity | `86dd9c8bd3e2120e76e451272b71ccb91e2ac8ad` / `sha512-SJE8KlvQRr1CF/YSlha0qDbU0GXDOgq+CbPs46QBEkWwfQ5iwNAeg5pSvcF/wS4NVBahzObkRwcw3h1NZMErSA==` |
+| 内容 | 「一起工作（专注）」25/50 分钟（内存-only quiet 窗口，显式交互仍回应；无存储键/通知/历史/streak；入口 +198 B → 95,731 B）；`LICENSE-ART` 覆盖实际 `client.anims.*`/`icon.png` 并向 `NOTICE` 边界收敛；真实 DSH 0.2.2-rc.4 宿主联调 46/46 与 rc.4/rc.5 契约门 45/45 文档入包；`files` 25→26 |
+| 联合证据 | `2026-11-21-c1-final-06586af` 的 JOINT-EVIDENCE 已绑定本 tarball sha256（与 registry dist 一致），见 desktop `release:c1` packet |
+| 未做 / 不声称 | provenance、trusted publishing、签名/合规/DLC/市场/私有仓真实 CI |
+
 ### 8.2 0.12.0 工作树（未发版，2026-11-21）
 
 | 项 | 值 |
@@ -212,5 +234,6 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | 状态 | **未 `npm publish`**；版本号仍 `0.11.1`，由 root 统一 bump 后再发布 |
 | 相对 0.11.1 | 新增 bridge `op:"state"`（wire 2，宿主粗状态）+ 懒加载 `client.status.js` + task-21 首启安全卡两个一次性有用动作（「10 分钟后提醒我休息一下」复用既有 `op:"task"`、「问一句工作问题」只预填不发送；无新增常驻 UI / 存储键 / 网络 / 权限 / 遥测）；入口 94,491→**95,533 B**（+1,042 B，其中 task-21 +385 B；gzip 27,409 B / brotli 22,906 B）；懒加载 `client.content.js` 74,189→79,094 B（task-21 +4,905 B，不计入首屏/挂载门禁）；`files` 24→25；`PLUGIN-MANIFEST.json` 已按工作树重新生成 |
 | 门禁 | `npm test` 306/306 绿；真实挂载载荷 163,463→168,604 B = 53.57%，首帧门禁 52%→**54%**（status kit 计入真实挂载下载；入口 31% / 96 KiB 门禁不变，余量 2,043 B / 2,771 B；mount 门禁余 1,367 B） |
+| task-B1 增量（「一起工作」专注模式，2026-11-21，未发布） | 入口 95,533→**95,731 B**（+198 B；gzip 27,470 / brotli 22,972；31% 门禁余 1,845 B、96 KiB 余 2,573 B）；懒加载 `client.content.js` 79,094→85,750 B（25/50 选择器、倒计时徽标、一次性提示与 zh/en 文案；不计入首屏/挂载门禁）；真实挂载 168,604→**168,802 B = 53.63%**（< 54%，余 1,169 B）；`npm test` **314/314** 绿；无新增存储键/权限/网络/系统通知/常驻 UI；状态仅内存、刷新即清；`PLUGIN-MANIFEST.json` 已按本任务工作树重新生成 |
 | 未做 / 不声称 | provenance、trusted publishing、signed/合规结论、公开仓 CI 实测 run |
 

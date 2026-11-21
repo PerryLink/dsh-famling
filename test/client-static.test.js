@@ -861,3 +861,41 @@ test('the chat surfaces disclose the DSH-configured model provider in both langu
   }
   assert.equal(/https?:\/\//.test(contentSource), false, 'the content chunk stays offline')
 })
+
+/* ==================== "一起工作" focus mode (0.12.0 working tree / task-B1) ==================== */
+// Released 0.12.0 entry before task-B1; the focus wiring may add at most 200 B.
+const FOCUS_ENTRY_BASELINE_BYTES = 95_533
+
+test('"一起工作" focus mode lives in the lazy chunks and keeps the entry within 200 B', () => {
+  const entryBytes = Buffer.byteLength(clientSource)
+  const focusDelta = entryBytes - FOCUS_ENTRY_BASELINE_BYTES
+  assert.ok(focusDelta >= 0 && focusDelta <= 200, 'focus wiring adds ' + focusDelta + ' B (<= 200 B) to the entry')
+  assert.ok(entryBytes <= FIRST_SCREEN_BUDGET_BYTES, 'entry stays within the 96 KiB budget')
+  assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.31, 'entry stays within the 31% gate')
+  // Entry owns no focus UI/copy/markup: one badge hook, one prompt sink, two quiet gates.
+  assert.ok(clientSource.includes('panelChunk?.createFocusStatus?.(L.lang)'), 'the remaining badge is rendered by the lazy chunk')
+  assert.ok(clientSource.includes("onFocusMsg: (text) => say(text, 'speech', 'direct')"), 'the entry lends only a one-time bubble prompt')
+  assert.equal((clientSource.match(/window\.__famlingFocus\?\.until > Date\.now\(\)/g) || []).length, 2, 'ambient bubbles + micro actions are the only two focus gates')
+  assert.equal(clientSource.includes('25 分钟'), false, 'the 25/50 copy stays in the lazy chunk')
+  assert.equal(clientSource.includes('结束专注'), false, 'the focus controls stay in the lazy chunk')
+  assert.equal(clientSource.includes("'dsh-famling/focus"), false, 'no new storage key')
+  assert.equal(/localStorage[^\n]*focus/i.test(clientSource), false, 'the entry never persists focus state')
+  assert.equal(clientSource.includes('Notification'), false, 'no system-notification API in the entry')
+  assert.equal(contentSource.includes('Notification'), false, 'no system-notification API in the lazy chunk')
+  // The lazy chunk owns the session: one in-memory deadline + one timer.
+  const begin = contentSource.indexOf('// <dsh-famling:focus:begin>')
+  const end = contentSource.indexOf('// <dsh-famling:focus:end>')
+  assert.ok(begin >= 0 && end > begin, 'the focus session block is marked')
+  const block = contentSource.slice(begin, end)
+  assert.ok(block.includes('const FOCUS_MINUTES = [25, 50]'), 'only 25/50-minute sessions')
+  assert.ok(block.includes("const FOCUS_STORE_KEY = '__famlingFocus'"), 'the session state is one window memory store')
+  assert.equal(/localStorage|sessionStorage|indexedDB/.test(block), false, 'the focus session never persists')
+  assert.equal(/Notification\b/.test(block), false, 'the focus session never raises a system notification')
+  assert.ok(block.includes('setTimeout(() => endFocus('), 'the deadline is one local timeout, nothing else')
+  assert.ok(contentSource.includes('function createFocusStatus('), 'the chunk exports the lightweight badge factory')
+  assert.match(contentSource, /createContentCenter, createSettingsPanel, createFocusStatus,/, 'the entry requests the badge factory from the same chunk')
+  for (const key of ['focusGroup:', 'focusHint:', 'focusStart25:', 'focusStart50:', 'focusEnd:', 'focusStatus:', 'focusIdle:', 'focusBadge:', 'focusDone:', 'focusDoneEarly:', 'focusMemoryOnly:']) assert.ok(contentSource.includes(key), 'focus i18n key: ' + key)
+  // The picker reuses the existing unified settings panel instead of a new permanent UI.
+  assert.ok(contentSource.includes('focusSection = section(T, T.focusGroup'), 'focus controls are an existing settings section')
+  assert.ok(contentSource.includes('lowDisturb, focusSection, data'), 'focus sits with the low-disturb settings')
+})

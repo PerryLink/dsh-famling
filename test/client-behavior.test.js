@@ -2113,3 +2113,130 @@ test('stored background and font choices are restored on the next render', () =>
   assert.equal(ui.tree.props.style['--dsh-famling-font-size'], '11px')
   assert.equal(ui.tree.props.style['--dsh-famling-line-height'], '1.4')
 })
+
+/* ==================== "一起工作" focus mode (0.12.0 working tree / task-B1) ==================== */
+function focusBadge(ui) { return ui.findAll((node) => node.type === 'span' && node.props.role === 'status')[0] }
+function focusTimer(harness, minutes) { return harness.timers.timeouts.filter((timer) => timer.ms === minutes * 60000) }
+function startFocusSession(harness, label = '25 分钟') {
+  openSettings(harness.ui)
+  harness.ui.click(harness.ui.findButtonExact(label))
+  harness.ui.render()
+}
+function storedSnapshot(harness) { return new Map([...harness.storage]) }
+
+test('settings offers a memory-only 25/50 focus mode and shows a lightweight remaining badge', () => {
+  const harness = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  const keysBefore = [...harness.storage.keys()].sort()
+  const valuesBefore = storedSnapshot(harness)
+  openSettings(harness.ui)
+  const text = harness.ui.text(settingsDialog(harness.ui))
+  assert.ok(text.includes('一起工作（专注）'), 'focus group lives in the existing settings panel')
+  assert.ok(text.includes('25 分钟') && text.includes('50 分钟'), '25/50-minute choices')
+  assert.ok(text.includes('只在本机内存计时'), 'the popup states the memory-only contract')
+  assert.equal(focusBadge(harness.ui), undefined, 'no badge before a session starts')
+  harness.ui.click(harness.ui.findButtonExact('25 分钟'))
+  harness.ui.render()
+  const badge = focusBadge(harness.ui)
+  assert.ok(badge, 'a lightweight remaining badge appears next to the pet')
+  assert.ok(harness.ui.text(badge).includes('专注 25:00'), 'badge shows the remaining time: ' + harness.ui.text(badge))
+  assert.equal(focusTimer(harness, 25).length, 1, 'the whole session state is one local 25-minute timer')
+  assert.ok(harness.ui.text(settingsDialog(harness.ui)).includes('剩余 25:00'), 'the settings row shows the remaining time')
+  assert.ok(harness.ui.findButtonExact('结束专注'), 'early end is offered while a session is active')
+  assert.deepEqual([...harness.storage.keys()].sort(), keysBefore, 'starting focus adds no storage key')
+  for (const [key, value] of valuesBefore) assert.equal(harness.storage.get(key), value, 'no stored value changes: ' + key)
+})
+
+test('the focus picker, remaining status and one-time prompt localize to English', () => {
+  const harness = createHarness({ language: 'en-US', now: localTime(12, 0), settings: { motion: true } })
+  openMenuAt(harness.ui)
+  clickMenu(harness.ui, 'Settings')
+  const englishDialog = harness.ui.findAll((node) => node.type === 'div' && node.props.role === 'dialog' && node.props['aria-label'] === 'Settings')[0]
+  assert.ok(englishDialog, 'English settings dialog opens')
+  const text = harness.ui.text(englishDialog)
+  assert.ok(text.includes('Focus together'), 'English focus group')
+  assert.ok(text.includes('25 minutes') && text.includes('50 minutes'), 'English 25/50 choices')
+  harness.ui.click(harness.ui.findButtonExact('25 minutes'))
+  harness.ui.render()
+  assert.ok(harness.ui.text(focusBadge(harness.ui)).includes('Focus 25:00'), 'English remaining badge')
+  assert.ok(harness.ui.findButtonExact('End focus'), 'English early end')
+  harness.ui.click(harness.ui.findButtonExact('End focus'))
+  harness.ui.render()
+  assert.ok(harness.ui.text(harness.ui.findBubble()).includes('Focus ended early'), 'English early-end prompt')
+})
+
+test('focus pauses automatic micro actions while explicit taps and the menu still answer', () => {
+  const harness = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  startFocusSession(harness)
+  closeActiveDialog(harness.ui)
+  const idle = petImage(harness.ui).props.src
+  const timer = microTimer(harness)
+  assert.ok(timer, 'an automatic micro-action timer is scheduled')
+  timer.fn()
+  harness.ui.render()
+  assert.equal(petImage(harness.ui).props.src, idle, 'no automatic micro action during focus')
+  assert.ok(microTimer(harness) && microTimer(harness) !== timer, 'focus re-checks and retries the timer')
+  harness.ui.clickPetAt(50, 35)
+  harness.ui.render()
+  assert.ok(harness.ui.findBubble(), 'explicit taps still answer during focus (no dead pet)')
+  openMenuAt(harness.ui)
+  assert.ok(menuNode(harness.ui), 'the right-click menu still opens during focus')
+  assert.ok(menuLabels(harness.ui).some((label) => label.includes('互动')), 'menu actions stay available during focus')
+})
+
+test('the focus timer ends with one local prompt, no storage history and no streak', () => {
+  const harness = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  const keysBefore = [...harness.storage.keys()].sort()
+  const valuesBefore = storedSnapshot(harness)
+  startFocusSession(harness)
+  harness.setNow(localTime(12, 25))
+  const timer = focusTimer(harness, 25)[0]
+  assert.ok(timer, 'the 25-minute timer is scheduled')
+  timer.fn()
+  harness.ui.render()
+  assert.equal(focusBadge(harness.ui), undefined, 'the badge disappears at the deadline')
+  const bubble = harness.ui.findBubble()
+  assert.ok(bubble && harness.ui.text(bubble).includes('专注结束'), 'one local end prompt')
+  assert.ok(harness.ui.text(settingsDialog(harness.ui)).includes('当前没有进行中的专注'), 'settings is back to idle')
+  assert.deepEqual([...harness.storage.keys()].sort(), keysBefore, 'ending focus writes no storage key')
+  for (const [key, value] of valuesBefore) assert.equal(harness.storage.get(key), value, 'ending focus changes no stored value: ' + key)
+  const fresh = createHarness({ now: localTime(12, 30) })
+  assert.equal(focusBadge(fresh.ui), undefined, 'the session is memory-only and never restored')
+})
+
+test('a focus session can be ended early and restarted without leftovers', () => {
+  const harness = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  startFocusSession(harness)
+  const clearedBefore = harness.timers.cleared
+  harness.ui.click(harness.ui.findButtonExact('结束专注'))
+  harness.ui.render()
+  assert.ok(harness.timers.cleared > clearedBefore, 'the local timer is cleared on early end')
+  assert.equal(focusBadge(harness.ui), undefined, 'badge disappears on early end')
+  const bubble = harness.ui.findBubble()
+  assert.ok(bubble && harness.ui.text(bubble).includes('已提前结束专注'), 'early end reports once')
+  assert.equal(harness.ui.findButtonExact('结束专注'), undefined, 'no end button after ending')
+  harness.ui.click(harness.ui.findButtonExact('25 分钟'))
+  harness.ui.render()
+  assert.ok(focusBadge(harness.ui), 'a second session starts cleanly')
+})
+
+test('the 50-minute option runs for 50 minutes and keeps counting down', () => {
+  const harness = createHarness({ now: localTime(9, 0), settings: { motion: true } })
+  startFocusSession(harness, '50 分钟')
+  assert.equal(focusTimer(harness, 50).length, 1, 'one 50-minute timer')
+  assert.equal(focusTimer(harness, 25).length, 0, 'no 25-minute timer')
+  harness.setNow(localTime(9, 10))
+  harness.ui.render()
+  assert.ok(harness.ui.text(focusBadge(harness.ui)).includes('专注 40:00'), 'remaining status counts down')
+})
+
+test('closing the settings panel keeps the memory-only session and its end prompt', () => {
+  const harness = createHarness({ now: localTime(12, 0), settings: { motion: true } })
+  startFocusSession(harness)
+  closeActiveDialog(harness.ui)
+  assert.ok(focusBadge(harness.ui), 'the badge stays after the panel closes')
+  harness.setNow(localTime(12, 25))
+  focusTimer(harness, 25)[0].fn()
+  harness.ui.render()
+  assert.equal(focusBadge(harness.ui), undefined, 'the badge is gone at the deadline')
+  assert.ok(harness.ui.findBubble(), 'the one-time prompt appears with the panel closed')
+})

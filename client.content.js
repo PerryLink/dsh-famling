@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
       },
       compatibility: { schemaVersion: 3, minPluginVersion: '0.10.9' },
     }
-    const PLUGIN_VERSION = '0.12.0'
+    const PLUGIN_VERSION = '0.13.0'
     // MB-014 (0.10.10): versioned TTS/ASR consent. This bundle is the canonical
     // declaration text shown in the consent dialog (zh authoritative + en); the
     // entry chunk pins its SHA-256 plus a version. Any wording change MUST bump
@@ -101,6 +101,12 @@ window.__ModuleLoader__.load({
         motionSystemReduce: '系统已请求减少动态', motionSystemAllow: '系统未请求减少动态',
         hideHour: '隐藏 1 小时', hideTomorrow: '隐藏到明天',
         hideHint: '隐藏期间不显示角色与气泡；可点「显示」提前恢复，或到时间自动恢复。',
+        focusGroup: '一起工作（专注）',
+        focusHint: '选 25 或 50 分钟开始：专注期间自动气泡与随机微动作暂停，点击、菜单与聊天回复仍会回应。',
+        focusStart25: '25 分钟', focusStart50: '50 分钟', focusEnd: '结束专注',
+        focusStatus: '剩余 {time}', focusIdle: '当前没有进行中的专注。', focusBadge: '专注 {time}',
+        focusDone: '专注结束，辛苦了。', focusDoneEarly: '已提前结束专注。',
+        focusMemoryOnly: '只在本机内存计时：不写存储、不记历史、不发系统通知、不惩罚、无 streak；可提前结束。',
         consentAsr: CONSENT_TEXTS.asr,
         allow: '同意并开启', cancel: '暂不开启',
         sound: '语音朗读', mic: '语音输入',
@@ -203,6 +209,12 @@ window.__ModuleLoader__.load({
         motionSystemReduce: 'the system requests reduced motion', motionSystemAllow: 'the system does not request reduced motion',
         hideHour: 'Hide for 1 hour', hideTomorrow: 'Hide until tomorrow',
         hideHint: 'While hidden the character and bubbles are not shown; click "Show" to restore early or wait for the deadline.',
+        focusGroup: 'Focus together',
+        focusHint: 'Pick 25 or 50 minutes: automatic bubbles and random micro actions pause; taps, menu actions and chat replies still answer.',
+        focusStart25: '25 minutes', focusStart50: '50 minutes', focusEnd: 'End focus',
+        focusStatus: '{time} left', focusIdle: 'No focus session running.', focusBadge: 'Focus {time}',
+        focusDone: 'Focus finished. Take a breath.', focusDoneEarly: 'Focus ended early.',
+        focusMemoryOnly: 'Timed in memory only: no storage, no history, no system notification, no penalty or streak; end early at any time.',
         consentAsr: CONSENT_TEXTS.asrEn,
         allow: 'Agree and enable', cancel: 'Not now',
         sound: 'Voice', mic: 'Voice input',
@@ -322,6 +334,74 @@ window.__ModuleLoader__.load({
         ...children,
       ])
     }
+
+    // <dsh-famling:focus:begin>
+    // "一起工作" 专注模式（0.12.0 工作树 / task-B1）：25/50 分钟，只在本机内存里
+    // 记一个截止时间 + 一个 setTimeout；不写本地存储、不弹系统通知、不记历史、
+    // 无惩罚/无 streak，可随时提前结束。专注期间复用既有 quiet/low-disturb 语义：
+    // 入口在自动气泡与随机微动作的触发点直接读这个内存截止时间；显式点击、菜单
+    // 互动与聊天回复不受影响。
+    const FOCUS_MINUTES = [25, 50]
+    const FOCUS_STORE_KEY = '__famlingFocus'
+    let focusTimer = null
+    /** Shared memory-only store on window (no browser storage, no history). */
+    function focusStore() {
+      if (typeof window === 'undefined') return null
+      const stored = window[FOCUS_STORE_KEY]
+      if (stored && typeof stored === 'object') return stored
+      const store = { until: 0 }
+      try { window[FOCUS_STORE_KEY] = store } catch { return null }
+      return store
+    }
+    /** True only while the in-memory deadline is in the future. */
+    function focusActive() {
+      const store = focusStore()
+      return Boolean(store && Number.isFinite(store.until) && store.until > Date.now())
+    }
+    /** Local MM:SS of the time left; clamped so a throttled clock never goes negative. */
+    function focusRemaining(until) {
+      const left = Math.max(0, until - Date.now())
+      return String(Math.floor(left / 60000)).padStart(2, '0') + ':' + String(Math.floor((left % 60000) / 1000)).padStart(2, '0')
+    }
+    /** End locally with one prompt: clear the deadline and timer; nothing is persisted. */
+    function endFocus(notice, notify) {
+      if (focusTimer !== null) { clearTimeout(focusTimer); focusTimer = null }
+      const store = focusStore()
+      if (store) store.until = 0
+      if (typeof notify === 'function') { try { notify(notice) } catch {} }
+    }
+    /** Start/restart a 25/50-minute session; the only state is the in-memory deadline. */
+    function startFocus(minutes, doneNotice, notify) {
+      const store = focusStore()
+      if (!store || !FOCUS_MINUTES.includes(minutes)) return false
+      if (focusTimer !== null) clearTimeout(focusTimer)
+      store.until = Date.now() + minutes * 60000
+      focusTimer = setTimeout(() => endFocus(doneNotice, notify), minutes * 60000)
+      return true
+    }
+    /**
+     * Lightweight remaining badge next to the pet. The entry calls this on every
+     * render but holds no focus state itself; null while idle so the mode never
+     * becomes a permanent UI element.
+     */
+    function createFocusStatus(lang) {
+      if (!focusActive()) return null
+      const T = STRINGS[lang] || STRINGS.zh
+      const remaining = focusRemaining(focusStore().until)
+      const title = T.focusStatus
+      const badge = T.focusBadge
+      return h('span', {
+        key: 'focus-status', role: 'status', 'aria-live': 'polite', title: title.replace('{time}', remaining),
+        style: {
+          alignSelf: 'center', flex: 'none', padding: '1px 5px', borderRadius: 8, fontVariantNumeric: 'tabular-nums',
+          fontSize: 'calc(10px * var(--dsh-famling-ui-scale, 1))', lineHeight: 1.4, whiteSpace: 'nowrap',
+          background: 'var(--dsw-alias-bg-layer-1, light-dark(#ffffff, #1f2329))',
+          color: 'var(--dsw-alias-label-caption, #9aa0a6)',
+          border: '1px solid var(--dsw-alias-border-l2, light-dark(rgba(0,0,0,.12), rgba(255,255,255,.16)))',
+        },
+      }, badge.replace('{time}', remaining))
+    }
+    // <dsh-famling:focus:end>
 
     function roleSummary(bundle, T) {
       const voice = bundle.voicePolicy.canTts ? T.voiceSpeech : T.voiceSilent
@@ -522,7 +602,7 @@ window.__ModuleLoader__.load({
         setDialogueMode, setThemeId, setBackgroundId, setFontChoice,
         quietHours, quietActive, onToggleQuiet, onQuietTime,
         motionMode, motionSystem, motionOn, onMotionMode, onHideFor,
-        onToggleSound, onToggleMenuButton, onLoadBrief, onHideBrief, onOpenContent, onRestoreRole,
+        onToggleSound, onToggleMenuButton, onLoadBrief, onHideBrief, onOpenContent, onRestoreRole, onFocusMsg,
         scaleSettings, resolvedScales,
         onGlobalScale, onUiTextScale, onImageScale, onComponentScale, onResetScales, scaleCatalog,
         onClose, panelStyle, panelBox, buttonBase, catalog,
@@ -621,6 +701,24 @@ window.__ModuleLoader__.load({
           h('button', { key: 'tomorrow', type: 'button', onClick: () => onHideFor('tomorrow'), style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.hideTomorrow),
         ]),
         h('p', { key: 'hide-hint', style: { margin: '4px 0 0', ...captionStyle() } }, T.hideHint),
+      ])
+      // "一起工作" 专注模式（0.12.0 工作树 / task-B1）：25/50 选择、进行中的剩余
+      // 状态与提前结束都在既有设置面板里；状态只在内存，结束只在本机提示一次。
+      // 开始/结束复用入口注入的 onFocusMsg 与一次既有 setSettings identity bump
+      // 触发重渲染，不新增存储键、不弹系统通知、不记历史。
+      const focusOn = focusActive()
+      const focusStatusTemplate = T.focusStatus
+      const focusSection = section(T, T.focusGroup, 'focus', [
+        h('p', { key: 'hint', style: { margin: '0 0 4px', ...captionStyle() } }, T.focusHint),
+        h('div', { key: 'choices', style: { display: 'flex', gap: 5, flexWrap: 'wrap' } }, [
+          h('button', { key: '25', type: 'button', onClick: () => { if (startFocus(25, T.focusDone, onFocusMsg)) setSettings((value) => ({ ...value })) }, style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.focusStart25),
+          h('button', { key: '50', type: 'button', onClick: () => { if (startFocus(50, T.focusDone, onFocusMsg)) setSettings((value) => ({ ...value })) }, style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.focusStart50),
+        ]),
+        h('p', { key: 'status', role: 'status', style: { margin: '5px 0 0', ...captionStyle() } }, focusOn ? focusStatusTemplate.replace('{time}', focusRemaining(focusStore().until)) : T.focusIdle),
+        focusOn ? h('div', { key: 'end', style: { marginTop: 5 } }, [
+          h('button', { key: 'stop', type: 'button', onClick: () => endFocus(T.focusDoneEarly, onFocusMsg), style: { ...buttonBase, padding: '3px 8px', fontSize: 11 } }, T.focusEnd),
+        ]) : null,
+        h('p', { key: 'memory', style: { margin: '5px 0 0', ...captionStyle() } }, T.focusMemoryOnly),
       ])
       // MB-021/022/024: sending destination, crisis resources, the DSH boundary,
       // the chat kill switch and clear-local-data/consent-withdrawal live here.
@@ -739,7 +837,7 @@ window.__ModuleLoader__.load({
         ]),
         h('p', { key: 'hint', style: { margin: '0 0 6px', ...captionStyle() } }, T.settingsHint),
         h('p', { key: 'use', role: 'note', style: { margin: '0 0 6px', padding: '7px 8px', border: '2px solid #a63d35', borderRadius: 6, fontSize: 11, lineHeight: 1.45 } }, useRestrictions || T.useRestrictions),
-        common, independent, lowDisturb, data, voice, memory, appearance, roleGroup, advanced,
+        common, independent, lowDisturb, focusSection, data, voice, memory, appearance, roleGroup, advanced,
         h('p', { key: 'ai', style: { margin: '8px 0 0', ...captionStyle() } }, aiNotice || ''),
       ])
     }
@@ -911,6 +1009,6 @@ window.__ModuleLoader__.load({
       } catch { return false }
     }
 
-    return { createContentCenter, createSettingsPanel, createFirstRunNotice, createInputPanel, createConsentDialog, createNoticePanel, saveConsent }
+    return { createContentCenter, createSettingsPanel, createFocusStatus, createFirstRunNotice, createInputPanel, createConsentDialog, createNoticePanel, saveConsent }
   },
 })

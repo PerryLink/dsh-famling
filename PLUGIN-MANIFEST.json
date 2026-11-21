@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-20T18:32:50.664Z",
+  "generatedAt": "2026-11-21T03:56:31.554Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
     "name": "dsh-famling",
-    "version": "0.12.0",
+    "version": "0.13.0",
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
-    "count": 25,
-    "totalBytes": 786786,
-    "digest": "7125e2769e297e86fc9e9f6336c1aa5afaf52182c6890c05f33cfe38e828c8a4",
+    "count": 26,
+    "totalBytes": 819891,
+    "digest": "0f739ffc3dd31c7ecc2c745f9f6cfcba6f40d55229d7ff84121399363e9065d1",
     "files": [
       {
         "path": "LICENSE",
@@ -22,18 +22,18 @@
       },
       {
         "path": "LICENSE-ART",
-        "bytes": 24769,
-        "sha256": "8faf889eb176fab1d729597af564b6b359fa8f310cde9f8b363745bf86d639ec"
+        "bytes": 26051,
+        "sha256": "a9eb6abdcb382ad1c46eb83ef41d02ba48f97caef94f1bc5da21d9715b462889"
       },
       {
         "path": "NOTICE",
-        "bytes": 201,
-        "sha256": "5c5258bb9f1345d9078a3f3e1f6de755d798da57e93df4b8b34cb600ff38c20f"
+        "bytes": 663,
+        "sha256": "611267df9947434a3142c76e5616664b4a1625f8dd785a250cd8d32c2f2c9d74"
       },
       {
         "path": "README.md",
-        "bytes": 72709,
-        "sha256": "2e00cb58542a776459bdabced2fb565ca5e65d61e446ea3f7546517f1f862460"
+        "bytes": 75666,
+        "sha256": "93b002fab3e368148801061551603db549acc64cf0258d8380120b43cf11362f"
       },
       {
         "path": "client.anims.cat.js",
@@ -57,13 +57,13 @@
       },
       {
         "path": "client.content.js",
-        "bytes": 79094,
-        "sha256": "f44f1221c4fc65527e7e3c692d0b5912655cbeeb9de98d1bff63bc9440ede007"
+        "bytes": 85750,
+        "sha256": "f7165ba22d0330684b2000efab311f62a15be054e642872969c4b97317f61228"
       },
       {
         "path": "client.js",
-        "bytes": 95533,
-        "sha256": "07c6279b38b1b5eca00ce3d8ddf555dbfdb1419f7b38f1ce9f08a36b47f3f3d1"
+        "bytes": 95731,
+        "sha256": "d0e6b489caa89d7d9987e3c3479abd2b748b3ca8002f2e683453b173e866c7dd"
       },
       {
         "path": "client.status.js",
@@ -87,8 +87,13 @@
       },
       {
         "path": "docs/DETAIL.md",
-        "bytes": 46205,
-        "sha256": "5df97eabb21a1ec7529199fe5b2c3094970e399cd132213fed3c31c51de3d80a"
+        "bytes": 49233,
+        "sha256": "1af08c9d91c7c64c8d28847864e3a6d8722f8d494ae7ee0fdc98f50b7f88c859"
+      },
+      {
+        "path": "docs/DSH-HOST-SMOKE-2026-11-21.md",
+        "bytes": 15457,
+        "sha256": "83e06ddb35b6cd78534fbe853b02caeff1d19a32da023253b683d4ee118a2de0"
       },
       {
         "path": "docs/INDEPENDENT-REBUILD-2026-11-20.md",
@@ -98,7 +103,7 @@
       {
         "path": "docs/LEGAL-NOTICE-2026-11-18.md",
         "bytes": 28846,
-        "sha256": "35a36cb2169377939607eb409c34a1c022374994eeed6b3e9024c29e3a14ff17"
+        "sha256": "e8a88e26519f811fa1b599a2adfe580b050c1601da04787582f49252f4e254e1"
       },
       {
         "path": "docs/PET-BRIEF-0.3.0-COMPAT-2026-11-20.md",
@@ -112,8 +117,8 @@
       },
       {
         "path": "docs/RELEASE-HYGIENE.md",
-        "bytes": 17908,
-        "sha256": "a12bb336b976512b7cb71e87b1e26e53f37263864824ded0bd4e481557898ac7"
+        "bytes": 20973,
+        "sha256": "6a55da0391ffec095d4bf54799b5f4feaeef76236bb6c14b92611196954263cc"
       },
       {
         "path": "icon.png",
@@ -128,17 +133,17 @@
       {
         "path": "locale/en.json",
         "bytes": 3434,
-        "sha256": "e6e402131b693122496d217c973bec2c7cd62e09663694afd5c0844a99a0a0b2"
+        "sha256": "05c35e30b7aaa485701454c86ef05be96e638a37d7ce74be122c135fa36d9317"
       },
       {
         "path": "locale/zh.json",
         "bytes": 3040,
-        "sha256": "2532ddf8beb0dcb4dd34898fe3c9352e24821695b85689e5576dde30d1e5e298"
+        "sha256": "e5b333fd791514bce16b7a355445177a089e24113fcc46a8d2f52927c05dd197"
       },
       {
         "path": "package.json",
         "bytes": 3014,
-        "sha256": "cd848a417ef1ed8affa1f1596fe4e945731f35339f85a01bd0ae31204abdbd1e"
+        "sha256": "5fc10ccbb31b3dc7a3896abf9332026423cf2ac6c6f4c791ae2752cdef87b741"
       }
     ]
   },

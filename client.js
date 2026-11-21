@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
     const CHARACTER_POLICY = {"human":{"canTts":true,"bubble":"speech"},"cat":{"canTts":false,"bubble":"thought"},"dog":{"canTts":false,"bubble":"thought"}}
     const CHARACTER_CHUNKS = {"human":"./client.anims.human.js","cat":"./client.anims.cat.js","dog":"./client.anims.dog.js"}
     // <dsh-famling:anims:end>
-    const PLUGIN_VERSION = '0.12.0'
+    const PLUGIN_VERSION = '0.13.0'
     const BRIDGE_WIRE_VERSION = 2
     const SIZE = 72
     const CHARACTER_KEY = 'dsh-famling/character'
@@ -825,7 +825,7 @@ window.__ModuleLoader__.load({
         let timer = null
         const schedule = () => { timer = setTimeout(() => {
           if (!alive) return
-          if (isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy) { schedule(); return }
+          if (isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy || window.__famlingFocus?.until > Date.now()) { schedule(); return }
           playMicroAction(false)
         }, 60000 + Math.random() * 30000) }
         schedule()
@@ -926,7 +926,7 @@ window.__ModuleLoader__.load({
       function say(text, kind = 'speech', source = 'ambient') {
         const dialogue = DIALOGUE_MODES[dialogueMode] || DIALOGUE_MODES.standard
         if (source === 'ambient' && dialogue.bubbleChance < 1 && Math.random() > dialogue.bubbleChance) return
-        if (source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy)) return
+        if (source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy || window.__famlingFocus?.until > Date.now())) return
         const canTts = characterCanTts(characterRef.current)
         const nextKind = canTts ? (kind === 'thought' ? 'thought' : 'speech') : 'thought'
         let line = typeof text === 'string' ? text : String(text == null ? '' : text)
@@ -1421,6 +1421,7 @@ window.__ModuleLoader__.load({
               onQuietTime: (key, value) => setSettings((state) => clockMinutes(value) === null ? state : ({ ...state, quietHours: normalizeQuietHours({ ...state.quietHours, [key]: value }) })),
               onMotionMode: (mode) => { if (MOTION_MODES.includes(mode)) setSettings((value) => ({ ...value, motionMode: mode })) },
               onLoadBrief: () => void loadBrief(), onHideBrief: () => setBrief(null),
+              onFocusMsg: (text) => say(text, 'speech', 'direct'),
               onOpenContent: () => { panelAnchor.current = anchor(); setMode('content') },
               onRestoreRole: restoreRole, onClose: () => setMode(null),
               scaleSettings, resolvedScales: resolvedScale,
@@ -1465,7 +1466,7 @@ window.__ModuleLoader__.load({
         h('button', { key: 'pet', ref: petRef, type: 'button', onClick: onPetClick, onContextMenu: openMenu, onKeyDown: onPetKeyDown, 'aria-label': charName, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: fillPet(L.title), style: { padding: 0, border: 0, background: 'transparent', cursor: 'pointer', lineHeight: 0, flex: 'none', pointerEvents: 'auto' } },
           h('img', { src, width: petSize, height: petSize, alt: charName, draggable: false, style: { imageRendering: 'pixelated', display: 'block' } })),
         menuButton ? h('button', { key: 'menu-trigger', type: 'button', onClick: () => openMenuFrom(petRef), 'aria-label': L.menu, 'aria-haspopup': 'menu', 'aria-expanded': menuOpen, title: L.menuButton, style: { ...buttonBase, flex: 'none', padding: '1px 6px', fontSize: 'calc(11px * var(--dsh-famling-ui-scale, 1))', lineHeight: 1.4, pointerEvents: 'auto' } }, '⋯') : null,
-        menuNode, inputPanel, firstRunPanel, noticePanel, contentPanel, settingsPanel, consentNode, bubbleNode,
+        panelChunk?.createFocusStatus?.(L.lang), menuNode, inputPanel, firstRunPanel, noticePanel, contentPanel, settingsPanel, consentNode, bubbleNode,
       ])
     }
     return {

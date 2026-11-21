@@ -1,0 +1,1007 @@
+{
+  "schema": "dsh-host-smoke-contract/1",
+  "kind": "dsh-famling-rc4-rc5-contract-gate",
+  "startedAt": "2026-11-21T03:19:37.333Z",
+  "finishedAt": "2026-11-21T03:19:37.499Z",
+  "pass": true,
+  "checkout": "/home/yy/deepseek-harness",
+  "refs": {
+    "from": "dsh-v0.2.1-rc.4",
+    "to": "dsh-v0.2.1-rc.5",
+    "head": "HEAD"
+  },
+  "versions": {
+    "from": "0.2.1-rc.4",
+    "to": "0.2.1-rc.5",
+    "head": "0.2.2-rc.4"
+  },
+  "engineRange": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0",
+  "hostContracts": [
+    {
+      "id": "slot.sidebar-footer-action-declaration",
+      "title": "ui-sidebar declares the sidebar.footer.action list slot",
+      "file": "packages/client/ui-sidebar/src/client/contract/slots.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "9e018b8be6e23c945aa74d3bdc060da3e829c7bd",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "slot-type-declaration",
+              "present": true,
+              "line": 56,
+              "count": 1
+            },
+            {
+              "id": "owner-props",
+              "present": true,
+              "line": 56,
+              "count": 2
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "9e018b8be6e23c945aa74d3bdc060da3e829c7bd",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "slot-type-declaration",
+              "present": true,
+              "line": 56,
+              "count": 1
+            },
+            {
+              "id": "owner-props",
+              "present": true,
+              "line": 56,
+              "count": 2
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "b6c2288656d114f55537b44236b8fb588ee7db88",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "slot-type-declaration",
+              "present": true,
+              "line": 75,
+              "count": 1
+            },
+            {
+              "id": "owner-props",
+              "present": true,
+              "line": 75,
+              "count": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "slot.sidebar-footer-action-runtime-declaration",
+      "title": "the sidebar entry declares sidebar.footer.action to the slot registry at runtime",
+      "file": "packages/client/ui-sidebar/src/client/index.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "ffc31028bf00e24a23c90e0a540fbe11775a25af",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "slot-runtime-declaration",
+              "present": true,
+              "line": 92,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "ffc31028bf00e24a23c90e0a540fbe11775a25af",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "slot-runtime-declaration",
+              "present": true,
+              "line": 92,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "981ea23d3ac57e335a4573b199915781ff52ca28",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "slot-runtime-declaration",
+              "present": true,
+              "line": 103,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "slots.register-and-inject",
+      "title": "the slots service offers register() and inject(), the two calls this plugin makes",
+      "file": "packages/client/ui-renderer/src/client/registry.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "4c3f520c8a7f70be4544c0d159107d2ca2ba980a",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "inject-signature",
+              "present": true,
+              "line": 209,
+              "count": 1
+            },
+            {
+              "id": "register-forwarding",
+              "present": true,
+              "line": 181,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "4c3f520c8a7f70be4544c0d159107d2ca2ba980a",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "inject-signature",
+              "present": true,
+              "line": 209,
+              "count": 1
+            },
+            {
+              "id": "register-forwarding",
+              "present": true,
+              "line": 181,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "a3e7b3e8c6b9d7566fd291f544ba2f87483af4d5",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "inject-signature",
+              "present": true,
+              "line": 233,
+              "count": 1
+            },
+            {
+              "id": "register-forwarding",
+              "present": true,
+              "line": 205,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "slots.list-requires-id",
+      "title": "a list slot registration requires the id this plugin passes",
+      "file": "packages/client/ui-slots/src/index.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "85c7d676cccc53c0958182eea8f98dd2bae9042a",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "requires-id-error",
+              "present": true,
+              "line": 1234,
+              "count": 1
+            },
+            {
+              "id": "list-kind-case",
+              "present": true,
+              "line": 1233,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "85c7d676cccc53c0958182eea8f98dd2bae9042a",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "requires-id-error",
+              "present": true,
+              "line": 1234,
+              "count": 1
+            },
+            {
+              "id": "list-kind-case",
+              "present": true,
+              "line": 1233,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "bf1200e5d1665331e5d0e5b0fc4873f73329e2c0",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "requires-id-error",
+              "present": true,
+              "line": 1296,
+              "count": 2
+            },
+            {
+              "id": "list-kind-case",
+              "present": true,
+              "line": 1295,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "connection.fetch-route-shape",
+      "title": "ConnectionFetchRoute admits POST plus a buffered body (the plugin bridge route)",
+      "file": "packages/client/connection/src/rpc.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "aec79d07285e43d9bc0659499dbec18cf0940d98",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "route-interface",
+              "present": true,
+              "line": 153,
+              "count": 1
+            },
+            {
+              "id": "methods-type",
+              "present": true,
+              "line": 147,
+              "count": 1
+            },
+            {
+              "id": "body-mode-type",
+              "present": true,
+              "line": 150,
+              "count": 1
+            },
+            {
+              "id": "host-registry",
+              "present": true,
+              "line": 175,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "aec79d07285e43d9bc0659499dbec18cf0940d98",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "route-interface",
+              "present": true,
+              "line": 153,
+              "count": 1
+            },
+            {
+              "id": "methods-type",
+              "present": true,
+              "line": 147,
+              "count": 1
+            },
+            {
+              "id": "body-mode-type",
+              "present": true,
+              "line": 150,
+              "count": 1
+            },
+            {
+              "id": "host-registry",
+              "present": true,
+              "line": 175,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "0211698f42a677b15b62146bb3f3c1d93e9acbe5",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "route-interface",
+              "present": true,
+              "line": 146,
+              "count": 1
+            },
+            {
+              "id": "methods-type",
+              "present": true,
+              "line": 140,
+              "count": 1
+            },
+            {
+              "id": "body-mode-type",
+              "present": true,
+              "line": 143,
+              "count": 1
+            },
+            {
+              "id": "host-registry",
+              "present": true,
+              "line": 168,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "connection.fetch-register-registration",
+      "title": "ctx.connection.fetch.register() wires an exact Fetch route and validates it",
+      "file": "packages/client/connection/src/rpc-host.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "88e7b48baa54df58392b0f1bcec6d4416cb30c7a",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "register-method",
+              "present": true,
+              "line": 118,
+              "count": 1
+            },
+            {
+              "id": "route-validation",
+              "present": true,
+              "line": 401,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "88e7b48baa54df58392b0f1bcec6d4416cb30c7a",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "register-method",
+              "present": true,
+              "line": 118,
+              "count": 1
+            },
+            {
+              "id": "route-validation",
+              "present": true,
+              "line": 401,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "6801402cdeddc26293676550734cbabb47da4105",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "register-method",
+              "present": true,
+              "line": 112,
+              "count": 1
+            },
+            {
+              "id": "route-validation",
+              "present": true,
+              "line": 334,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "agent.status-event",
+      "title": "agent/status is emitted with { agent, status } and AgentStatus is idle|running",
+      "file": "packages/core/agent/src/runtime-types.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "0fa89afc054a819493206cef65dd7907092cdd7f",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "status-type",
+              "present": true,
+              "line": 109,
+              "count": 1
+            },
+            {
+              "id": "status-event",
+              "present": true,
+              "line": 280,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "0fa89afc054a819493206cef65dd7907092cdd7f",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "status-type",
+              "present": true,
+              "line": 109,
+              "count": 1
+            },
+            {
+              "id": "status-event",
+              "present": true,
+              "line": 280,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "7012dfdf50b7c78b07697fbe0cdc9defec7bb957",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "status-type",
+              "present": true,
+              "line": 136,
+              "count": 1
+            },
+            {
+              "id": "status-event",
+              "present": true,
+              "line": 310,
+              "count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "client.platform-gate",
+      "title": "the client-module scan loads only a dsh.client platform of 'web' (what this plugin declares)",
+      "file": "packages/client/modules/src/index.ts",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "blob": "18bbc1208b64cc215ebf906a2146e01c909202ba",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "platform-check",
+              "present": true,
+              "line": 862,
+              "count": 1
+            }
+          ]
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "blob": "18bbc1208b64cc215ebf906a2146e01c909202ba",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "platform-check",
+              "present": true,
+              "line": 862,
+              "count": 1
+            }
+          ]
+        },
+        "HEAD": {
+          "exists": true,
+          "blob": "b3afc6fea5d9c2494b7dcc1749f5fb1de4c34b67",
+          "ok": true,
+          "patterns": [
+            {
+              "id": "platform-check",
+              "present": true,
+              "line": 928,
+              "count": 1
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "injectPackages": [
+    {
+      "id": "inject.ui-sidebar",
+      "package": "@deepseek-ai/dsh-client-ui-sidebar",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-sidebar",
+          "ok": true
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-sidebar",
+          "ok": true
+        },
+        "HEAD": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-sidebar",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "inject.ui-layout",
+      "package": "@deepseek-ai/dsh-client-ui-layout",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-layout",
+          "ok": true
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-layout",
+          "ok": true
+        },
+        "HEAD": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-layout",
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "inject.ui-renderer",
+      "package": "@deepseek-ai/dsh-client-ui-renderer",
+      "refs": {
+        "dsh-v0.2.1-rc.4": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-renderer",
+          "ok": true
+        },
+        "dsh-v0.2.1-rc.5": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-renderer",
+          "ok": true
+        },
+        "HEAD": {
+          "exists": true,
+          "name": "@deepseek-ai/dsh-client-ui-renderer",
+          "ok": true
+        }
+      }
+    }
+  ],
+  "pluginWire": [
+    {
+      "id": "plugin.bridge-wire-version",
+      "file": "index.js",
+      "present": true,
+      "line": 28,
+      "detail": "Host half negotiates bridge wire v2"
+    },
+    {
+      "id": "plugin.bridge-wire-accepts",
+      "file": "index.js",
+      "present": true,
+      "line": 30,
+      "detail": "legacy v1 remains accepted"
+    },
+    {
+      "id": "plugin.bridge-path",
+      "file": "index.js",
+      "present": true,
+      "line": 33,
+      "detail": "bridge path is under /api so it requires an authenticated Peer"
+    },
+    {
+      "id": "plugin.hello-op",
+      "file": "index.js",
+      "present": true,
+      "line": 212,
+      "detail": "Host answers hello"
+    },
+    {
+      "id": "plugin.probe-op",
+      "file": "index.js",
+      "present": true,
+      "line": 236,
+      "detail": "Host answers probe"
+    },
+    {
+      "id": "plugin.state-op",
+      "file": "index.js",
+      "present": true,
+      "line": 403,
+      "detail": "Host answers state"
+    },
+    {
+      "id": "plugin.hello-probe-wire-guard",
+      "file": "index.js",
+      "present": true,
+      "line": 809,
+      "detail": "hello/probe/state are rejected below wire 2"
+    },
+    {
+      "id": "plugin.client-wire-version",
+      "file": "client.js",
+      "present": true,
+      "line": 21,
+      "detail": "browser half sends bridge wire v2"
+    },
+    {
+      "id": "plugin.client-hello",
+      "file": "client.js",
+      "present": true,
+      "line": 856,
+      "detail": "browser hello carries its version and wire revision"
+    },
+    {
+      "id": "plugin.client-probe",
+      "file": "client.js",
+      "present": true,
+      "line": 1196,
+      "detail": "browser can re-probe capabilities"
+    },
+    {
+      "id": "plugin.client-slot-inject",
+      "file": "client.js",
+      "present": true,
+      "line": 1475,
+      "detail": "browser registers into the footer action slot"
+    }
+  ],
+  "hashes": [
+    {
+      "id": "slot.sidebar-footer-action-declaration",
+      "file": "packages/client/ui-sidebar/src/client/contract/slots.ts",
+      "fromBlob": "9e018b8be6e23c945aa74d3bdc060da3e829c7bd",
+      "toBlob": "9e018b8be6e23c945aa74d3bdc060da3e829c7bd",
+      "headBlob": "b6c2288656d114f55537b44236b8fb588ee7db88",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "slot.sidebar-footer-action-runtime-declaration",
+      "file": "packages/client/ui-sidebar/src/client/index.ts",
+      "fromBlob": "ffc31028bf00e24a23c90e0a540fbe11775a25af",
+      "toBlob": "ffc31028bf00e24a23c90e0a540fbe11775a25af",
+      "headBlob": "981ea23d3ac57e335a4573b199915781ff52ca28",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "slots.register-and-inject",
+      "file": "packages/client/ui-renderer/src/client/registry.ts",
+      "fromBlob": "4c3f520c8a7f70be4544c0d159107d2ca2ba980a",
+      "toBlob": "4c3f520c8a7f70be4544c0d159107d2ca2ba980a",
+      "headBlob": "a3e7b3e8c6b9d7566fd291f544ba2f87483af4d5",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "slots.list-requires-id",
+      "file": "packages/client/ui-slots/src/index.ts",
+      "fromBlob": "85c7d676cccc53c0958182eea8f98dd2bae9042a",
+      "toBlob": "85c7d676cccc53c0958182eea8f98dd2bae9042a",
+      "headBlob": "bf1200e5d1665331e5d0e5b0fc4873f73329e2c0",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "connection.fetch-route-shape",
+      "file": "packages/client/connection/src/rpc.ts",
+      "fromBlob": "aec79d07285e43d9bc0659499dbec18cf0940d98",
+      "toBlob": "aec79d07285e43d9bc0659499dbec18cf0940d98",
+      "headBlob": "0211698f42a677b15b62146bb3f3c1d93e9acbe5",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "connection.fetch-register-registration",
+      "file": "packages/client/connection/src/rpc-host.ts",
+      "fromBlob": "88e7b48baa54df58392b0f1bcec6d4416cb30c7a",
+      "toBlob": "88e7b48baa54df58392b0f1bcec6d4416cb30c7a",
+      "headBlob": "6801402cdeddc26293676550734cbabb47da4105",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "agent.status-event",
+      "file": "packages/core/agent/src/runtime-types.ts",
+      "fromBlob": "0fa89afc054a819493206cef65dd7907092cdd7f",
+      "toBlob": "0fa89afc054a819493206cef65dd7907092cdd7f",
+      "headBlob": "7012dfdf50b7c78b07697fbe0cdc9defec7bb957",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    },
+    {
+      "id": "client.platform-gate",
+      "file": "packages/client/modules/src/index.ts",
+      "fromBlob": "18bbc1208b64cc215ebf906a2146e01c909202ba",
+      "toBlob": "18bbc1208b64cc215ebf906a2146e01c909202ba",
+      "headBlob": "b3afc6fea5d9c2494b7dcc1749f5fb1de4c34b67",
+      "fromEqualsTo": true,
+      "toEqualsHead": false
+    }
+  ],
+  "checks": [
+    {
+      "id": "plugin.declares-client-platform-web",
+      "ok": true,
+      "detail": "package.json dsh.client.platform = \"web\" (the Host gate this plugin must satisfy)"
+    },
+    {
+      "id": "contract.slot.sidebar-footer-action-declaration.to",
+      "ok": true,
+      "detail": "ui-sidebar declares the sidebar.footer.action list slot [dsh-v0.2.1-rc.5]: 2/2 patterns at slot-type-declaration:56, owner-props:56"
+    },
+    {
+      "id": "contract.slot.sidebar-footer-action-declaration.head",
+      "ok": true,
+      "detail": "ui-sidebar declares the sidebar.footer.action list slot [head HEAD]: 2/2 patterns at slot-type-declaration:75, owner-props:75"
+    },
+    {
+      "id": "contract.slot.sidebar-footer-action-runtime-declaration.to",
+      "ok": true,
+      "detail": "the sidebar entry declares sidebar.footer.action to the slot registry at runtime [dsh-v0.2.1-rc.5]: 1/1 patterns at slot-runtime-declaration:92"
+    },
+    {
+      "id": "contract.slot.sidebar-footer-action-runtime-declaration.head",
+      "ok": true,
+      "detail": "the sidebar entry declares sidebar.footer.action to the slot registry at runtime [head HEAD]: 1/1 patterns at slot-runtime-declaration:103"
+    },
+    {
+      "id": "contract.slots.register-and-inject.to",
+      "ok": true,
+      "detail": "the slots service offers register() and inject(), the two calls this plugin makes [dsh-v0.2.1-rc.5]: 2/2 patterns at inject-signature:209, register-forwarding:181"
+    },
+    {
+      "id": "contract.slots.register-and-inject.head",
+      "ok": true,
+      "detail": "the slots service offers register() and inject(), the two calls this plugin makes [head HEAD]: 2/2 patterns at inject-signature:233, register-forwarding:205"
+    },
+    {
+      "id": "contract.slots.list-requires-id.to",
+      "ok": true,
+      "detail": "a list slot registration requires the id this plugin passes [dsh-v0.2.1-rc.5]: 2/2 patterns at requires-id-error:1234, list-kind-case:1233"
+    },
+    {
+      "id": "contract.slots.list-requires-id.head",
+      "ok": true,
+      "detail": "a list slot registration requires the id this plugin passes [head HEAD]: 2/2 patterns at requires-id-error:1296, list-kind-case:1295"
+    },
+    {
+      "id": "contract.connection.fetch-route-shape.to",
+      "ok": true,
+      "detail": "ConnectionFetchRoute admits POST plus a buffered body (the plugin bridge route) [dsh-v0.2.1-rc.5]: 4/4 patterns at route-interface:153, methods-type:147, body-mode-type:150, host-registry:175"
+    },
+    {
+      "id": "contract.connection.fetch-route-shape.head",
+      "ok": true,
+      "detail": "ConnectionFetchRoute admits POST plus a buffered body (the plugin bridge route) [head HEAD]: 4/4 patterns at route-interface:146, methods-type:140, body-mode-type:143, host-registry:168"
+    },
+    {
+      "id": "contract.connection.fetch-register-registration.to",
+      "ok": true,
+      "detail": "ctx.connection.fetch.register() wires an exact Fetch route and validates it [dsh-v0.2.1-rc.5]: 2/2 patterns at register-method:118, route-validation:401"
+    },
+    {
+      "id": "contract.connection.fetch-register-registration.head",
+      "ok": true,
+      "detail": "ctx.connection.fetch.register() wires an exact Fetch route and validates it [head HEAD]: 2/2 patterns at register-method:112, route-validation:334"
+    },
+    {
+      "id": "contract.agent.status-event.to",
+      "ok": true,
+      "detail": "agent/status is emitted with { agent, status } and AgentStatus is idle|running [dsh-v0.2.1-rc.5]: 2/2 patterns at status-type:109, status-event:280"
+    },
+    {
+      "id": "contract.agent.status-event.head",
+      "ok": true,
+      "detail": "agent/status is emitted with { agent, status } and AgentStatus is idle|running [head HEAD]: 2/2 patterns at status-type:136, status-event:310"
+    },
+    {
+      "id": "contract.client.platform-gate.to",
+      "ok": true,
+      "detail": "the client-module scan loads only a dsh.client platform of 'web' (what this plugin declares) [dsh-v0.2.1-rc.5]: 1/1 patterns at platform-check:862"
+    },
+    {
+      "id": "contract.client.platform-gate.head",
+      "ok": true,
+      "detail": "the client-module scan loads only a dsh.client platform of 'web' (what this plugin declares) [head HEAD]: 1/1 patterns at platform-check:928"
+    },
+    {
+      "id": "inject.inject.ui-sidebar.to",
+      "ok": true,
+      "detail": "@deepseek-ai/dsh-client-ui-sidebar resolves in dsh-v0.2.1-rc.5"
+    },
+    {
+      "id": "inject.inject.ui-sidebar.head",
+      "ok": true,
+      "detail": "@deepseek-ai/dsh-client-ui-sidebar resolves at HEAD"
+    },
+    {
+      "id": "inject.inject.ui-layout.to",
+      "ok": true,
+      "detail": "@deepseek-ai/dsh-client-ui-layout resolves in dsh-v0.2.1-rc.5"
+    },
+    {
+      "id": "inject.inject.ui-layout.head",
+      "ok": true,
+      "detail": "@deepseek-ai/dsh-client-ui-layout resolves at HEAD"
+    },
+    {
+      "id": "inject.inject.ui-renderer.to",
+      "ok": true,
+      "detail": "@deepseek-ai/dsh-client-ui-renderer resolves in dsh-v0.2.1-rc.5"
+    },
+    {
+      "id": "inject.inject.ui-renderer.head",
+      "ok": true,
+      "detail": "@deepseek-ai/dsh-client-ui-renderer resolves at HEAD"
+    },
+    {
+      "id": "wire.plugin.bridge-wire-version",
+      "ok": true,
+      "detail": "Host half negotiates bridge wire v2 (index.js:28)"
+    },
+    {
+      "id": "wire.plugin.bridge-wire-accepts",
+      "ok": true,
+      "detail": "legacy v1 remains accepted (index.js:30)"
+    },
+    {
+      "id": "wire.plugin.bridge-path",
+      "ok": true,
+      "detail": "bridge path is under /api so it requires an authenticated Peer (index.js:33)"
+    },
+    {
+      "id": "wire.plugin.hello-op",
+      "ok": true,
+      "detail": "Host answers hello (index.js:212)"
+    },
+    {
+      "id": "wire.plugin.probe-op",
+      "ok": true,
+      "detail": "Host answers probe (index.js:236)"
+    },
+    {
+      "id": "wire.plugin.state-op",
+      "ok": true,
+      "detail": "Host answers state (index.js:403)"
+    },
+    {
+      "id": "wire.plugin.hello-probe-wire-guard",
+      "ok": true,
+      "detail": "hello/probe/state are rejected below wire 2 (index.js:809)"
+    },
+    {
+      "id": "wire.plugin.client-wire-version",
+      "ok": true,
+      "detail": "browser half sends bridge wire v2 (client.js:21)"
+    },
+    {
+      "id": "wire.plugin.client-hello",
+      "ok": true,
+      "detail": "browser hello carries its version and wire revision (client.js:856)"
+    },
+    {
+      "id": "wire.plugin.client-probe",
+      "ok": true,
+      "detail": "browser can re-probe capabilities (client.js:1196)"
+    },
+    {
+      "id": "wire.plugin.client-slot-inject",
+      "ok": true,
+      "detail": "browser registers into the footer action slot (client.js:1475)"
+    },
+    {
+      "id": "engine.excludes-from",
+      "ok": true,
+      "detail": "engines.dsh \">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0\" rejects dsh-v0.2.1-rc.4 (0.2.1-rc.4)"
+    },
+    {
+      "id": "engine.admits-to",
+      "ok": true,
+      "detail": "engines.dsh \">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0\" admits dsh-v0.2.1-rc.5 (0.2.1-rc.5)"
+    },
+    {
+      "id": "engine.admits-head",
+      "ok": true,
+      "detail": "engines.dsh \">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0\" admits the booted checkout (0.2.2-rc.4)"
+    },
+    {
+      "id": "location.slot.sidebar-footer-action-declaration",
+      "ok": true,
+      "detail": "slot.sidebar-footer-action-declaration: rc.4==rc.5 identical blob (9e018b8be6), rc.5->HEAD moved (blob 9e018b8be6 -> b6c2288656)"
+    },
+    {
+      "id": "location.slot.sidebar-footer-action-runtime-declaration",
+      "ok": true,
+      "detail": "slot.sidebar-footer-action-runtime-declaration: rc.4==rc.5 identical blob (ffc31028bf), rc.5->HEAD moved (blob ffc31028bf -> 981ea23d3a)"
+    },
+    {
+      "id": "location.slots.register-and-inject",
+      "ok": true,
+      "detail": "slots.register-and-inject: rc.4==rc.5 identical blob (4c3f520c8a), rc.5->HEAD moved (blob 4c3f520c8a -> a3e7b3e8c6)"
+    },
+    {
+      "id": "location.slots.list-requires-id",
+      "ok": true,
+      "detail": "slots.list-requires-id: rc.4==rc.5 identical blob (85c7d676cc), rc.5->HEAD moved (blob 85c7d676cc -> bf1200e5d1)"
+    },
+    {
+      "id": "location.connection.fetch-route-shape",
+      "ok": true,
+      "detail": "connection.fetch-route-shape: rc.4==rc.5 identical blob (aec79d0728), rc.5->HEAD moved (blob aec79d0728 -> 0211698f42)"
+    },
+    {
+      "id": "location.connection.fetch-register-registration",
+      "ok": true,
+      "detail": "connection.fetch-register-registration: rc.4==rc.5 identical blob (88e7b48baa), rc.5->HEAD moved (blob 88e7b48baa -> 6801402cde)"
+    },
+    {
+      "id": "location.agent.status-event",
+      "ok": true,
+      "detail": "agent.status-event: rc.4==rc.5 identical blob (0fa89afc05), rc.5->HEAD moved (blob 0fa89afc05 -> 7012dfdf50)"
+    },
+    {
+      "id": "location.client.platform-gate",
+      "ok": true,
+      "detail": "client.platform-gate: rc.4==rc.5 identical blob (18bbc1208b), rc.5->HEAD moved (blob 18bbc1208b -> b3afc6fea5)"
+    }
+  ],
+  "limitations": [
+    "rc.4/rc.5 Host instances are not booted by this script: only one built checkout exists on this machine, and building a release tag needs another full pnpm install + build. The dynamic proof runs in test/dsh-host-smoke.mjs against HEAD.",
+    "Static assertions read blobs from the git object database (git show <ref>:<path>), so they do not depend on the checkout working tree state."
+  ],
+  "plugin": {
+    "name": "dsh-famling",
+    "version": "0.12.0",
+    "enginesDsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+  },
+  "engineResults": {
+    "from": {
+      "version": "0.2.1-rc.4",
+      "satisfies": false
+    },
+    "to": {
+      "version": "0.2.1-rc.5",
+      "satisfies": true
+    },
+    "head": {
+      "version": "0.2.2-rc.4",
+      "satisfies": true
+    }
+  },
+  "summary": {
+    "checks": 45,
+    "passed": 45,
+    "failed": 0,
+    "failedIds": []
+  }
+}

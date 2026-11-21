@@ -1,0 +1,735 @@
+{
+  "schema": "dsh-host-smoke/1",
+  "kind": "dsh-famling-real-host-smoke",
+  "startedAt": "2026-11-21T03:21:54.449Z",
+  "finishedAt": "2026-11-21T03:22:13.232Z",
+  "pass": true,
+  "environment": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v24.22.1",
+    "workdir": "/tmp/dsh-host-smoke-Mvixut",
+    "pnpm": "12.21.0",
+    "dshHome": "/tmp/dsh-host-smoke-Mvixut/home",
+    "workspaceDir": "/tmp/dsh-host-smoke-Mvixut/workspace",
+    "mockLlmBaseUrl": "http://127.0.0.1:52866/v1",
+    "webUrl": "http://127.0.0.1:52780/",
+    "chrome": {
+      "path": "/home/yy/.cache/ms-playwright/chromium-1148/chrome-linux/chrome",
+      "version": "Chromium 131.0.6778.33",
+      "headless": true,
+      "libDirs": [
+        "/tmp/dsh-host-smoke-Mvixut/chrome-libs/usr/lib/x86_64-linux-gnu"
+      ],
+      "libPrep": "prepared",
+      "debugPort": 52116
+    }
+  },
+  "host": {
+    "checkout": "/home/yy/deepseek-harness",
+    "version": "0.2.2-rc.4",
+    "commit": "ca33fd6843b205e279c7ccb6cb73a472c78f5760",
+    "describe": "dsh-v0.2.2-alpha.3-2986-gca33fd6843",
+    "dirty": [
+      "M package.json",
+      " M packages/boot/app-boot/src/profile-resolution/resolver.ts",
+      " M pnpm-lock.yaml"
+    ],
+    "bootRelease": {
+      "version": "0.2.2-rc.4"
+    },
+    "bootEntries": 77
+  },
+  "plugin": {
+    "name": "dsh-famling",
+    "version": "0.12.0",
+    "directory": "/mnt/d/Projects/dsh/plugins/dsh-famling",
+    "tarball": "/tmp/dsh-host-smoke-Mvixut/pkg/dsh-famling-0.12.0.tgz",
+    "tarballSha256": "1e64c83c06d97144f7f3bad8ab505c6fc0d0c6ed0f2bf265a9e1f7ceec0d8b52",
+    "tarballBytes": 348547
+  },
+  "checks": [
+    {
+      "id": "preflight.host-version",
+      "ok": true,
+      "detail": "Host version 0.2.2-rc.4 (commit ca33fd6843b205e279c7ccb6cb73a472c78f5760, describe dsh-v0.2.2-alpha.3-2986-gca33fd6843)",
+      "at": "2026-11-21T03:21:54.607Z"
+    },
+    {
+      "id": "preflight.dsh-home-isolated",
+      "ok": true,
+      "detail": "DSH_HOME is a fresh mkdtemp directory; inherited DSH_*/DEEPSEEK_* variables are scrubbed from every child environment",
+      "at": "2026-11-21T03:21:54.607Z"
+    },
+    {
+      "id": "preflight.plugin-version",
+      "ok": true,
+      "detail": "plugin dsh-famling@0.12.0",
+      "at": "2026-11-21T03:21:54.607Z"
+    },
+    {
+      "id": "preflight.node",
+      "ok": true,
+      "detail": "node v24.22.1",
+      "at": "2026-11-21T03:21:54.607Z"
+    },
+    {
+      "id": "preflight.pnpm",
+      "ok": true,
+      "detail": "pnpm 12.21.0",
+      "at": "2026-11-21T03:21:54.607Z"
+    },
+    {
+      "id": "pack.tarball",
+      "ok": true,
+      "detail": "dsh-famling-0.12.0.tgz (348547 bytes, sha256 1e64c83c06d97144...)",
+      "at": "2026-11-21T03:21:54.860Z"
+    },
+    {
+      "id": "install.exit-code",
+      "ok": true,
+      "detail": "pnpm dsh plugin add exited 0",
+      "at": "2026-11-21T03:21:55.974Z"
+    },
+    {
+      "id": "install.profile-bundle-selected",
+      "ok": true,
+      "detail": "profile bundles: [\"@deepseek-ai/dsh-base\",\"@deepseek-ai/dsh-web-app\",\"dsh-famling\"]",
+      "at": "2026-11-21T03:21:55.975Z"
+    },
+    {
+      "id": "install.profile-dependency",
+      "ok": true,
+      "detail": "profile dependency dsh-famling: file:/tmp/dsh-host-smoke-Mvixut/pkg/dsh-famling-0.12.0.tgz",
+      "at": "2026-11-21T03:21:55.975Z"
+    },
+    {
+      "id": "install.package-materialized",
+      "ok": true,
+      "detail": "/tmp/dsh-host-smoke-Mvixut/home/profiles/web/node_modules/dsh-famling/package.json",
+      "at": "2026-11-21T03:21:55.975Z"
+    },
+    {
+      "id": "install.installed-version",
+      "ok": true,
+      "detail": "installed dsh-famling@0.12.0",
+      "at": "2026-11-21T03:21:55.975Z"
+    },
+    {
+      "id": "install.bundle-patch-present",
+      "ok": true,
+      "detail": "cordis.patch.yml materialized in the profile",
+      "at": "2026-11-21T03:21:55.975Z"
+    },
+    {
+      "id": "mock-llm.ready",
+      "ok": true,
+      "detail": "Messages mock on http://127.0.0.1:52866/v1 (scripted success repeated, no provider key, no network)",
+      "at": "2026-11-21T03:21:56.231Z"
+    },
+    {
+      "id": "host.token-url",
+      "ok": true,
+      "detail": "startup printed a tokenized URL on http://127.0.0.1:52780/ (token redacted)",
+      "at": "2026-11-21T03:21:58.739Z"
+    },
+    {
+      "id": "host.token-exchange",
+      "ok": true,
+      "detail": "launch token exchanged for a signed Cookie (HTTP 303)",
+      "at": "2026-11-21T03:21:58.765Z"
+    },
+    {
+      "id": "http.index-status",
+      "ok": true,
+      "detail": "GET / -> HTTP 200 (43086 bytes)",
+      "at": "2026-11-21T03:21:58.777Z"
+    },
+    {
+      "id": "http.boot-graph-entry",
+      "ok": true,
+      "detail": "__DSH_BOOT__ entry 'dsh-famling' url=plugins/??dsh-famling/client.js&rev=e0388c0bcbe2 inject=[\"@deepseek-ai/dsh-client-ui-sidebar\",\"@deepseek-ai/dsh-client-ui-layout\",\"@deepseek-ai/dsh-client-ui-renderer\"]",
+      "at": "2026-11-21T03:21:58.777Z"
+    },
+    {
+      "id": "http.boot-graph-release",
+      "ok": true,
+      "detail": "boot release {\"version\":\"0.2.2-rc.4\"} matches Host 0.2.2-rc.4",
+      "at": "2026-11-21T03:21:58.777Z"
+    },
+    {
+      "id": "http.client-bundle-status",
+      "ok": true,
+      "detail": "GET client bundle -> HTTP 200 (94586 bytes)",
+      "at": "2026-11-21T03:21:58.783Z"
+    },
+    {
+      "id": "http.client-bundle-shape",
+      "ok": true,
+      "detail": "served bundle registers the package through __ModuleLoader__",
+      "at": "2026-11-21T03:21:58.783Z"
+    },
+    {
+      "id": "bridge.hello-status",
+      "ok": true,
+      "detail": "POST hello -> HTTP 200 ok=true",
+      "at": "2026-11-21T03:21:58.790Z"
+    },
+    {
+      "id": "bridge.hello-wire",
+      "ok": true,
+      "detail": "bridge wire v2 accepts [1,2]",
+      "at": "2026-11-21T03:21:58.790Z"
+    },
+    {
+      "id": "bridge.hello-host-version",
+      "ok": true,
+      "detail": "hello host.version=\"0.2.2-rc.4\" source=\"client-boot\"",
+      "at": "2026-11-21T03:21:58.790Z"
+    },
+    {
+      "id": "bridge.hello-compatible",
+      "ok": true,
+      "detail": "compatible=true versionMismatch=false",
+      "at": "2026-11-21T03:21:58.790Z"
+    },
+    {
+      "id": "bridge.hello-capabilities",
+      "ok": true,
+      "detail": "capabilities={\"llm\":true,\"schedule\":true,\"agentDefaultModel\":true,\"brief\":true,\"bridge\":true}",
+      "at": "2026-11-21T03:21:58.790Z"
+    },
+    {
+      "id": "bridge.probe-status",
+      "ok": true,
+      "detail": "POST probe -> HTTP 200 ok=true",
+      "at": "2026-11-21T03:21:58.794Z"
+    },
+    {
+      "id": "bridge.probe-wire",
+      "ok": true,
+      "detail": "probe wire v2",
+      "at": "2026-11-21T03:21:58.794Z"
+    },
+    {
+      "id": "bridge.agent-status-contract",
+      "ok": true,
+      "detail": "state available=true source=\"events\" (agent/status subscription live in the real Host)",
+      "at": "2026-11-21T03:21:58.798Z"
+    },
+    {
+      "id": "bridge.requires-authentication",
+      "ok": true,
+      "detail": "unauthenticated POST -> HTTP 401 (owner Peer policy enforced)",
+      "at": "2026-11-21T03:21:58.799Z"
+    },
+    {
+      "id": "browser.chrome-available",
+      "ok": true,
+      "detail": "Chromium 131.0.6778.33 (/home/yy/.cache/ms-playwright/chromium-1148/chrome-linux/chrome)",
+      "at": "2026-11-21T03:22:02.230Z"
+    },
+    {
+      "id": "browser.cdp-connected",
+      "ok": true,
+      "detail": "CDP connected to the page target (debug port 52116)",
+      "at": "2026-11-21T03:22:02.492Z"
+    },
+    {
+      "id": "browser.pet-present",
+      "ok": true,
+      "detail": "character button aria-label=\"Tinglan\" at x=8 y=590 in the sidebar footer",
+      "at": "2026-11-21T03:22:03.430Z"
+    },
+    {
+      "id": "browser.pet-72px",
+      "ok": true,
+      "detail": "rendered character is 72x72 px (img width/height attributes 72/72)",
+      "at": "2026-11-21T03:22:03.430Z"
+    },
+    {
+      "id": "browser.pet-label",
+      "ok": true,
+      "detail": "character aria-label \"Tinglan\" is one of the shipped character names",
+      "at": "2026-11-21T03:22:03.430Z"
+    },
+    {
+      "id": "browser.pet-sprite",
+      "ok": true,
+      "detail": "character sprite is an inline PNG data URL (no network asset)",
+      "at": "2026-11-21T03:22:03.430Z"
+    },
+    {
+      "id": "browser.context-menu-opens",
+      "ok": true,
+      "detail": "right-click opened #dsh-famling-menu role=\"menu\" aria-label=\"Menu\"",
+      "at": "2026-11-21T03:22:04.032Z"
+    },
+    {
+      "id": "browser.context-menu-items",
+      "ok": true,
+      "detail": "menu items: Chat… | Play ▸ | Content & characters… | Settings… | More ▸ | Quit (hide; refresh to restore)",
+      "at": "2026-11-21T03:22:04.033Z"
+    },
+    {
+      "id": "browser.context-menu-escape",
+      "ok": true,
+      "detail": "Escape closed the menu",
+      "at": "2026-11-21T03:22:04.492Z"
+    },
+    {
+      "id": "browser.keyboard-menu",
+      "ok": true,
+      "detail": "Shift+F10 on the character opened the same menu",
+      "at": "2026-11-21T03:22:05.295Z"
+    },
+    {
+      "id": "browser.bridge-hello",
+      "ok": true,
+      "detail": "browser POST hello ok=true compatible=true host.version=\"0.2.2-rc.4\" source=\"client-boot\"",
+      "at": "2026-11-21T03:22:05.300Z"
+    },
+    {
+      "id": "browser.workspace-selected",
+      "ok": true,
+      "detail": "workspace picker selected /tmp/dsh-host-smoke-Mvixut/workspace (opened)",
+      "at": "2026-11-21T03:22:11.921Z"
+    },
+    {
+      "id": "browser.composer-found",
+      "ok": true,
+      "detail": "session chat composer is available after workspace selection",
+      "at": "2026-11-21T03:22:11.923Z"
+    },
+    {
+      "id": "browser.turn-sent",
+      "ok": true,
+      "detail": "typed the prompt and clicked Send (composer text: \"Say hello in one short sentence.\")",
+      "at": "2026-11-21T03:22:12.351Z"
+    },
+    {
+      "id": "browser.agent-busy-quiet",
+      "ok": true,
+      "detail": "agent/status observed through the plugin: running -> idle (available=true source=events lastError=null)",
+      "at": "2026-11-21T03:22:12.871Z"
+    },
+    {
+      "id": "browser.model-turn-rendered",
+      "ok": true,
+      "detail": "the real Web UI rendered the mock provider reply (\"Hello from the mock model. This is the f...\")",
+      "at": "2026-11-21T03:22:12.872Z"
+    },
+    {
+      "id": "browser.screenshot",
+      "ok": true,
+      "detail": "/mnt/d/Projects/dsh/plugins/dsh-famling/test/dsh-host-smoke.screenshot.png",
+      "at": "2026-11-21T03:22:12.931Z"
+    }
+  ],
+  "steps": [
+    {
+      "id": "preflight",
+      "title": "Locate the DSH checkout, Host version, and toolchain",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:54.450Z",
+      "finishedAt": "2026-11-21T03:21:54.607Z",
+      "detail": "Host 0.2.2-rc.4, plugin dsh-famling@0.12.0"
+    },
+    {
+      "id": "pack",
+      "title": "npm pack the plugin tarball",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:54.607Z",
+      "finishedAt": "2026-11-21T03:21:54.860Z",
+      "detail": "/tmp/dsh-host-smoke-Mvixut/pkg/dsh-famling-0.12.0.tgz"
+    },
+    {
+      "id": "install",
+      "title": "dsh plugin --profile web add <tarball> with an isolated DSH_HOME",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:54.860Z",
+      "finishedAt": "2026-11-21T03:21:55.975Z",
+      "detail": "installed dsh-famling@0.12.0"
+    },
+    {
+      "id": "mock-llm",
+      "title": "Start the scriptable Messages mock endpoint",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:55.976Z",
+      "finishedAt": "2026-11-21T03:21:56.231Z",
+      "detail": "http://127.0.0.1:52866/v1"
+    },
+    {
+      "id": "host",
+      "title": "Boot the real Web host (dsh --profile web --no-open)",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:56.231Z",
+      "finishedAt": "2026-11-21T03:21:58.765Z",
+      "detail": "http://127.0.0.1:52780/"
+    },
+    {
+      "id": "http-contract",
+      "title": "Verify the boot graph, the client bundle route, and the authenticated bridge over HTTP",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:58.765Z",
+      "finishedAt": "2026-11-21T03:21:58.799Z",
+      "detail": "boot graph + bundle route + bridge hello/probe/state"
+    },
+    {
+      "id": "browser",
+      "title": "Drive headless Chromium over CDP against the real Web GUI",
+      "status": "pass",
+      "startedAt": "2026-11-21T03:21:58.799Z",
+      "finishedAt": "2026-11-21T03:22:12.932Z",
+      "detail": "character + menu + bridge + one real agent turn"
+    }
+  ],
+  "observations": [
+    {
+      "id": "install.engines",
+      "detail": "engines.dsh declared by the packaged plugin and accepted by the Host",
+      "value": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0",
+      "at": "2026-11-21T03:21:55.975Z"
+    },
+    {
+      "id": "host.startup-url",
+      "detail": "tokenized launch URL printed by dsh web; the credential itself is redacted on purpose",
+      "value": "redacted",
+      "at": "2026-11-21T03:21:58.739Z"
+    },
+    {
+      "id": "bridge.hello-host-identity",
+      "detail": "hello reports the Host version through the client boot report because a source launch sets no DSH_CLIENT_VERSION",
+      "value": {
+        "version": "0.2.2-rc.4",
+        "commit": null,
+        "source": "client-boot",
+        "engines": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+      },
+      "at": "2026-11-21T03:21:58.790Z"
+    },
+    {
+      "id": "bridge.probe-host-identity",
+      "detail": "probe carries no client boot payload, so host.version/source stay null/unknown in a source launch without DSH_CLIENT_VERSION",
+      "value": {
+        "version": null,
+        "commit": null,
+        "source": "unknown",
+        "engines": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+      },
+      "at": "2026-11-21T03:21:58.794Z"
+    },
+    {
+      "id": "browser.turn-transcript",
+      "detail": "body text after the turn (bounded)",
+      "value": "DSH Local Build\n0.2.2-rc.4-ca33fd6-dirty\nNew Session\nPlugins\nAutomation tasks\nMore\nWorkspaces\nworkspace\nHello from the mock model. This is the famling real-host smoke reply.\nMore\nHello from the mock model. This is the famling real-host smoke reply.\nStandard mode\nSession panel\nChat\nTrajectory\nSay hello in one short sentence.\n11:22\nCompleted\nCompleted in 1s\n\nHello from the mock model. This is the famling real-host smoke reply.\n\nUsage 72 tok\n11:22\nMessage or run a task, / commands, @ files or sessions\nWorkspace Write\nDeepSeek-V4.1-Flash\nHigh\n1 turns 1 steps·34500 tok/s\n72 tok·Cache hit 0%\n0%",
+      "at": "2026-11-21T03:22:12.872Z"
+    }
+  ],
+  "artifacts": {
+    "npmPackLog": "/tmp/dsh-host-smoke-Mvixut/npm-pack.log",
+    "installLog": "/tmp/dsh-host-smoke-Mvixut/install.log",
+    "mockLlmLog": "/tmp/dsh-host-smoke-Mvixut/mock-llm.log",
+    "webLog": "/tmp/dsh-host-smoke-Mvixut/web.log",
+    "clientBundleUrl": "http://127.0.0.1:52780/plugins/??dsh-famling/client.js&rev=e0388c0bcbe2",
+    "clientBundleBytes": 94586,
+    "screenshotMenuOpen": "/tmp/dsh-host-smoke-Mvixut/screenshot-menu-open.png",
+    "screenshot": "/mnt/d/Projects/dsh/plugins/dsh-famling/test/dsh-host-smoke.screenshot.png"
+  },
+  "limitations": [],
+  "bridge": {
+    "hello": {
+      "v": 2,
+      "ok": true,
+      "op": "hello",
+      "plugin": {
+        "name": "dsh-famling",
+        "version": "0.12.0"
+      },
+      "wire": {
+        "version": 2,
+        "min": 1,
+        "accepts": [
+          1,
+          2
+        ]
+      },
+      "contract": {
+        "bridge": 2,
+        "contentExtension": 3,
+        "contentExtensionSchema": 3
+      },
+      "host": {
+        "version": "0.2.2-rc.4",
+        "commit": null,
+        "source": "client-boot",
+        "engines": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+      },
+      "client": {
+        "version": "0.12.0",
+        "wireVersion": 2,
+        "contentExtension": 3
+      },
+      "capabilities": {
+        "llm": true,
+        "schedule": true,
+        "agentDefaultModel": true,
+        "brief": true,
+        "bridge": true
+      },
+      "probes": [
+        {
+          "id": "bridge",
+          "available": true,
+          "method": "ctx.connection.fetch.register"
+        },
+        {
+          "id": "llm",
+          "available": true,
+          "method": "ctx.llm.stream"
+        },
+        {
+          "id": "schedule",
+          "available": true,
+          "method": "ctx.schedule.create/edit"
+        },
+        {
+          "id": "agentDefaultModel",
+          "available": true,
+          "method": "ctx.agentDefaultModel.currentSelection"
+        },
+        {
+          "id": "brief",
+          "available": true,
+          "method": "local ~/.advisers/pet-brief.json projection"
+        }
+      ],
+      "degraded": [],
+      "compatible": true,
+      "versionMismatch": false
+    },
+    "probe": {
+      "v": 2,
+      "ok": true,
+      "op": "probe",
+      "plugin": {
+        "name": "dsh-famling",
+        "version": "0.12.0"
+      },
+      "wire": {
+        "version": 2,
+        "min": 1,
+        "accepts": [
+          1,
+          2
+        ]
+      },
+      "contract": {
+        "bridge": 2,
+        "contentExtension": 3,
+        "contentExtensionSchema": 3
+      },
+      "host": {
+        "version": null,
+        "commit": null,
+        "source": "unknown",
+        "engines": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+      },
+      "capabilities": {
+        "llm": true,
+        "schedule": true,
+        "agentDefaultModel": true,
+        "brief": true,
+        "bridge": true
+      },
+      "probes": [
+        {
+          "id": "bridge",
+          "available": true,
+          "method": "ctx.connection.fetch.register"
+        },
+        {
+          "id": "llm",
+          "available": true,
+          "method": "ctx.llm.stream"
+        },
+        {
+          "id": "schedule",
+          "available": true,
+          "method": "ctx.schedule.create/edit"
+        },
+        {
+          "id": "agentDefaultModel",
+          "available": true,
+          "method": "ctx.agentDefaultModel.currentSelection"
+        },
+        {
+          "id": "brief",
+          "available": true,
+          "method": "local ~/.advisers/pet-brief.json projection"
+        }
+      ],
+      "degraded": [],
+      "generatedAt": "2026-11-21T03:21:58.792Z"
+    },
+    "stateBaseline": {
+      "v": 2,
+      "ok": true,
+      "op": "state",
+      "available": true,
+      "source": "events",
+      "state": "unknown",
+      "active": 0,
+      "updatedAt": null,
+      "lastError": null,
+      "transitions": []
+    }
+  },
+  "browser": {
+    "pet": {
+      "ariaLabel": "Tinglan",
+      "buttonRect": {
+        "x": 8,
+        "y": 590,
+        "width": 72,
+        "height": 72
+      },
+      "imageRect": {
+        "width": 72,
+        "height": 72
+      },
+      "imageWidthAttribute": "72",
+      "imageHeightAttribute": "72",
+      "imageSrcPrefix": "data:image/png;base64,",
+      "inSidebarFooter": true
+    },
+    "contextMenu": {
+      "found": true,
+      "menuPresent": true,
+      "role": "menu",
+      "ariaLabel": "Menu",
+      "items": [
+        "Chat…",
+        "Play ▸",
+        "Content & characters…",
+        "Settings…",
+        "More ▸",
+        "Quit (hide; refresh to restore)"
+      ],
+      "rect": {
+        "x": 44,
+        "y": 512,
+        "width": 210,
+        "height": 195.34375
+      }
+    },
+    "hello": {
+      "v": 2,
+      "ok": true,
+      "op": "hello",
+      "plugin": {
+        "name": "dsh-famling",
+        "version": "0.12.0"
+      },
+      "wire": {
+        "version": 2,
+        "min": 1,
+        "accepts": [
+          1,
+          2
+        ]
+      },
+      "contract": {
+        "bridge": 2,
+        "contentExtension": 3,
+        "contentExtensionSchema": 3
+      },
+      "host": {
+        "version": "0.2.2-rc.4",
+        "commit": null,
+        "source": "client-boot",
+        "engines": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+      },
+      "client": {
+        "version": "0.12.0",
+        "wireVersion": 2,
+        "contentExtension": 3
+      },
+      "capabilities": {
+        "llm": true,
+        "schedule": true,
+        "agentDefaultModel": true,
+        "brief": true,
+        "bridge": true
+      },
+      "probes": [
+        {
+          "id": "bridge",
+          "available": true,
+          "method": "ctx.connection.fetch.register"
+        },
+        {
+          "id": "llm",
+          "available": true,
+          "method": "ctx.llm.stream"
+        },
+        {
+          "id": "schedule",
+          "available": true,
+          "method": "ctx.schedule.create/edit"
+        },
+        {
+          "id": "agentDefaultModel",
+          "available": true,
+          "method": "ctx.agentDefaultModel.currentSelection"
+        },
+        {
+          "id": "brief",
+          "available": true,
+          "method": "local ~/.advisers/pet-brief.json projection"
+        }
+      ],
+      "degraded": [],
+      "compatible": true,
+      "versionMismatch": false
+    },
+    "stateBaseline": {
+      "v": 2,
+      "ok": true,
+      "op": "state",
+      "available": true,
+      "source": "events",
+      "state": "unknown",
+      "active": 0,
+      "updatedAt": null,
+      "lastError": null,
+      "transitions": []
+    },
+    "turn": {
+      "baselineTransitions": 0,
+      "observedTransitions": [
+        {
+          "state": "running",
+          "at": 1795231332360
+        },
+        {
+          "state": "idle",
+          "at": 1795231332771
+        }
+      ],
+      "finalState": {
+        "available": true,
+        "source": "events",
+        "state": "idle",
+        "active": 0,
+        "lastError": null
+      }
+    }
+  },
+  "summary": {
+    "checks": 46,
+    "passed": 46,
+    "failed": 0,
+    "failedIds": []
+  }
+}
