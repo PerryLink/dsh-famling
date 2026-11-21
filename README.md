@@ -1,8 +1,25 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-famling-hero-zh-dark.webp">
+  <img src="docs/assets/dsh-famling-hero-zh-light.webp" width="100%" alt="dsh-famling 配图：DeepSeek Harness 侧栏左下角的 72px 像素桌宠 —— 汀岚、布偶猫、金毛三个形象共 212 帧、12 个 clip；入口 95,731 B，精灵帧走懒加载角色 chunk；点击区域挑 clip 与台词，宿主状态只保存在本机有界环形缓冲">
+</picture>
+
 # dsh-famling
+
+**Famling / 汀岚 的 DSH 客户端插件。**
+
+*侧栏左下角的研究/技术演示入口 —— 212 帧动画、零常驻按钮、右键 / Shift+F10 分级菜单，全部偏好只存本机。**不是**情感陪伴产品。*
+
+[English](README.en.md) · [简体中文](README.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+
+</div>
 
 > ⚠️ **使用限制（必读）**：本项目及其全部代码、美术、音频、文案、角色素材和衍生物**仅用于技术研究与原型验证**；**不得用于情感陪伴、虚拟伴侣、心理治疗/医疗/法律/金融建议、未成年人亲密关系、冒充真人/官方，或任何违反法律法规/平台规则的用途**。完整说明见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
 
 Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角、账号信息下方**显示一个小型研究/技术演示入口（不是情感陪伴产品）。
+
+---
 
 ## 两个包
 
@@ -16,6 +33,14 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 > `famling` 是独立应用；`dsh-famling` 是放在 DSH 里的轻量伴随入口。两者共享角色/品牌，不共享运行时代码。
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
+
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-famling-flow-v5-dark.svg">
+  <img src="docs/assets/dsh-famling-flow-v5-light.svg" width="100%" alt="dsh-famling 结构图：DSH 的 sidebar.footer.action slot 挂载 95,731 B 的 client.js 入口，入口按需懒加载一个角色 chunk；点击区域挑一个物种专属 clip 和一句气泡台词；bridge 只提供 chat、task 与本机粗状态，全部同源">
+</picture>
+
+*结构：挂载 → 互动 → 观测。入口不带精灵帧载荷 —— 只有显示某个角色时才下载对应的角色 chunk；宿主状态是只在本机的有界环形缓冲，不含会话 id、消息或工具参数。图内只有真实的 slot 与 bridge 名称，五语共用同一张结构图。*
 
 ## 当前实现（0.13.0）
 
@@ -348,6 +373,11 @@ dsh plugin --profile web add dsh-famling
 - 细节与实测证据：[docs/INDEPENDENT-REBUILD-2026-11-20.md](docs/INDEPENDENT-REBUILD-2026-11-20.md)；公开仓 staging 清单：[docs/PUBLIC-REPO-SYNC-2026-11-20.md](docs/PUBLIC-REPO-SYNC-2026-11-20.md)。
 
 ## 验证
+
+![dsh-famling 验证：真实运行 npm test（314 条测试、301 通过、0 失败、13 跳过）与 npm run verify（212 帧、12 个 clip、三个角色分别 68/74/70 帧，首屏 155.2 KiB）](docs/assets/dsh-famling-demo.gif)
+
+*动图是本仓 `npm test` 与 `npm run verify` 的真实 stdout（2026-11-21 在浅克隆里复跑）。13 条跳过需要同级 checkout（Advisers producer、私有 famling fixtures），本克隆没有，因此如实显示为 skipped 而不是藏起来。*
+
 
 - `node --check client.js`
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）

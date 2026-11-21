@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-21T03:56:31.554Z",
+  "generatedAt": "2026-11-21T07:15:51.480Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
@@ -11,9 +11,9 @@
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
-    "count": 26,
-    "totalBytes": 819891,
-    "digest": "0f739ffc3dd31c7ecc2c745f9f6cfcba6f40d55229d7ff84121399363e9065d1",
+    "count": 34,
+    "totalBytes": 1339285,
+    "digest": "396bfe91b2c8c640ef68a3822e490a1854d135cba49946de30fbbd1f80a37fe8",
     "files": [
       {
         "path": "LICENSE",
@@ -31,9 +31,14 @@
         "sha256": "611267df9947434a3142c76e5616664b4a1625f8dd785a250cd8d32c2f2c9d74"
       },
       {
+        "path": "README.en.md",
+        "bytes": 63761,
+        "sha256": "b08074c50d684fbb0e969c85798e1ef94150082886f1a5ed65346379a3094ad5"
+      },
+      {
         "path": "README.md",
-        "bytes": 75666,
-        "sha256": "93b002fab3e368148801061551603db549acc64cf0258d8380120b43cf11362f"
+        "bytes": 77835,
+        "sha256": "d6c09a31565f50f019a8d03044e7d808834de5f30c91bbafa2783353c4f1fa54"
       },
       {
         "path": "client.anims.cat.js",
@@ -121,6 +126,41 @@
         "sha256": "6a55da0391ffec095d4bf54799b5f4feaeef76236bb6c14b92611196954263cc"
       },
       {
+        "path": "docs/assets/dsh-famling-demo.gif",
+        "bytes": 174074,
+        "sha256": "66d4780fe64c2a6bc47da52d4ee3d25f69b1e8ca49703e23b6f3a87fdb722c75"
+      },
+      {
+        "path": "docs/assets/dsh-famling-flow-v5-dark.svg",
+        "bytes": 10031,
+        "sha256": "6a28320332796311a27ded21ed42629f93122905b076ec62b3bff9acdc1a13d9"
+      },
+      {
+        "path": "docs/assets/dsh-famling-flow-v5-light.svg",
+        "bytes": 10031,
+        "sha256": "570e6b89925e761beea2de8c37cf8c71fa6c552884d821c7b54442eca66a3920"
+      },
+      {
+        "path": "docs/assets/dsh-famling-hero-en-dark.webp",
+        "bytes": 63820,
+        "sha256": "13422bd89cd0cbfd107d77496f29854e3f3cc7b42930bab427e0a01699d54dcf"
+      },
+      {
+        "path": "docs/assets/dsh-famling-hero-en-light.webp",
+        "bytes": 63998,
+        "sha256": "5e6b326f96096bd23ebb40e52534bec844b2808d1cf2604ca161de5e55a2a41b"
+      },
+      {
+        "path": "docs/assets/dsh-famling-hero-zh-dark.webp",
+        "bytes": 65946,
+        "sha256": "fad634a09fb1706412fe896cd598c0e62677f770f9409e9ca516b0d9646d3ed2"
+      },
+      {
+        "path": "docs/assets/dsh-famling-hero-zh-light.webp",
+        "bytes": 65544,
+        "sha256": "6b70b2cd62f06dc7d4fc4dbc38f5708cd76e134e920da59730e10ed024a83f8c"
+      },
+      {
         "path": "icon.png",
         "bytes": 1891,
         "sha256": "207135059430dd4b782e688273c4cf191a259e1e9e0c268c7c5d0eecac1d4eae"
@@ -142,8 +182,8 @@
       },
       {
         "path": "package.json",
-        "bytes": 3014,
-        "sha256": "5fc10ccbb31b3dc7a3896abf9332026423cf2ac6c6f4c791ae2752cdef87b741"
+        "bytes": 3034,
+        "sha256": "f703ddd20166197b2592240ad2034d4e2535508ec9d5724406db02abc34bdf7c"
       }
     ]
   },
