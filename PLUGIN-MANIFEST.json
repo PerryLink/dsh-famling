@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-21T09:24:52.655Z",
+  "generatedAt": "2026-11-21T10:35:45.698Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
     "name": "dsh-famling",
-    "version": "0.13.1",
+    "version": "0.13.2",
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
     "count": 37,
     "totalBytes": 1351109,
-    "digest": "a0ab18478149923002450fc9167b73f87afab34c1de0884358cbe32549a6ad1c",
+    "digest": "73ae41b42fab053be2d7709766c8feb556642020b4062c7bb4ac6a7a2572c665",
     "files": [
       {
         "path": "LICENSE",
@@ -38,7 +38,7 @@
       {
         "path": "README.md",
         "bytes": 77835,
-        "sha256": "0cd82463779a96ec4fa2e91926adf4ae44ba04222e3eb4768be0500558c6c458"
+        "sha256": "7eb227aa710d534e6604aa1b91ca3badfa9e0d9d435053a157e6f7be6d5e6a97"
       },
       {
         "path": "client.anims.cat.js",
@@ -63,12 +63,12 @@
       {
         "path": "client.content.js",
         "bytes": 85750,
-        "sha256": "39ee5913f0a073670d928c2545b29c70f001aff597fd612d62daaaf145793941"
+        "sha256": "b926c805f462912789bbed0fb1d96731bb175d2a792bd6df04f8acde8ff3f371"
       },
       {
         "path": "client.js",
         "bytes": 95731,
-        "sha256": "54045df173358a6b3590c138740af9dc90ab984331dd246cc53393eb0c922971"
+        "sha256": "926005ea1fa42827c06927aa28cadf1ebf67a69c94c891f63724b26c3c553ff3"
       },
       {
         "path": "client.status.js",
@@ -108,7 +108,7 @@
       {
         "path": "docs/LEGAL-NOTICE-2026-11-18.md",
         "bytes": 28846,
-        "sha256": "1753b051cd5715e4ae937f285f28cacd176cd13bc5ed0681b2b3a1eee07bc7c6"
+        "sha256": "ef6ea8eebb81815e61e3a32c5e9993a2b0d5410b179227a219ad09fe29508184"
       },
       {
         "path": "docs/PET-BRIEF-0.3.0-COMPAT-2026-11-20.md",
@@ -188,17 +188,17 @@
       {
         "path": "locale/en.json",
         "bytes": 3434,
-        "sha256": "2da3afb7e7bc1be814b71269e7d7a24623dadbb28a6e8c325fba3038b7985009"
+        "sha256": "af5771949caec17a074cf8069a199eb09777d5bb076e2cdee60ac717a017bb7c"
       },
       {
         "path": "locale/zh.json",
         "bytes": 3040,
-        "sha256": "e3974e05646ed65659eab7cd7be8c14a8452bb783a8fd022ad9b721a52788e0b"
+        "sha256": "5e668ad8d48cc19ce672069e208ce1b86425aecdac0c324763ac71bad9e1ba91"
       },
       {
         "path": "package.json",
         "bytes": 3034,
-        "sha256": "1dbac18bc84cc1e8660d48504d4021d28fcaae5e3855fa7c96b787f769365996"
+        "sha256": "3ba95713bb2b87eb7b592ee0608cf391e282880f49e373d91c5ae589d35a0373"
       }
     ]
   },
