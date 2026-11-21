@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "title": "Famling Market",
+  "metadata": {
+    "sortKeys": {
+      "npm_weekly_downloads": {
+        "title": {
+          "en": "npm weekly downloads",
+          "zh": "npm 周下载量"
+        },
+        "order": "desc"
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-famling",
+      "title": {
+        "en": "Famling · Tinglan / Ragdoll / Golden Retriever",
+        "zh": "Famling · 汀岚 / 布偶猫 / 金毛"
+      },
+      "description": {
+        "en": "Shows a pixel mini pet (Tinglan, Ragdoll cat, Golden Retriever) below the DSH account area with no permanent buttons besides the character; right-click the pet (or press Shift+F10 / ContextMenu) to open a restrained hierarchical menu (chat / play / content & characters / settings / more), with submenu pages and full keyboard navigation. A role IS its theme bundle, so the content center is organized as Roles / Customize / Packs / Market; a unified settings popup centralizes every adjustable item and can enable an optional menu button (off by default). Content packs use the reserved v3 pure-data contract with a mandatory research-only declaration; no network, no script execution. Chat text goes through the DSH Host to the model provider configured in DSH (disclosed in the chat panel and settings; never send passwords, private data or client material); crisis keywords are short-circuited locally in the Host with 12356/110/120 and professional-service resources, and settings can turn AI chat off and clear all local settings/consent (withdrawal). Four-level scaling (0.10.4): Common has an overall scale (everything together), independent UI + text / image axes can decouple and follow the overall scale again in one click, and the folded advanced group has per-component scaling that inherits UI + text by default. It only writes this widget's inline styles, never the DSH global theme; persisted under dsh-famling/scale with a one-time migration of the legacy absolute multipliers, the bubble is capped at 240px, menus/panels are fitted to the viewport after scaling, and native range inputs stay keyboard operable. 0.10.6 low disturbance: a new Low disturbance settings group with quiet hours (on by default 22:00-08:00; automatic bubbles and random micro actions are 0 while taps and chat replies still answer; editable or off), an animation preference (follow the system prefers-reduced-motion / allow / reduce motion, with the legacy motion boolean migrated), and temporary hide (1 hour / until tomorrow, persisted in dsh-famling/hidden-until with a single Show restore control and automatic restore); automatic micro actions are now >=60s apart; the input/consent/usage dialogs moved to the lazy client.content.js chunk while the first-screen budget stays within 96 KiB. 0.10.10 versioned consent: TTS/ASR consent is stored as per-kind declaration version, zh+en declaration SHA-256, acceptedAt and withdrawn; a version/hash mismatch re-prompts, the legacy boolean v1 is migrated to withdrawn records, and settings can withdraw it separately. 0.10.11 cross-repo sync: the cat is now a same-palette blue-bicolor Ragdoll (16 palette hexes unchanged, palette id cat-ragdoll-anim@0.1, white silky long coat with cool blue-grey points); cat UI copy is unified as Ragdoll, the wash line now reads long hair, the cat/dog renderer labels are synced, and the cat animation chunk is re-embedded. 0.10.12 host-adaptive appearance: the cat/dog default backgrounds are now transparent (bubble/panel themes stay), the right-click menu no longer uses role-theme hard-coded colours and instead reads DSH host theme variables with light-dark() fallbacks that follow day/night, the buttonBase fallbacks match day/night, and the widget root inherits the host color-scheme.",
+        "zh": "在 DSH 左下角账号信息下方显示像素小桌宠（汀岚 / 布偶猫 / 金毛），默认不显示角色以外任何按钮；右键角色或按 Shift+F10 / ContextMenu 打开分级菜单（聊两句 / 互动 / 内容与角色 / 设置 / 更多）；角色就是主题，内容中心一级分类为角色、自定义、内容包、市场，一键切换角色会同时应用声音策略、对话模式与外观（气泡 / 面板 / 背景 / 字体）；统一设置弹窗集中所有可调项，并可开启「显示菜单按钮」（默认关闭）；内容包与远程市场接口已预留（v3 纯数据契约，强制研究用途声明），不联网、不执行脚本；聊天文本经 DSH Host 发给用户在 DSH 中配置的模型供应商（输入面板与设置明示，勿发密码/隐私/客户资料），聊天危机关键词在 Host 本地短路并返回 12356/110/120 与专业机构资源，设置内可关闭 AI 聊天并一键清除本机设置/同意（撤回）。 四层缩放（0.10.4）：常用「整体缩放」= 所有内容一并缩放，独立轴「UI + 文本 / 图像」可单独解耦并一键跟随整体，高级折叠「组件缩放」默认继承 UI + 文本；只作用于本插件 widget 的内联样式，不改 DSH 全局主题；持久化 dsh-famling/scale 并一次性迁移旧绝对倍率，气泡 ≤ 240px 不溢出、菜单/面板按缩放夹取、原生 range 键盘可达。 0.10.6 低打扰：设置弹窗新增「低打扰」分组——安静时段（默认 22:00–08:00 开启，时段内自动气泡/随机微动作=0，点击与聊天回复仍可用，可改时段或关闭）、动画偏好（跟随系统 prefers-reduced-motion / 允许动画 / 减少动态，旧 motion 布尔迁移）、暂时隐藏（1 小时/到明天，持久化到 dsh-famling/hidden-until，只留一个「显示」恢复控件，到点自动恢复）；自动微动作间隔提高到 ≥60 秒；输入/同意/使用限制弹窗移入懒加载 client.content.js，首屏预算保持 96 KiB 内。 0.10.10 版本化同意：TTS/ASR 同意逐项保存声明版本、zh+en 声明 SHA-256、acceptedAt 与 withdrawn，版本/哈希不符即重弹；旧布尔 v1 一次性迁移为 withdrawn 记录，设置内可单独撤回。 0.10.11 跨仓同步：猫改为同配色蓝重点双色布偶猫（16 个 palette hex 不变，palette id `cat-ragdoll-anim@0.1`，白底丝滑长毛 + 冷灰蓝重点），猫 UI 文案统一为「布偶猫」、洗脸台词改为「长毛不好梳」，猫/狗渲染器标签同步，插件重新嵌入 cat 动画 chunk。 0.10.12 宿主自适应外观：猫/狗默认背景改为透明（气泡/面板主题保留），右键菜单不再使用角色主题硬编码配色，改用 DSH 宿主主题变量 + light-dark() 回退并随昼夜切换，buttonBase 回退同步 day/night，widget 根 color-scheme 继承宿主。"
+      },
+      "icon": "data:image/png;base64,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",
+      "homepage": "https://github.com/PerryLink/dsh-famling#readme",
+      "repository": {
+        "url": "https://github.com/PerryLink/dsh-famling"
+      },
+      "metadata": {
+        "keywords": [
+          "deepseek-harness",
+          "dsh",
+          "dsh-plugin",
+          "famling",
+          "desktop-pet",
+          "tinglan"
+        ],
+        "sortKeys": {
+          "npm_weekly_downloads": 496
+        }
+      },
+      "versions": [
+        {
+          "version": "0.13.1",
+          "publishTimestamp": 1795245365,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+          }
+        },
+        {
+          "version": "0.13.0",
+          "publishTimestamp": 1795231880,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+          }
+        },
+        {
+          "version": "0.12.0",
+          "publishTimestamp": 1795199170,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+          }
+        },
+        {
+          "version": "0.11.1",
+          "publishTimestamp": 1795196099,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+          }
+        },
+        {
+          "version": "0.11.0",
+          "publishTimestamp": 1795193705,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+          }
+        },
+        {
+          "version": "0.10.11",
+          "publishTimestamp": 1795186480,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0"
+          }
+        }
+      ]
+    }
+  ]
+}

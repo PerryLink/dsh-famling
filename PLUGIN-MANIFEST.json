@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-21T09:23:44.730Z",
+  "generatedAt": "2026-11-21T09:24:52.655Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
@@ -11,9 +11,9 @@
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
-    "count": 34,
-    "totalBytes": 1339285,
-    "digest": "5acbd85de564fd999f4a27eea187201546fbfb3950a6a130447248edab162766",
+    "count": 37,
+    "totalBytes": 1351109,
+    "digest": "a0ab18478149923002450fc9167b73f87afab34c1de0884358cbe32549a6ad1c",
     "files": [
       {
         "path": "LICENSE",
@@ -159,6 +159,21 @@
         "path": "docs/assets/dsh-famling-hero-zh-light.webp",
         "bytes": 65544,
         "sha256": "6b70b2cd62f06dc7d4fc4dbc38f5708cd76e134e920da59730e10ed024a83f8c"
+      },
+      {
+        "path": "docs/market/README.md",
+        "bytes": 595,
+        "sha256": "d8a1e919496af710347653607ca35c39b289fe24c6e3313c1a4e212440ce0090"
+      },
+      {
+        "path": "docs/market/index.json",
+        "bytes": 11217,
+        "sha256": "7f441c2f4a453b0b95c726b1273b89402f22f759097741488e09823c390bf017"
+      },
+      {
+        "path": "docs/market/plugins.txt",
+        "bytes": 12,
+        "sha256": "447ff528226c5e65102817acea995b4b09e337af8cde9ee256510cd1bc732b45"
       },
       {
         "path": "icon.png",
