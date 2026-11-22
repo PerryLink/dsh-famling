@@ -11,6 +11,8 @@
 
 *侧栏左下角的研究/技术演示入口 —— 212 帧动画、零常驻按钮、右键 / Shift+F10 分级菜单，全部偏好只存本机。**不是**情感陪伴产品。*
 
+最近一次核验：DeepSeek Harness `dsh-v0.2.3-alpha.1`（2026-11-22）。
+
 [English](README.en.md) · [简体中文](README.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 </div>
@@ -33,7 +35,6 @@ Famling / 汀岚 的 DSH 兼容版：在 DeepSeek Harness 左侧栏**左下角�
 > `famling` 是独立应用；`dsh-famling` 是放在 DSH 里的轻量伴随入口。两者共享角色/品牌，不共享运行时代码。
 >
 > **跨产品口径（0.10.2 / E3-T3）**：独立 famling **不提供官方的自由 LLM 角色扮演（RP）或情感陪伴**；本插件提供的是**工作助手型 AI 回复**（非 RP、非情感陪伴，文本发给 DSH 中配置的模型供应商，可能出错）。两者都不应被宣传或改造成情感陪伴/虚拟伴侣产品；完整使用限制见 [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md)。
-
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-famling-flow-v5-dark.svg">
@@ -377,7 +378,6 @@ dsh plugin --profile web add dsh-famling
 ![dsh-famling 验证：真实运行 npm test（314 条测试、301 通过、0 失败、13 跳过）与 npm run verify（212 帧、12 个 clip、三个角色分别 68/74/70 帧，首屏 155.2 KiB）](docs/assets/dsh-famling-demo.gif)
 
 *动图是本仓 `npm test` 与 `npm run verify` 的真实 stdout（2026-11-21 在浅克隆里复跑）。13 条跳过需要同级 checkout（Advisers producer、私有 famling fixtures），本克隆没有，因此如实显示为 skipped 而不是藏起来。*
-
 
 - `node --check client.js`
 - `node --check client.content.js`（内容中心懒加载 UI chunk，纯本地渲染）

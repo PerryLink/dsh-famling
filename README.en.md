@@ -11,6 +11,8 @@
 
 *A small research/technical demo entry in the sidebar footer, below the account area — 212 animation frames, zero permanent buttons, a right-click / Shift+F10 menu, and every preference stored locally. **Not** an emotional-companion product.*
 
+Last verified on DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
+
 [English](README.en.md) · [简体中文](README.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 </div>
@@ -33,7 +35,6 @@ This work line provides two packages, separated by purpose:
 > `famling` is the standalone application; `dsh-famling` is the lightweight companion entry inside DSH. They share characters and branding, not runtime code.
 >
 > **Cross-product statement (0.10.2 / E3-T3)**: the standalone famling **does not offer official free-form LLM role-play (RP) or emotional companionship**; this plugin offers **work-assistant-style AI replies** (not RP, not companionship; the text goes to the model provider configured in DSH and may be wrong). Neither should be promoted or turned into an emotional-companion / virtual-partner product; the full usage limits are in [docs/LEGAL-NOTICE-2026-11-18.md](docs/LEGAL-NOTICE-2026-11-18.md).
-
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dsh-famling-flow-v5-dark.svg">
@@ -347,7 +348,6 @@ This plugin can be rebuilt, tested and verified in a standalone checkout **witho
 ![dsh-famling verification: a real run of npm test (314 tests, 301 pass, 0 fail, 13 skipped) followed by npm run verify (212 frames across 12 clips, 68/74/70 per character, first paint 155.2 KiB)](docs/assets/dsh-famling-demo.gif)
 
 *Animated: the repository's own `npm test` and `npm run verify` stdout, captured on 2026-11-21 in a shallow clone. The 13 skipped tests need sibling checkouts (Advisers producer, private famling fixtures) that this clone does not contain, so they are shown as skipped rather than hidden.*
-
 
 - `node --check client.js`
 - `node --check client.content.js` (content-centre lazy UI chunk, purely local rendering)

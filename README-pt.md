@@ -11,6 +11,8 @@
 
 *Uma pequena entrada de demonstração técnica/pesquisa no rodapé da barra lateral, abaixo da área da conta — 212 quadros de animação, zero botões permanentes, menu de contexto com clique direito / Shift+F10 e todas as preferências guardadas localmente. **Não** é um produto de companhia emocional.*
 
+Última verificação: DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
+
 [English](README.en.md) · [简体中文](README.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 </div>

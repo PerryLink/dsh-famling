@@ -11,6 +11,8 @@
 
 *Una pequeña entrada de demostración técnica/investigación en el pie de la barra lateral, bajo el área de cuenta — 212 fotogramas de animación, cero botones permanentes, menú contextual con clic derecho / Shift+F10 y todas las preferencias guardadas localmente. **No** es un producto de acompañamiento emocional.*
 
+Última verificación: DeepSeek Harness `dsh-v0.2.3-alpha.1` (2026-11-22).
+
 [English](README.en.md) · [简体中文](README.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 </div>
