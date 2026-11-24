@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
     const CHARACTER_POLICY = {"human":{"canTts":true,"bubble":"speech"},"cat":{"canTts":false,"bubble":"thought"},"dog":{"canTts":false,"bubble":"thought"}}
     const CHARACTER_CHUNKS = {"human":"./client.anims.human.js","cat":"./client.anims.cat.js","dog":"./client.anims.dog.js"}
     // <dsh-famling:anims:end>
-    const PLUGIN_VERSION = '0.13.2'
+    const PLUGIN_VERSION = '0.13.3'
     const BRIDGE_WIRE_VERSION = 2
     const SIZE = 72
     const CHARACTER_KEY = 'dsh-famling/character'
@@ -444,6 +444,7 @@ window.__ModuleLoader__.load({
         task: '提醒', taskAt: '提醒时间', createTask: '创建提醒', taskEmpty: '写下提醒内容并选择未来时间。', taskDone: '已创建提醒。',
         bridgeFailed: '桥接调用失败。', noModel: '未连接模型，聊天不可用。', noSchedule: '当前宿主不支持提醒。',
         micUnsupported: '当前浏览器不支持语音输入。', inputEmpty: '先说点什么吧。',
+        workSuccessLine: '完成。', workErrorLine: '出错了，请稍后。',
         waveLine: '挥了挥手。', stretchLine: '伸了个懒腰。', coverFaceLine: '抬手理了理头发。', lookBackLine: '回头看了一眼。',
         catWashLine: '（洗洗脸。）', catStandLine: '（站起来看看。）', catTailLine: '（尾巴…转。）', catScratchLine: '（挠挠耳朵。）',
         dogWagLine: '（摇尾巴…开心。）', dogTailLine: '（尾巴在动？追！）', dogScratchLine: '（挠挠痒。）', dogLickLine: '（舔舔爪子。）',
@@ -468,6 +469,7 @@ window.__ModuleLoader__.load({
         task: 'Remind', taskAt: 'Remind at', createTask: 'Create reminder', taskEmpty: 'Write a reminder and choose a future time.', taskDone: 'Reminder created.',
         bridgeFailed: 'Bridge call failed.', noModel: 'No model connected; chat unavailable.', noSchedule: 'This Host does not support reminders.',
         micUnsupported: 'Speech input is unavailable in this browser.', inputEmpty: 'Say something first.',
+        workSuccessLine: 'Done.', workErrorLine: 'Failed.',
         waveLine: 'Waved hello.', stretchLine: 'Stretched a little.', coverFaceLine: 'Tidied her hair.', lookBackLine: 'Glanced back.',
         catWashLine: '(Washing my face.)', catStandLine: '(Standing up to look.)', catTailLine: '(Tail… spinning.)', catScratchLine: '(Scratching an ear.)',
         dogWagLine: '(Tail wagging… happy.)', dogTailLine: '(Tail moved? Chase!)', dogScratchLine: '(Scratching an itch.)', dogLickLine: '(Licking a paw.)',
@@ -571,6 +573,13 @@ window.__ModuleLoader__.load({
       return date.getTime()
     }
         // <dsh-famling:lowdisturb:end>
+    // <dsh-famling:bubbles:begin>
+    // 0.13.3 bubble priority; work-state line: success once, error 60s.
+    const BUBBLE_TTL_MS = 3200
+    const BUBBLE_PRIORITY = { ambient: 10, interaction: 20, direct: 30 }
+    function bubblePriorityOf(s) { return Object.hasOwn(BUBBLE_PRIORITY, s) ? BUBBLE_PRIORITY[s] : BUBBLE_PRIORITY.interaction }
+    function shouldAcceptBubble(cur, inc, now) { return !cur || !(cur.until > now) || !inc || inc.priority >= cur.priority }
+    // <dsh-famling:bubbles:end>
     /** Keep a fixed menu inside the viewport (8px margin on every side). */
     function clampMenuPosition(x, y, width, height) {
       const viewportWidth = typeof window !== 'undefined' && Number.isFinite(window.innerWidth) ? window.innerWidth : 1024
@@ -642,12 +651,14 @@ window.__ModuleLoader__.load({
       const briefHideTimer = useRef(null)
       const bridgeInFlight = useRef(false)
       const hostStatus = useRef(null)
+      const statusRef = useRef({ say: null, state: 'idle', errorAt: 0 })
       // Host hello result: null while probing, { legacy:true } on an older Host.
       const [host, setHost] = useState(null)
       const rootRef = useRef(null)
       const closeRef = useRef(null)
       const inputRef = useRef(null)
       const bubbleTimer = useRef(null)
+      const bubbleMeta = useRef(null)
       const followUpTimer = useRef(null)
       const clipEndTimer = useRef(null)
       const lastLines = useRef({})
@@ -927,13 +938,17 @@ window.__ModuleLoader__.load({
         const dialogue = DIALOGUE_MODES[dialogueMode] || DIALOGUE_MODES.standard
         if (source === 'ambient' && dialogue.bubbleChance < 1 && Math.random() > dialogue.bubbleChance) return
         if (source === 'ambient' && (dialogueMode === 'quiet' || isQuietHoursActive(settings.quietHours) || hostStatus.current?.busy || window.__famlingFocus?.until > Date.now())) return
+        if (source === 'status' && (!settings.bubble || !pageVisible || isQuietHoursActive(settings.quietHours))) return
+        const next = { priority: bubblePriorityOf(source), until: Date.now() + BUBBLE_TTL_MS }
+        if (!shouldAcceptBubble(bubbleMeta.current, next, Date.now())) return
+        bubbleMeta.current = next
         const canTts = characterCanTts(characterRef.current)
         const nextKind = canTts ? (kind === 'thought' ? 'thought' : 'speech') : 'thought'
         let line = typeof text === 'string' ? text : String(text == null ? '' : text)
         if (dialogue.maxChars > 0 && line.length > dialogue.maxChars) line = line.slice(0, dialogue.maxChars - 1).trimEnd() + '…'
         setBubble(line); setBubbleKind(nextKind)
         if (bubbleTimer.current) clearTimeout(bubbleTimer.current)
-        bubbleTimer.current = setTimeout(() => setBubble(''), 3200)
+        bubbleTimer.current = setTimeout(() => setBubble(''), BUBBLE_TTL_MS)
         if (canTts && settings.sound && ttsConsent && typeof window !== 'undefined' && 'speechSynthesis' in window) {
           try {
             cancelSpeech()
@@ -944,6 +959,17 @@ window.__ModuleLoader__.load({
             window.speechSynthesis.speak(utterance)
           } catch {}
         }
+      }
+      statusRef.current.say = say
+      function noteWorkState(reply) {
+        const r = reply && reply.ok ? reply.result : null
+        if (!r || r.available !== true || !/^(idle|working|success|error)$/.test(r.workState)) return
+        const ref = statusRef.current, was = ref.state
+        ref.state = r.workState
+        if (was === r.workState) return
+        if (r.workState === 'error') { if (Date.now() - ref.errorAt < 60000) return; ref.errorAt = Date.now() }
+        else if (r.workState !== 'success') return
+        ref.say?.(r.workState === 'success' ? L.workSuccessLine : L.workErrorLine, 'speech', 'status')
       }
       function anchor() {
         const rect = rootRef.current?.getBoundingClientRect()
@@ -1202,7 +1228,9 @@ window.__ModuleLoader__.load({
         try {
           const response = await fetch(new URL('api/famling/bridge', document.baseURI), { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), ...(controller ? { signal: controller.signal } : {}) })
           const result = await response.json().catch(() => null)
-          return { ok: response.ok && result !== null && result.ok !== false, result }
+          const reply = { ok: response.ok && result !== null && result.ok !== false, result }
+          try { if (payload.op === 'state') noteWorkState(reply) } catch {}
+          return reply
         } catch { return { ok: false, result: null } } finally { if (timer) clearTimeout(timer) }
       }
       async function loadBrief() {

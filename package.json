@@ -1,8 +1,10 @@
 {
   "name": "dsh-famling",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "private": false,
   "type": "module",
+  "main": "index.js",
+  "icon": "icon.png",
   "scripts": {
     "test": "node --test test/*.test.js",
     "check": "node scripts/embed-anims.mjs --check && node scripts/gen-content-constants.mjs --check",
@@ -18,7 +20,12 @@
     "qa:anims": "node scripts/embed-anims.mjs --qa",
     "check:package": "node scripts/check-package.mjs",
     "verify:package": "node scripts/check-package.mjs --pack",
-    "release:check": "npm test && npm run check && npm run verify && npm run verify:package && npm run lint && npm run typecheck",
+    "verify:dsh": "node scripts/verify-dsh.mjs",
+    "check:fast": "node scripts/check-fast.mjs",
+    "check:release": "node scripts/check-release.mjs",
+    "prepublish-check": "node scripts/prepublish-check.mjs",
+    "prepublishOnly": "node scripts/prepublish-check.mjs",
+    "release:check": "npm test && npm run check && npm run verify && npm run verify:package && npm run lint && npm run typecheck && npm run verify:dsh",
     "prepack": "node scripts/check-package.mjs --prepack"
   },
   "description": "Famling mini pet in the DSH sidebar footer: Tinglan / Ragdoll cat / Golden Retriever pixel animations with a minimal zero-button UI, a right-click / Shift+F10 hierarchical menu, region-aware interactions, chat personas, a role-as-theme content center (roles / customize / packs / market), a unified settings popup with low-disturb controls (quiet hours / reduce-motion / temporary hide), and a reserved v3 third-party content-pack contract with a mandatory research-only usage declaration.",
@@ -36,6 +43,7 @@
     "./client": "./client.js",
     "./content-extension": "./content-extension.mjs",
     "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json",
     "./icon": "./icon.png"
   },
   "files": [
@@ -53,7 +61,6 @@
     "docs",
     "icon.png",
     "README.md",
-    "README.en.md",
     "LICENSE",
     "LICENSE-ART",
     "NOTICE"
@@ -79,6 +86,13 @@
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-renderer"
       ]
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.2-rc.5": "compatible",
+        "0.2.3-alpha.1": "compatible",
+        "0.2.3-alpha.2": "compatible"
+      }
     }
   },
   "engines": {

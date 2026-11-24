@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { CRISIS_KEYWORDS, apply, crisisKeyword, inject } from '../index.js'
+import { CRISIS_KEYWORDS, HOST_WORK_STATES, HOST_WORK_STATE_TTL_MS, apply, crisisKeyword, deriveHostWorkState, inject } from '../index.js'
 import { CONTENT_EXTENSION_POINTS, CONTENT_EXTENSION_VERSION, CONTENT_PACK_SCHEMA_VERSION } from '../content-extension.mjs'
 
 const PLUGIN_VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version
@@ -524,6 +524,8 @@ test('a Host without the event API activates and reports state unsupported, not 
   assert.equal(body.lastError, null)
   assert.equal(body.active, 0)
   assert.equal(body.updatedAt, null)
+  assert.equal(body.workState, 'idle', 'no event API: the derived work state fails closed to idle')
+  assert.equal(body.workSince, null)
 })
 
 test('agent/status transitions are tracked as bounded coarse state', async () => {
@@ -533,17 +535,23 @@ test('agent/status transitions are tracked as bounded coarse state', async () =>
   assert.equal(first.available, true, 'event API present -> available')
   assert.equal(first.source, 'events')
   assert.equal(first.state, 'unknown', 'no transition yet: unknown, not idle')
+  assert.equal(first.workState, 'idle', 'no transition yet: idle, not a guessed status')
+  assert.equal(first.workSince, null)
   env.emit('agent/status', { agent: { id: 'a1' }, status: 'running' })
   const running = await (await post(env.route(), { v: 2, op: 'state' })).json()
   assert.equal(running.state, 'running')
   assert.equal(running.active, 1)
   assert.ok(Number.isInteger(running.updatedAt) && running.updatedAt > 0)
   assert.deepEqual(running.transitions, [{ state: 'running', at: running.updatedAt }])
+  assert.equal(running.workState, 'working')
+  assert.equal(running.workSince, running.updatedAt, 'workSince is when the busy streak started')
   env.emit('agent/status', { agent: { id: 'a1' }, status: 'idle' })
   const idle = await (await post(env.route(), { v: 2, op: 'state' })).json()
   assert.equal(idle.state, 'idle')
   assert.equal(idle.active, 0)
   assert.equal(idle.transitions.length, 2)
+  assert.equal(idle.workState, 'success', 'a clean stop inside the 10s window is success')
+  assert.equal(idle.workSince, idle.updatedAt)
 })
 
 test('concurrent agents stay counted and an extra idle never goes negative', async () => {
@@ -562,6 +570,7 @@ test('concurrent agents stay counted and an extra idle never goes negative', asy
   const none = await (await post(env.route(), { v: 2, op: 'state' })).json()
   assert.equal(none.active, 0, 'extra idle events never make the count negative')
   assert.equal(none.state, 'idle')
+  assert.equal(none.workState, 'success', 'the last stop is still a success inside its window')
 })
 
 test('the transition ring is bounded and keeps the newest transitions last', async () => {
@@ -597,8 +606,70 @@ test('agent/error is classified into a bounded kind without leaking its message'
     const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
     assert.equal(body.lastError.kind, kind, JSON.stringify(error) + ' -> ' + kind)
     assert.ok(Number.isInteger(body.lastError.at))
+    assert.equal(body.workState, 'error', JSON.stringify(error) + ' -> error work state')
+    assert.equal(body.workSince, body.lastError.at, 'workSince is the classified error timestamp')
     assert.equal(JSON.stringify(body).includes('SECRET-PROMPT-TEXT'), false, 'the error message is never projected')
   }
+})
+
+/* ==================== P0: derived four-state work status ==================== */
+
+test('deriveHostWorkState maps the tracker to working/success/error/idle under an injected now', () => {
+  const now = 1_700_000_000_000
+  // Working wins over everything while at least one agent is active.
+  assert.deepEqual(
+    deriveHostWorkState({ active: 2, workStartedAt: now - 4_000, lastError: { kind: 'server', at: now - 1_000 }, lastStopAt: now - 500 }, now),
+    { workState: 'working', workSince: now - 4_000 },
+  )
+  // No usable streak start: fall back to the last transition timestamp, then null.
+  assert.deepEqual(deriveHostWorkState({ active: 1, updatedAt: now - 2_000 }, now), { workState: 'working', workSince: now - 2_000 })
+  assert.deepEqual(deriveHostWorkState({ active: 1 }, now), { workState: 'working', workSince: null })
+  // A clean stop is success inside <=10s; the classified error window is <=60s.
+  for (const [age, expected] of [[0, 'success'], [HOST_WORK_STATE_TTL_MS.success, 'success'], [HOST_WORK_STATE_TTL_MS.success + 1, 'idle']]) {
+    assert.equal(deriveHostWorkState({ active: 0, lastStopAt: now - age }, now).workState, expected, 'stop age ' + age)
+  }
+  for (const [age, expected] of [[0, 'error'], [HOST_WORK_STATE_TTL_MS.error, 'error'], [HOST_WORK_STATE_TTL_MS.error + 1, 'idle']]) {
+    assert.equal(deriveHostWorkState({ active: 0, lastError: { kind: 'auth', at: now - age } }, now).workState, expected, 'error age ' + age)
+  }
+  // A fresh error outranks a fresh stop (documented priority order).
+  assert.deepEqual(
+    deriveHostWorkState({ active: 0, lastError: { kind: 'tool', at: now - 1_000 }, lastStopAt: now - 1_000 }, now),
+    { workState: 'error', workSince: now - 1_000 },
+  )
+  // Malformed/absent stamps and a backwards clock fail closed to idle.
+  assert.deepEqual(deriveHostWorkState({ active: 0, lastStopAt: now - 10_001 }, now), { workState: 'idle', workSince: null })
+  assert.deepEqual(deriveHostWorkState({ active: 0, lastError: { kind: 'unknown', at: now - 60_001 } }, now), { workState: 'idle', workSince: null })
+  for (const tracker of [null, undefined, {}, [], 'state', { active: 'one' }]) {
+    assert.equal(deriveHostWorkState(tracker, now).workState, 'idle', 'malformed/empty tracker: ' + JSON.stringify(tracker))
+  }
+  // A malformed active count cannot hide a fresh classified error: error is not a fake busy state.
+  assert.equal(deriveHostWorkState({ active: 'one', lastError: { kind: 'auth', at: now - 1_000 } }, now).workState, 'error')
+  assert.equal(deriveHostWorkState({ active: 0, lastStopAt: now + 1_000 }, now).workState, 'idle', 'a future stamp is not a fresh success')
+  assert.equal(deriveHostWorkState({ active: 0, lastStopAt: now }, NaN).workState, 'idle', 'an invalid now degrades to idle')
+  assert.deepEqual([...HOST_WORK_STATES].sort(), ['error', 'idle', 'success', 'working'], 'the exported enum is the closed four-state set')
+  assert.deepEqual({ ...HOST_WORK_STATE_TTL_MS }, { error: 60_000, success: 10_000 }, 'the exported TTLs match the state op windows')
+  assert.equal(Object.isFrozen(HOST_WORK_STATES) && Object.isFrozen(HOST_WORK_STATE_TTL_MS), true, 'the public constants cannot be mutated at runtime')
+})
+
+test('a real error outranks the clean stop that follows it until the error window ends', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  env.emit('agent/status', { status: 'running' })
+  env.emit('agent/status', { status: 'idle' })
+  const stopped = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(stopped.workState, 'success')
+  assert.equal(stopped.workSince, stopped.updatedAt)
+  env.emit('agent/error', { agent: { id: 'a1' }, error: { status: 503 } })
+  const failed = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(failed.workState, 'error', 'a fresh classified error wins over the success window')
+  assert.equal(failed.workSince, failed.lastError.at, 'workSince is the error stamp')
+  env.emit('agent/status', { status: 'running' })
+  const busy = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(busy.workState, 'working', 'active work outranks the fresh error')
+  assert.equal(busy.workSince, busy.updatedAt, 'the busy streak restarts at this transition')
+  env.emit('agent/status', { status: 'idle' })
+  const after = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(after.workState, 'error', 'the 60s error window outlives the clean stop, per the documented priority')
 })
 
 test('state answers with a closed schema: no ids, no messages, only the declared fields', async () => {
@@ -607,9 +678,12 @@ test('state answers with a closed schema: no ids, no messages, only the declared
   env.emit('agent/status', { agent: { id: 'agent-xyz' }, status: 'running', message: { text: 'SECRET-PROMPT-TEXT' } })
   env.emit('agent/error', { agent: { id: 'agent-xyz' }, error: { message: 'SECRET-PROMPT-TEXT' } })
   const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
-  assert.deepEqual(Object.keys(body).sort(), ['active', 'available', 'lastError', 'ok', 'op', 'source', 'state', 'transitions', 'updatedAt', 'v'])
+  assert.deepEqual(Object.keys(body).sort(), ['active', 'available', 'lastError', 'ok', 'op', 'source', 'state', 'transitions', 'updatedAt', 'v', 'workSince', 'workState'])
+  assert.equal(body.workState, 'working', 'the busy agent still outranks the error for the derived view')
+  assert.ok(Number.isInteger(body.workSince) && body.workSince > 0, 'workSince is a coarse timestamp, never an id')
   assert.equal(JSON.stringify(body).includes('agent-xyz'), false, 'no agent id is stored or projected')
   assert.equal(JSON.stringify(body).includes('SECRET-PROMPT-TEXT'), false, 'no message text is stored or projected')
+  assert.equal(JSON.stringify(body).includes('SECRET'), false, 'the derived fields add no free text at all')
 })
 
 test('a throwing event API degrades to available:false and never blocks the bridge', async () => {

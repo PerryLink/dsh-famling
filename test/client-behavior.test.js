@@ -801,6 +801,22 @@ test('quiet hours stop automatic micro actions but explicit taps still answer', 
 /* ==================== 0.11.2: coarse host state (client half) ==================== */
 const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve))
 function statusTimers(harness) { return harness.timers.timeouts.filter((timer) => timer.ms === 30000) }
+/** A valid WP-C `state` reply carrying the optional work-state fields. */
+function stateReply(workState, workSince = null) {
+  return {
+    v: 2, ok: true, op: 'state', available: true, source: 'events',
+    state: workState === 'working' ? 'running' : 'idle',
+    active: workState === 'working' ? 1 : 0,
+    updatedAt: 1, lastError: null, transitions: [], workState, workSince,
+  }
+}
+/** Fire the latest scheduled 30s poll and let the fetch/parse/settle chain run. */
+async function pollState(harness) {
+  const timers = statusTimers(harness)
+  timers[timers.length - 1].fn()
+  await flushMicrotasks()
+  harness.ui.render()
+}
 
 test('the lazy host-status chunk loads after mount and pulls once per 30s', async () => {
   const harness = createHarness({ now: localTime(12, 0) })
@@ -898,6 +914,116 @@ test('a malformed state reply is ignored instead of mapped to quiet', async () =
   harness.ui.render()
   assert.notEqual(petImage(harness.ui).props.src, idleFrame, 'an invalid report never quiets the pet')
 })
+test('a work-state success transition shows one local line through say()', async () => {
+  let reply = stateReply('idle')
+  const harness = createHarness({ now: localTime(12, 0), hostState: () => reply })
+  await pollState(harness)
+  assert.equal(harness.ui.findBubble(), undefined, 'the first idle report only baselines the state')
+  reply = stateReply('working', 100)
+  await pollState(harness)
+  assert.equal(harness.ui.findBubble(), undefined, 'a running agent stays silent')
+  reply = stateReply('success', 200)
+  await pollState(harness)
+  const bubble = harness.ui.findBubble()
+  assert.ok(bubble, 'the success transition shows one line')
+  assert.equal(harness.ui.text(bubble), '完成。', 'the zh inline dictionary supplies the line')
+  assert.equal(harness.speech.speak.length, 1, 'the line goes through say() (TTS consent on)')
+  reply = stateReply('success', 200)
+  await pollState(harness)
+  assert.equal(harness.speech.speak.length, 1, 'repeated success reports are silent (once per transition)')
+  reply = stateReply('idle', 300)
+  await pollState(harness)
+  assert.equal(harness.speech.speak.length, 1, 'a bare idle transition says nothing')
+  reply = stateReply('error', 400)
+  await pollState(harness)
+  assert.equal(harness.ui.text(harness.ui.findBubble()), '出错了，请稍后。', 'an error transition shows its local line')
+  assert.equal(harness.speech.speak.length, 2)
+})
+
+test('the work-state error line is cooled down to at most one per 60s', async () => {
+  let reply = stateReply('idle')
+  const harness = createHarness({ now: localTime(12, 0), hostState: () => reply })
+  await pollState(harness)
+  reply = stateReply('error', 100)
+  await pollState(harness)
+  assert.equal(harness.speech.speak.length, 1, 'the first error announces')
+  reply = stateReply('idle', 200)
+  await pollState(harness)
+  reply = stateReply('working', 300)
+  await pollState(harness)
+  reply = stateReply('error', 400)
+  await pollState(harness)
+  assert.equal(harness.speech.speak.length, 1, 'a second error inside the 60s cooldown is silent')
+  harness.setNow(new Date(2026, 4, 1, 12, 1, 1, 0))
+  reply = stateReply('idle', 500)
+  await pollState(harness)
+  reply = stateReply('error', 600)
+  await pollState(harness)
+  assert.equal(harness.speech.speak.length, 2, 'a new error after the cooldown announces again')
+})
+
+test('an old Host without the work-state fields never triggers a line', async () => {
+  const harness = createHarness({ now: localTime(12, 0) })
+  await pollState(harness)
+  await pollState(harness)
+  assert.equal(harness.ui.findBubble(), undefined, 'the v0.13.2 state reply is inert')
+  assert.equal(harness.speech.speak.length, 0, 'no TTS without a work state')
+})
+
+test('work-state lines obey the bubble switch, quiet hours and page visibility', async () => {
+  let offReply = stateReply('idle')
+  const off = createHarness({ now: localTime(12, 0), settings: { bubble: false }, hostState: () => offReply })
+  await pollState(off)
+  offReply = stateReply('success', 100)
+  await pollState(off)
+  assert.equal(off.ui.findBubble(), undefined, 'settings.bubble off suppresses the line')
+  assert.equal(off.speech.speak.length, 0, 'a suppressed line is not spoken either')
+
+  let quietReply = stateReply('idle')
+  const quiet = createHarness({ now: localTime(23, 0), hostState: () => quietReply })
+  await pollState(quiet)
+  quietReply = stateReply('success', 100)
+  await pollState(quiet)
+  assert.equal(quiet.ui.findBubble(), undefined, 'quiet hours suppress the automatic line')
+
+  let hiddenReply = stateReply('idle')
+  const hidden = createHarness({ now: localTime(12, 0), hostState: () => hiddenReply })
+  await pollState(hidden)
+  hiddenReply = stateReply('success', 200)
+  const pending = statusTimers(hidden)
+  pending[pending.length - 1].fn()
+  hidden.document.visibilityState = 'hidden'
+  hidden.documentListeners.get('visibilitychange')()
+  hidden.ui.render()
+  await flushMicrotasks()
+  hidden.ui.render()
+  assert.equal(hidden.ui.findBubble(), undefined, 'a reply landing after the tab hides shows nothing')
+  assert.equal(hidden.speech.speak.length, 0)
+})
+
+test('a live direct reply blocks an interactive tap and keeps its 3200ms timer', async () => {
+  const harness = createHarness({ reply: '嗯，我在。', settings: { motion: true } })
+  const { ui, timers } = harness
+  openInputPanel(ui)
+  const textarea = ui.findAll((node) => node.type === 'textarea')[0]
+  ui.change(textarea, '你好')
+  ui.render()
+  ui.clickText('发送')
+  await ui.settle()
+  assert.equal(ui.text(ui.findBubble()), '嗯，我在。', 'the chat reply is a direct bubble')
+  const ttlTimers = () => timers.timeouts.filter((timer) => timer.ms === 3200).length
+  const before = ttlTimers()
+  ui.clickPetAt(51, 27)
+  ui.render()
+  assert.equal(ui.text(ui.findBubble()), '嗯，我在。', 'the interactive tap line is dropped while direct is live')
+  assert.equal(ttlTimers(), before, 'a dropped line never re-arms the bubble timer')
+  finishClip(ui, timers, 'human', 'pat_head')
+  harness.setNow(new Date(2026, 4, 1, 12, 0, 4, 0))
+  ui.clickPetAt(51, 27)
+  ui.render()
+  assert.ok(regionSays('human', 'head').includes(ui.text(ui.findBubble())), 'after the TTL expires the tap line shows')
+})
+
 test('motion preference follows prefers-reduced-motion by default and explicit on/off wins', () => {
   const reducedAuto = createHarness({ reduceMotion: true, settings: { motionMode: 'auto' } })
   assert.equal(hasFrameTimer(reducedAuto), false, 'auto + reduce -> frame animation off')

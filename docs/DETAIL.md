@@ -104,9 +104,9 @@
 ### 0.12.0 宿主粗状态 op:"state"（隐私最小，未发版）
 
 - 订阅：`ctx.on('agent/status', ({ agent, status }) => …)`（`idle` ⇄ `running`）与 `ctx.on('agent/error', ({ error }) => …)`；每个 handler 都 try/catch，畸形/恶意 payload 被忽略；`ctx.on` 不存在或订阅抛错时 tracker 保持 unavailable，插件仍激活（`ctx.effect` 负责 dispose 时取消订阅）。
-- 只存：有界环 ≤16 条 `{ state, at }`（epoch ms）、运行计数（多 agent 叠加、下限 0）、`lastError: { kind, at }`；`kind` 只由 error 的 `name`/`status`/`code` 分类（aborted / timeout / auth / rate-limit / server / network / tool / unknown），**从不读取 error.message**；不存 agent id / 会话 id / 消息 / 提示词 / 工具参数 / 文件内容，不落盘、不上传、不写日志。
-- `op:"state"`（wire 2）响应字段闭合：`{ v, ok, op, available, source, state, active, updatedAt, lastError, transitions }`；`source: "events"` 表示订阅可用，`"unsupported"` 表示 Host 无事件 API。快照交给闭合校验，未知字段/越界/非法枚举整体回退为 unavailable（fail-closed，不投影半份数据）。
-- 客户端：懒加载 `client.status.js` 导出 `watchHostStatus(callBridge)` → `{ busy, available, refresh(visible), stop() }`；首个轮询在挂载 30s 后，`setTimeout` 链（无 `setInterval`），失败静默重试 ≤3 次，响应 `available:false` 立即停止；客户端对响应再做一次闭合校验（非法 → 视为失败，绝不映射 quiet）；`refresh` 只由入口既有的单一 `visibilitychange` 监听调用（隐藏暂停、恢复立即拉取一次）；不写 localStorage、不触碰 DOM。`busy=true` 复用 quiet 语义：自动气泡与随机微动作跳过，显式点击/菜单/聊天仍回应；不新增美术帧、无新增权限/网络/存储键；chunk 缺失时行为不变。
+- 只存：有界环 ≤16 条 `{ state, at }`（epoch ms）、运行计数（多 agent 叠加、下限 0）、`lastError: { kind, at }`、`lastStopAt`（最近一次 busy 归零的时间戳）与 `workStartedAt`（当前 busy 段起点，仅内存时间戳，用于派生 `workState`）；`kind` 只由 error 的 `name`/`status`/`code` 分类（aborted / timeout / auth / rate-limit / server / network / tool / unknown），**从不读取 error.message**；不存 agent id / 会话 id / 消息 / 提示词 / 工具参数 / 文件内容，不落盘、不上传、不写日志。
+- `op:"state"`（wire 2）响应字段闭合：`{ v, ok, op, available, source, state, active, updatedAt, lastError, transitions, workState, workSince }`；`source: "events"` 表示订阅可用，`"unsupported"` 表示 Host 无事件 API。快照交给闭合校验，未知字段/越界/非法枚举整体回退为 unavailable（fail-closed，不投影半份数据）。0.13.2 起在既有字段之后**追加**派生工作状态 `workState`（`idle` / `working` / `success` / `error`：`active > 0` → `working`；否则 `lastError` 距今 ≤ 60s → `error`；否则 `lastStopAt` 距今 ≤ 10s → `success`；否则 `idle`）与 `workSince`（当前状态起点 epoch ms，`idle` 时为 `null`）；只用 `agent/status` / `agent/error` 两个事件派生，不新增对消息/提示词/工具参数/文件路径的读取。
+- 客户端：懒加载 `client.status.js` 导出 `watchHostStatus(callBridge)` → `{ busy, available, workState, workSince, refresh(visible), stop() }`；`workState`/`workSince` 为可选新增字段的严格解析结果，旧 Host 缺字段时降级为 `idle`/`null`（不崩、不伪造），非法值整体 fail-closed 并回退 `idle`/`null`；首个轮询在挂载 30s 后，`setTimeout` 链（无 `setInterval`），失败静默重试 ≤3 次，响应 `available:false` 立即停止；客户端对响应再做一次闭合校验（非法 → 视为失败，绝不映射 quiet）；`refresh` 只由入口既有的单一 `visibilitychange` 监听调用（隐藏暂停、恢复立即拉取一次）；不写 localStorage、不触碰 DOM。`busy=true` 复用 quiet 语义：自动气泡与随机微动作跳过，显式点击/菜单/聊天仍回应；不新增美术帧、无新增权限/网络/存储键；chunk 缺失时行为不变。
 
 ### 客户端半（client.js）
 
@@ -282,6 +282,13 @@ pack 可选 `remoteCatalog: { status: "reserved", url?: "https://..." }`。statu
 ### 与独立 famling 共享模型（famling.content/0.2）的关系
 
 独立 famling 仓另有内容目录规范 `famling.content/0.2`（`public/content/README.md`、`public/content/library.json`、`src/pet/content-library.ts`），是目标超集；dsh-famling 0.10.x 的七类 kind 可与其目录映射：role 是 v3 新增的角色主题 bundle（character + voicePolicy + dialogue + theme + background + font 的组合），其内置 `rolePresets` 与插件 `ROLE_BUNDLES` 的六个组件逐项对齐（origami 的 high-contrast 显式映射 night）；其余六类仍一一映射（characters ↔ character、voices ↔ voice、dialoguePacks ↔ dialogue、themes ↔ theme、backgrounds ↔ background、fonts ↔ font；`builtin` ≡ `bundled`）。差异仍然存在：插件契约把“选择/应用”建模为 `apply` + permissions，共享模型是目录条目 + 解析函数；主题 CSS 前缀分别为 `--dsh-famling-*` / `--famling-content-*`；插件背景只支持纯色/透明（无 pattern/图片）、字体只支持本地字体栈；插件声音来自浏览器 `speechSynthesis`，共享目录是 DeepSeek stella/tide，二者不能互相覆盖；两个校验器返回结构不同（插件 `{ ok, errors: string[] }`）。两套契约并存、各自 fail-closed；未来收敛通过适配层把共享目录六类内置内容投影为插件 entry（保留 0.9.x/0.10.x 存储键与 UI），不直接加载共享 pack。
+
+## 0.13.3：工作状态气泡与气泡优先级（2026-11-24）
+
+- **宿主工作状态派生**：`op:"state"` 在既有粗状态字段后追加 `workState`（`idle` / `working` / `success` / `error`）与 `workSince`。派生只用 `agent/status` 的 busy 计数与 `agent/error` 的分类 `kind` + 时间戳：`active > 0` → `working`；busy 归零后 `lastStopAt` ≤10s → `success`；`lastError` ≤60s → `error`（error 优先于 success）；其余 → `idle`。不读取 agent/session id、消息、提示词、工具参数或文件路径，不落盘、不上传、不写日志。旧 Host 缺字段时客户端按 `idle`/`null` 降级，非法值 fail-closed 回退 `idle`（不伪造 busy）。
+- **客户端消费**：懒加载 `client.status.js` 的 handle 增加 `workState` / `workSince`（保留 `busy` / `available` / `refresh` / `stop`）；入口在 `op:"state"` 回复处防御式读取 `workState`，进入 `success` 或 `error` 时用本地化短句（`workSuccessLine` / `workErrorLine`）说一次；success 每次转换只提示一次，error 冷却 ≥60s；受气泡开关、页面可见与安静时段约束，不新增美术帧、不写存储。
+- **气泡优先级**：所有气泡仍走单槽；`say()` 以 `{priority, until}` 记录当前气泡，`ambient < interaction < direct`，低优先级在更高优先级气泡未到期时直接丢弃（不排队、不重置计时），direct 始终替换；TTL 仍为 3200ms，TTS 与既有抑制逻辑不变。纯函数块由 `test/client-bubbles.test.js` 提取测试。
+- **发布门禁**：`check:fast` / `check:release` / `prepublish-check` / `verify-dsh` 四件套见 [RELEASE-HYGIENE.md](RELEASE-HYGIENE.md) §8.6 与 [DSH-COMPATIBILITY.md](DSH-COMPATIBILITY.md)。
 
 ## 使用限制（canonical，必读）
 

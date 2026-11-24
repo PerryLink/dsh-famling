@@ -237,3 +237,45 @@ verify `OK`，package `pack ok`，typecheck 在无 TypeScript 的临时副本里
 | task-B1 增量（「一起工作」专注模式，2026-11-21，未发布） | 入口 95,533→**95,731 B**（+198 B；gzip 27,470 / brotli 22,972；31% 门禁余 1,845 B、96 KiB 余 2,573 B）；懒加载 `client.content.js` 79,094→85,750 B（25/50 选择器、倒计时徽标、一次性提示与 zh/en 文案；不计入首屏/挂载门禁）；真实挂载 168,604→**168,802 B = 53.63%**（< 54%，余 1,169 B）；`npm test` **314/314** 绿；无新增存储键/权限/网络/系统通知/常驻 UI；状态仅内存、刷新即清；`PLUGIN-MANIFEST.json` 已按本任务工作树重新生成 |
 | 未做 / 不声称 | provenance、trusted publishing、signed/合规结论、公开仓 CI 实测 run |
 
+
+### 8.4 0.13.1（2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | `0.13.1`（registry `latest` = `0.13.1`） |
+| registry 时间 | `2026-11-21T07:16:05.015Z`（UTC） |
+| 发布方式 | 本地 `npm publish --tag latest --access public`；未启用 provenance / trusted publishing |
+| tarball | `dsh-famling-0.13.1.tgz`；349,618 B；26 files；unpacked 819,891 B |
+| tarball sha256 | `aec66fd0127cacdc9ba5cbf0581de1d49abc8d7840972323968722cfe901a185` |
+| npm shasum | `c340a6c98adc1966b092e6ac28b676e449b4988b` |
+| 内容 | 文档/证据同步版本：`RELEASE-HYGIENE` 补齐 0.12/0.13 发布记录与 DSH 真机证据引用；运行时代码与 0.13.0 一致（专注模式/许可清收/宿主状态钩子）；`files` 仍 26 |
+| 联合证据 | desktop `2026-11-21-c1-final-986312a` 的 JOINT-EVIDENCE 绑定本 tarball sha256（与 registry dist 一致） |
+| 未做 / 不声称 | provenance、trusted publishing、签名/合规/DLC/市场/私有仓真实 CI |
+
+### 8.5 0.13.2（2026-11-21）
+
+| 项 | 值 |
+| --- | --- |
+| 版本 | `0.13.2`（registry `latest` = `0.13.2`） |
+| registry 时间 | `2026-11-21T10:31:28.660Z`（UTC） |
+| 发布方式 | 本地 `npm publish --tag latest --access public`；未启用 provenance / trusted publishing |
+| tarball | `dsh-famling-0.13.2.tgz`；349,859 B；26 files；unpacked 820,861 B |
+| tarball sha256 | `def66d6c9e979e58c54c5a44657b8dfa8423a99d5c3af78811c18b6b3e774667` |
+| npm shasum | `6fdcbb991c0f41b0da2bd738ef0604dd49487863` |
+| 内容 | 文档/证据同步版本：`RELEASE-HYGIENE` 补齐 0.13.1 联合证据与真实 DSH 宿主验收记录；运行时代码与 0.13.0/0.13.1 一致（专注模式/许可清收/宿主状态钩子）；`files` 仍 26 |
+| 联合证据 | desktop `2026-11-21-c1-final-9eea3d0` 的 JOINT-EVIDENCE 绑定本 tarball sha256（与 registry dist 一致） |
+| 未做 / 不声称 | provenance、trusted publishing、签名/合规/DLC/市场/私有仓真实 CI |
+
+### 8.6 0.13.3 本地发布候选（2026-11-24，未 npm publish / 未打 tag）
+
+| 项 | 值 |
+| --- | --- |
+| 状态 | **本地 0.13.3 发布候选：未 `npm publish`、未打 tag、未 commit/push**；发布需 owner 最终批准 |
+| 清单 | `package.json` 新增 `main: index.js`、`icon: icon.png`、`exports["./package.json"]`、`dsh.compatibility.dshReleases`（0.2.2-rc.5 / 0.2.3-alpha.1 / 0.2.3-alpha.2 = compatible，只保最新三版）；`engines.dsh` 合并为 `>=0.2.1-rc.5 <0.3.0 || >=0.2.2-0 <0.3.0 || >=0.2.3-0 <0.3.0-0`；`package-lock.json` 同步 engines |
+| 兼容/自检 | `node scripts/verify-dsh.mjs`（28 项离线检查；`--dsh-version` 校验引擎区间与矩阵；`--json`；退出码 0/1/2）；说明见 docs/DSH-COMPATIBILITY.md；插件页 detail 改为 docs/PLUGIN-PAGE.md |
+| 门禁分层 | `check:fast`（JSDoc/typecheck/生成块/verify-dsh/全量单测）；`check:release`（fast + verify-anims + check-package --pack + plugin-manifest --check + prepublish-check + measure-bundle 信息）；`prepublish-check`（11 项发布不变量：tarball 清单/导出目标/体积预算/模块 id/版本一致/locale 解析/图标上限/私径卫生等）；`prepublishOnly` 接 prepublish-check；`release:check` 保留旧链并追加 verify:dsh |
+| 工作状态 | bridge `op:"state"` 追加 `workState`（idle/working/success/error）+ `workSince`；客户端 `client.status.js` 严格解析可选字段并在 handle 暴露；入口在 success/error 时各提示一次（error 60s 冷却，受气泡/页面可见/安静时段约束）；仍只用 agent/status + agent/error 与时间戳，不读会话/消息/工具参数/文件路径 |
+| 气泡优先级 | 单槽 `{priority, until}`：ambient < interaction < direct；低优先级丢弃、不排队、不重置计时；TTL 3200ms 不变 |
+| 预算 | 入口 95,731→97,558 B（96 KiB / 31% / 52% 硬门禁不变；0.13.3 把 2,025 B 功能增量折进 focus 基线 `FOCUS_ENTRY_BASELINE_BYTES=97,558`，200 B 额度保留；mount 门禁 55% 为 0.13.3 基线）；`npm test` 314→359 条（0 fail；原插件的 13 个 clean-checkout skip 在 canonical 位置不触发） |
+| 本地产物 | `npm pack` 只做本地校验/取证，不发布；tarball 清单以 `PLUGIN-MANIFEST.json` 与 prepublish-check 输出为准 |
+| 未做/不声称 | 未 npm publish、未 bump、未打 tag、未改公开仓；未在 0.2.3-alpha.1 宿主做真实冒烟（矩阵中该版本仅按区间+离线自检标注，见 DSH-COMPATIBILITY 的维护约定）；真实 0.2.2-rc.4 宿主证据仍是 2026-11-21 的 46/46 记录 |

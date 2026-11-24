@@ -2,6 +2,8 @@
 
 > 范围：在只读 DSH checkout 上，用临时 `DSH_HOME` 安装本插件并真实启动 Web 宿主，headless Chromium + CDP 做浏览器级验证；并用 `git show <tag>:<path>` 对 0.2.1-rc.4 / rc.5 做静态契约门。
 > 不签名、不上传、不发布、不跑外部 PR、不 commit/push；未改动 DSH checkout 工作树，未触碰真实 `~/.dsh`。
+>
+> 脱敏说明：本报告中的本机绝对路径已替换为占位符（`<DSH checkout>` / `<plugin checkout>`），不包含开发者机器上的目录。
 
 ## 1. 结论
 
@@ -23,7 +25,7 @@
 
 | 项 | 值 |
 |---|---|
-| 宿主 checkout | `/home/yy/deepseek-harness`（只读；仅 `git show/rev-parse/status` 读取） |
+| 宿主 checkout | `<DSH checkout>`（只读；仅 `git show/rev-parse/status` 读取；本机绝对路径已脱敏） |
 | 宿主版本 | `0.2.2-rc.4`（`apps/cli/package.json`） |
 | 宿主 commit | `ca33fd6843b205e279c7ccb6cb73a472c78f5760`，`git describe` = `dsh-v0.2.2-alpha.3-2986-gca33fd6843` |
 | 宿主工作树 dirty（**既有，非本任务**） | `package.json`、`packages/boot/app-boot/src/profile-resolution/resolver.ts`、`pnpm-lock.yaml` |
@@ -38,16 +40,16 @@
 ## 3. 复现命令
 
 ```sh
-cd /mnt/d/Projects/dsh/plugins/dsh-famling
+cd <plugin checkout>
 
 # 动态：真实宿主 + CDP 浏览器（约 20s；需要已构建 checkout、node>=22、pnpm/npm、Chrome/Chromium）
 node test/dsh-host-smoke.mjs \
-  --checkout /home/yy/deepseek-harness \
+  --checkout <DSH checkout> \
   --json test/dsh-host-smoke.evidence.json \
   --screenshot test/dsh-host-smoke.screenshot.png
 
 # 静态：rc.4 / rc.5 / HEAD 契约门（约 2s，无宿主、无网络）
-node test/dsh-host-smoke.contract.mjs --checkout /home/yy/deepseek-harness
+node test/dsh-host-smoke.contract.mjs --checkout <DSH checkout>
 ```
 
 可选参数：`--workdir DIR`（默认 mkdtemp）、`--chrome PATH`、`--chrome-lib-dir DIR`、`--no-ensure-chrome-deps`（离线时用预置 lib 目录）、`--port/--mock-port`、`--headed`、`--clean`、`--timeout MS`、`--plugin-name`。

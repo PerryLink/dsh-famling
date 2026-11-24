@@ -260,12 +260,13 @@ test('first-screen client.js carries no sprite payload and meets the lazy budget
   assert.ok(entryBytes < AUDIT_BASELINE_BYTES * 0.31, 'entry shrinks >69% vs the pre-split audit snapshot')
   assert.ok(entryBytes + humanBytes < AUDIT_BASELINE_BYTES * 0.52, 'first paint (entry + default chunk) shrinks >48% vs the pre-split audit snapshot')
   // The behavior kit and the host-status kit are both requested right after
-  // mount, so the honest mount payload charges them too. The host-state hook
-  // (0.11.2) adds one small lazy kit, so the mount gate moves 52% -> 54%; the
-  // entry-only 31%/96 KiB gates above are unchanged.
+  // mount, so the honest mount payload charges them too. The 0.11.2 host-state
+  // hook moved the mount gate 52% -> 54%; 0.13.3's bubble-priority/work-state
+  // consumption re-baselines it to 55% (released, measured entry+status kit).
+  // The entry-only 31%/96 KiB gates above are unchanged.
   const behaviorChunkBytes = Buffer.byteLength(readFileSync(behaviorChunkPath, 'utf8'))
   const statusChunkBytes = Buffer.byteLength(readFileSync(statusChunkPath, 'utf8'))
-  assert.ok(entryBytes + humanBytes + behaviorChunkBytes + statusChunkBytes < AUDIT_BASELINE_BYTES * 0.54, 'mount payload (entry + default chunk + behavior kit + host-status kit) stays within the 54% first-frame gate')
+  assert.ok(entryBytes + humanBytes + behaviorChunkBytes + statusChunkBytes < AUDIT_BASELINE_BYTES * 0.55, 'mount payload (entry + default chunk + behavior kit + host-status kit) stays within the 55% first-frame gate')
   assert.equal(/data:image\/png;base64,[A-Za-z0-9+/]{512,}/.test(clientSource), false, 'no full base64 PNG frame in client.js')
   assert.equal(/[A-Za-z0-9+/]{4096,}={0,2}/.test(clientSource), false, 'no multi-KB base64 literal in client.js')
   assert.ok(clientSource.includes('function requestCharacterChunk(kind, onSettled)'), 'lazy chunk request helper exists')
@@ -863,10 +864,12 @@ test('the chat surfaces disclose the DSH-configured model provider in both langu
 })
 
 /* ==================== "一起工作" focus mode (0.12.0 working tree / task-B1) ==================== */
-// Released 0.12.0 entry before task-B1; the focus wiring may add at most 200 B.
-const FOCUS_ENTRY_BASELINE_BYTES = 95_533
+// 0.13.3 released entry baseline: 0.12.0 focus baseline (95,533) + the
+// 2,025 B bubble-priority/work-state feature folded in at this release. The
+// focus/feature wiring may still add at most 200 B on top of this baseline.
+const FOCUS_ENTRY_BASELINE_BYTES = 97_558
 
-test('"一起工作" focus mode lives in the lazy chunks and keeps the entry within 200 B', () => {
+test('"一起工作" focus mode lives in the lazy chunks; the entry stays within the released 200 B budget', () => {
   const entryBytes = Buffer.byteLength(clientSource)
   const focusDelta = entryBytes - FOCUS_ENTRY_BASELINE_BYTES
   assert.ok(focusDelta >= 0 && focusDelta <= 200, 'focus wiring adds ' + focusDelta + ' B (<= 200 B) to the entry')

@@ -259,13 +259,23 @@ function handleProbe(ctx) {
  * session ids, messages, prompts, tool arguments and file paths are never read,
  * stored, logged or projected. A Host without the event API keeps loading the
  * plugin: `state` then answers available:false instead of faking a status.
+ *
+ * On top of that legacy coarse view the tracker derives a four-state work
+ * status (`workState`: idle | working | success | error) from the same two
+ * events only: a working streak, the last clean stop and the last classified
+ * error. It still never reads an agent/session id, message, prompt, tool
+ * argument or file path; the extra fields are an enum plus one timestamp.
  */
 const HOST_STATE_RING_MAX = 16
 const HOST_STATE_MAX_ACTIVE = 64
 const HOST_STATE_STATES = ['idle', 'running', 'unknown']
 const HOST_STATE_TRANSITIONS = ['idle', 'running']
 const HOST_STATE_ERROR_KINDS = ['aborted', 'auth', 'network', 'rate-limit', 'server', 'timeout', 'tool', 'unknown']
-const HOST_STATE_FIELDS = ['available', 'source', 'state', 'active', 'updatedAt', 'lastError', 'transitions']
+/** Derived coarse work states; `idle` is always the safe fallback. */
+export const HOST_WORK_STATES = Object.freeze(['idle', 'working', 'success', 'error'])
+/** Freshness windows (ms) for the derived `error` / `success` work states. */
+export const HOST_WORK_STATE_TTL_MS = Object.freeze({ error: 60_000, success: 10_000 })
+const HOST_STATE_FIELDS = ['available', 'source', 'state', 'active', 'updatedAt', 'lastError', 'transitions', 'workState', 'workSince']
 /** Bounded trackers by Host context; a WeakMap never keeps a disposed context alive. */
 const HOST_STATE_TRACKERS = new WeakMap()
 const HOST_STATE_UNAVAILABLE = Object.freeze({
@@ -276,6 +286,8 @@ const HOST_STATE_UNAVAILABLE = Object.freeze({
   updatedAt: null,
   lastError: null,
   transitions: Object.freeze([]),
+  workState: 'idle',
+  workSince: null,
 })
 
 /**
@@ -301,9 +313,21 @@ function hostStateErrorKind(value) {
   } catch { return 'unknown' }
 }
 
-/** One bounded in-memory tracker: running count, last transition and error kind. */
+/**
+ * One bounded in-memory tracker: running count, last transition, error kind and
+ * the two stamps the work-state derivation needs (work streak start / last stop).
+ */
 function createHostStateTracker(now) {
-  const tracker = { available: false, running: 0, state: 'unknown', updatedAt: null, lastError: null, transitions: [] }
+  const tracker = {
+    available: false,
+    running: 0,
+    state: 'unknown',
+    updatedAt: null,
+    lastError: null,
+    lastStopAt: null,
+    workStartedAt: null,
+    transitions: [],
+  }
   tracker.record = (state) => {
     tracker.state = state
     tracker.updatedAt = now()
@@ -311,6 +335,49 @@ function createHostStateTracker(now) {
     if (tracker.transitions.length > HOST_STATE_RING_MAX) tracker.transitions.shift()
   }
   return tracker
+}
+
+/**
+ * Test whether one event stamp is still fresh. `now` must be an integer epoch
+ * so the derivation is deterministic; a backwards clock degrades to "stale"
+ * (idle) instead of latching a fake success/error forever.
+ * @param {unknown} at Event timestamp to test.
+ * @param {unknown} now Injected current timestamp.
+ * @param {number} ttl Freshness window in ms.
+ * @returns {boolean}
+ */
+function hostWorkStampFresh(at, now, ttl) {
+  return Number.isInteger(at) && at >= 0 && Number.isInteger(now) && now >= at && now - at <= ttl
+}
+
+/**
+ * Derive the coarse four-state work status from the bounded tracker stamps.
+ * Pure and now-injectable so every TTL edge is testable without waiting. Only
+ * counters and timestamps are read: no agent/session id, message, prompt, tool
+ * argument or file path. active > 0 always wins; otherwise a fresh classified
+ * error (<= 60s) beats a fresh clean stop (<= 10s); everything missing, stale
+ * or malformed degrades to idle/null (fail-closed, never a guessed busy state).
+ * @param {{active?: unknown, lastError?: unknown, lastStopAt?: unknown, workStartedAt?: unknown, updatedAt?: unknown}} tracker Coarse tracker or its snapshot.
+ * @param {number} now Injected current epoch ms.
+ * @returns {{workState: string, workSince: number|null}} Derived state and the stamp it started at.
+ */
+export function deriveHostWorkState(tracker, now) {
+  const source = tracker && typeof tracker === 'object' ? tracker : {}
+  if (Number.isInteger(source.active) && source.active > 0) {
+    const startedAt = Number.isInteger(source.workStartedAt) && source.workStartedAt >= 0
+      ? source.workStartedAt
+      : (Number.isInteger(source.updatedAt) && source.updatedAt >= 0 ? source.updatedAt : null)
+    return { workState: 'working', workSince: startedAt }
+  }
+  const lastError = source.lastError
+  if (lastError && typeof lastError === 'object'
+    && hostWorkStampFresh(lastError.at, now, HOST_WORK_STATE_TTL_MS.error)) {
+    return { workState: 'error', workSince: lastError.at }
+  }
+  if (hostWorkStampFresh(source.lastStopAt, now, HOST_WORK_STATE_TTL_MS.success)) {
+    return { workState: 'success', workSince: source.lastStopAt }
+  }
+  return { workState: 'idle', workSince: null }
 }
 
 /**
@@ -329,10 +396,20 @@ function trackHostState(ctx) {
       try {
         const status = payload && payload.status
         if (status !== 'running' && status !== 'idle') return
+        const before = tracker.running
         tracker.running = status === 'running'
           ? Math.min(tracker.running + 1, HOST_STATE_MAX_ACTIVE)
           : Math.max(0, tracker.running - 1)
         tracker.record(tracker.running > 0 ? 'running' : 'idle')
+        // Work-state stamps (privacy: timestamps only, never who/what): a busy
+        // streak starts at the 0 -> N transition and a clean stop is recorded
+        // only when the count really reaches 0, so extra idle events cannot keep
+        // stretching the success window. Same clock tick as `updatedAt`.
+        if (before === 0 && tracker.running > 0) tracker.workStartedAt = tracker.updatedAt
+        if (before > 0 && tracker.running === 0) {
+          tracker.lastStopAt = tracker.updatedAt
+          tracker.workStartedAt = null
+        }
       } catch {}
     }
     const onError = (payload) => {
@@ -366,6 +443,8 @@ function hostStateReportValid(report) {
   for (const key of Object.keys(report)) if (!HOST_STATE_FIELDS.includes(key)) return false
   if (report.available !== true || report.source !== 'events') return false
   if (!HOST_STATE_STATES.includes(report.state)) return false
+  if (!HOST_WORK_STATES.includes(report.workState)) return false
+  if (report.workSince !== null && (!Number.isInteger(report.workSince) || report.workSince < 0)) return false
   if (!Number.isInteger(report.active) || report.active < 0 || report.active > HOST_STATE_MAX_ACTIVE) return false
   if (report.updatedAt !== null && (!Number.isInteger(report.updatedAt) || report.updatedAt < 0)) return false
   if (report.lastError !== null) {
@@ -386,6 +465,13 @@ function hostStateReportValid(report) {
 function hostStateSnapshot(ctx) {
   const tracker = HOST_STATE_TRACKERS.get(ctx)
   if (!tracker || tracker.available !== true) return HOST_STATE_UNAVAILABLE
+  const work = deriveHostWorkState({
+    active: tracker.running,
+    lastError: tracker.lastError,
+    lastStopAt: tracker.lastStopAt,
+    workStartedAt: tracker.workStartedAt,
+    updatedAt: tracker.updatedAt,
+  }, Date.now())
   const report = {
     available: true,
     source: 'events',
@@ -394,6 +480,8 @@ function hostStateSnapshot(ctx) {
     updatedAt: tracker.updatedAt,
     lastError: tracker.lastError,
     transitions: tracker.transitions.slice(-HOST_STATE_RING_MAX),
+    workState: work.workState,
+    workSince: work.workSince,
   }
   return hostStateReportValid(report) ? report : HOST_STATE_UNAVAILABLE
 }

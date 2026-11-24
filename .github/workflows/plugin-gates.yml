@@ -1,0 +1,39 @@
+# dsh-famling 分层门禁（push/PR 跑 fast；tag v* 跑 release；不发布、不签名）
+#   fast   ：每次 push/PR 跑 check:fast（静态 + verify-dsh + 全量单测，零依赖）
+#   release：tag 上跑 check:release（fast + 动画/打包/清单/发布不变量），不发布、不签名
+name: plugin-gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: fast gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: check:fast
+        run: node scripts/check-fast.mjs
+      - name: verify-dsh with a declared host version
+        run: node scripts/verify-dsh.mjs --dsh-version 0.2.3-alpha.2
+
+  release-gate:
+    name: release gates
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: check:release
+        run: node scripts/check-release.mjs
