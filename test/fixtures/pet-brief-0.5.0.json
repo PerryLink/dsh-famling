@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T15:21:27.898Z",
+  "expiresAt": "2026-11-24T15:26:27.898Z",
+  "source": "advisers",
+  "displayPolicy": "private",
+  "counts": {
+    "today": 1,
+    "commitments": 1,
+    "risks": 1,
+    "facts": 1
+  },
+  "today": [
+    {
+      "id": "matter_mwuuecey_1",
+      "title": "给客户A发报价",
+      "status": "open"
+    }
+  ],
+  "commitments": [
+    {
+      "id": "cm_mwuuecey_3",
+      "matter": "matter_mwuuecey_1",
+      "who": "客户A",
+      "what": "发报价",
+      "due": "2026-11-25",
+      "risk": "medium",
+      "confidence": 0.95
+    }
+  ],
+  "risks": [
+    {
+      "id": "risk_cm_mwuuecey_3",
+      "level": "medium",
+      "summary": "客户A的发报价即将到期",
+      "evidence": "cm_mwuuecey_3",
+      "confidence": 0.72
+    }
+  ],
+  "facts": [
+    {
+      "id": "fact_mwuuecez_5",
+      "subject": "客户A",
+      "predicate": "prefers",
+      "value": "PDF 报价",
+      "confidence": 0.9
+    }
+  ],
+  "mood": "focused",
+  "suggestedLines": [
+    "客户A的发报价即将到期。",
+    "客户A的发报价，2026-11-25到期。",
+    "客户A：PDF 报价"
+  ],
+  "redactions": [
+    "不含文档正文、邮件正文、聊天记录",
+    "不含模型推理、系统提示或原始提示词",
+    "已排除保密等级≥2 的事项（1 个）",
+    "已排除保密事项下的承诺（1 条）",
+    "联系人/客户名默认不进入 brief"
+  ]
+}

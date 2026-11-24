@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-24T14:55:01.632Z",
+  "generatedAt": "2026-11-24T15:22:12.499Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
     "name": "dsh-famling",
-    "version": "0.13.3",
+    "version": "0.13.4",
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
-    "count": 38,
-    "totalBytes": 1240148,
-    "digest": "3c5b23d33df4a68c2950afdb3da5139886e637c6dd6efdbfc7b55e5b0505aeed",
+    "count": 39,
+    "totalBytes": 1245480,
+    "digest": "f2e36a8c6ba9e1cb7219ca09beb4d977bd67216f1bd6516fae0d63ca4a139a50",
     "files": [
       {
         "path": "LICENSE",
@@ -33,7 +33,7 @@
       {
         "path": "README.md",
         "bytes": 5848,
-        "sha256": "e090aa6f4de877ad3a509d45d1ef07fcc379884a4d1a6e2691c421f10c356217"
+        "sha256": "b39439e9453629d0e8152fa45501c4168314341b79219a2843f91d8e29aa5ae6"
       },
       {
         "path": "client.anims.cat.js",
@@ -58,12 +58,12 @@
       {
         "path": "client.content.js",
         "bytes": 85750,
-        "sha256": "db216a33c1f9df66c8ba15cb41a0bc1d7e99c8026fbe0ff7719816a5010986e5"
+        "sha256": "5601e4028df9506a0c0a1447490cc83eec1e4f6d74c8442448fbed678ced0bc5"
       },
       {
         "path": "client.js",
         "bytes": 97558,
-        "sha256": "0d1e68cba61e8997c9c80d82472b9d5848efeae06d9dccd239f08df409722e03"
+        "sha256": "8b1e5c7debec32f306997693750d4dad0e8857e437c507ada6e014f2ff89ecec"
       },
       {
         "path": "client.status.js",
@@ -108,12 +108,17 @@
       {
         "path": "docs/LEGAL-NOTICE-2026-11-18.md",
         "bytes": 28846,
-        "sha256": "5559cb43157bcad4ccafc2341e5178308420431fc3d03e2ef88a558078189c32"
+        "sha256": "f061bb02e8c4b3e4a1c00eb9987d7964281fc170df4335854e042f65bd53a3e7"
       },
       {
         "path": "docs/PET-BRIEF-0.3.0-COMPAT-2026-11-20.md",
-        "bytes": 15069,
-        "sha256": "5a88b71389006c34dc3980531dff45a211b44b31ade414b69f1fa9a8b02b6474"
+        "bytes": 15251,
+        "sha256": "2f6df8aa0a6777237e0b208880fbfbff9986008a1bdf3b892d5302b8d1f9ff3c"
+      },
+      {
+        "path": "docs/PET-BRIEF-0.5.0-COMPAT-2026-11-24.md",
+        "bytes": 5122,
+        "sha256": "a81b192360c6e408bb56b88b4e4fcdbc8a798425cb62c2960edeaf409cfc2ab4"
       },
       {
         "path": "docs/PLUGIN-PAGE.md",
@@ -187,23 +192,23 @@
       },
       {
         "path": "index.js",
-        "bytes": 48389,
-        "sha256": "5628345cf0761a07ead372e079b31aa9afae99d72ba57631c6d5ce6f4595f3bd"
+        "bytes": 48417,
+        "sha256": "20a1b997f7626e9426e2f31eb152b03c999619d467748d1206b80777d32a886c"
       },
       {
         "path": "locale/en.json",
         "bytes": 3439,
-        "sha256": "3e0399bc2a1886ecd5f3420ee700c8569bfcb507109e67ff8a18e5953d553a85"
+        "sha256": "1e10de703e72dc2214b5df766fb31b235d9bcad2c019953c630df0b4731fb688"
       },
       {
         "path": "locale/zh.json",
         "bytes": 3045,
-        "sha256": "2ef6af005987897f4952ffa920d7a80bfc70d6b4e27fe141ebd24f4053d28502"
+        "sha256": "83c820c2363c4e5ce6edf3ed66a19b7a8071e09f47bbd0302be5eced21785491"
       },
       {
         "path": "package.json",
         "bytes": 3589,
-        "sha256": "564c8942f6f99216dd9bd040ca7fe45f201b6031a0d2d2b6b679924ae05a16cc"
+        "sha256": "ba99555f4d422cfddddaf2c9f1c29620b1b9f9fdf87b44d9b04907cdc8d35f66"
       }
     ]
   },

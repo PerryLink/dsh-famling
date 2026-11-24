@@ -1,5 +1,5 @@
 /**
- * Pet Brief producer/consumer compatibility — Advisers 0.3.0 / contract v0.2.
+ * Pet Brief producer/consumer compatibility — Advisers 0.5.0 / contract v0.2 (verified 0.3.0–0.5.0).
  *
  * The plugin host half (index.js `readBriefProjection`) is a *projection
  * boundary* AND a strict consumer: since the 0.3.0 follow-up it validates the
@@ -14,7 +14,8 @@
  *  1. always-on synthetic fixtures shaped by contract v0.2 (schemaVersion 2,
  *     5-minute TTL, displayPolicy, counts, closed schema) — no external
  *     checkout and no real data;
- *  2. optional real producer: the Advisers 0.3.0 library builds a brief from an
+ *  2. captured Advisers 0.5.0 producer fixture (synthetic ledger, restamped TTL)
+ *     is always-on; an optional real-producer layer also builds a brief from an
  *     in-memory synthetic ledger (no real ledger, no ~/.advisers read);
  *  3. optional private-famling fixtures copied from the desktop consumer —
  *     honest skip when the private checkout is absent (never a hidden private
@@ -45,6 +46,8 @@ const ADVISERS_REPO = resolve(process.env.ADVISERS_REPO_DIR ?? join(ROOT, '..', 
 const PRODUCER_LIB = join(ADVISERS_REPO, 'packages', 'advisers', 'lib', 'pet-brief.js')
 const PRODUCER_CORE = join(ADVISERS_REPO, 'packages', 'core', 'dist', 'index.js')
 const PRODUCER_TESTCASES = join(ADVISERS_REPO, 'docs', 'pet-brief', 'testcases-v0.2.json')
+/** Captured from Advisers 0.5.0 (synthetic ledger; sha256 a3f7cc28…). */
+const PRODUCER_050_FIXTURE = join(ROOT, 'test', 'fixtures', 'pet-brief-0.5.0.json')
 const PRODUCER_AVAILABLE = existsSync(PRODUCER_LIB) && existsSync(PRODUCER_CORE)
 const VECTORS_AVAILABLE = existsSync(PRODUCER_TESTCASES)
 /** Private famling checkout (optional): fixtures only, never imported as code. */
@@ -169,6 +172,17 @@ test('a contract-shaped v0.2 brief projects only counts/today/commitments (no ex
   }
   for (const item of body.brief.today) assert.deepEqual(Object.keys(item).sort(), ['status', 'title'])
   for (const item of body.brief.commitments) assert.deepEqual(Object.keys(item).sort(), ['due', 'risk', 'what'])
+})
+
+test('captured Advisers 0.5.0 producer fixture round-trips after TTL restamp', async () => {
+  const raw = JSON.parse(await readFile(PRODUCER_050_FIXTURE, 'utf8'))
+  const { status, body } = await request(restamp(raw))
+  assert.equal(status, 200)
+  assert.equal(body.ok, true)
+  assert.equal(body.brief.schemaVersion, 2)
+  assert.deepEqual(body.brief.counts, raw.counts)
+  assert.deepEqual(body.brief.today, raw.today.slice(0, 3).map((item) => ({ title: item.title, status: item.status })))
+  assert.deepEqual(body.brief.commitments, raw.commitments.slice(0, 3).map((item) => ({ what: item.what, due: item.due, risk: item.risk })))
 })
 
 test('the projection caps today/commitments at three rows but keeps the real counts', async () => {
@@ -333,10 +347,10 @@ test('malformed JSON and a file above 128 KiB are refused', async () => {
   assert.match(tooLarge.body.message, /too large/)
 })
 
-/* ---------- 3. optional: real Advisers 0.3.0 producer, synthetic ledger ---------- */
+/* ---------- 3. optional: real Advisers 0.5.0 producer, synthetic ledger ---------- */
 
 if (!IS_STANDALONE_CHILD) {
-  test('an Advisers 0.3.0 producer brief (in-memory synthetic ledger) round-trips through the bridge', {
+  test('an Advisers 0.5.0 producer brief (in-memory synthetic ledger) round-trips through the bridge', {
     skip: PRODUCER_AVAILABLE ? false : 'Advisers producer checkout not available (set ADVISERS_REPO_DIR; expected ' + PRODUCER_LIB + ')',
   }, async (t) => {
     let lib
@@ -382,7 +396,7 @@ if (!IS_STANDALONE_CHILD) {
     const brief = lib.buildPetBrief(ledger, { now, displayPolicy: 'private' })
     const validation = lib.validatePetBrief(brief, { now })
     assert.equal(validation.ok, true, 'producer validates its own v0.2 output: ' + JSON.stringify(validation.errors))
-    assert.equal(brief.schemaVersion, 2, '0.3.0 still emits contract v0.2 (schemaVersion 2)')
+    assert.equal(brief.schemaVersion, 2, '0.5.0 still emits contract v0.2 (schemaVersion 2)')
 
     const { status, body } = await request(brief)
     assert.equal(status, 200)

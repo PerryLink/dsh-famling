@@ -1,5 +1,7 @@
 # dsh-famling × Advisers 0.3.0：Pet Brief 严格校验报告（2026-11-20）
 
+> **历史报告（0.3.0）。** Advisers 0.5.0 的复验见 [PET-BRIEF-0.5.0-COMPAT-2026-11-24.md](PET-BRIEF-0.5.0-COMPAT-2026-11-24.md)（契约 v0.2 未变，插件 0.13.4）。
+
 - 范围：`plugins/dsh-famling` 的 **Host bridge `op:"brief"`**（`index.js`）对 Advisers 生产的 `pet-brief.json` 的消费；生产端为 **Advisers 0.3.0**（npm `advisers@0.3.0`，契约 **Pet Brief v0.2 / `schemaVersion: 2`**）。
 - 本次改动（task-152）：只改 `index.js`、`test/`、`docs/`、`README.md`；**未改 `client.js` / 版本号 / package.json，未 commit / push，未改 Advisers 仓**。
 - 结论：**bridge 从「投影 allowlist」升级为「严格 consumer」**——读取后先按 closed contract v0.2 校验整份文档，再投影固定 allowlist；任何偏差 404 `E_MEMORY` fail-closed，不返回部分对象。0.3.0 输出仍为 contract v0.2，真实 producer 往返、私有 famling fixtures 往返、非法/篡改输入负向用例全部通过。

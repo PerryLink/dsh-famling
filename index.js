@@ -538,7 +538,7 @@ function advisersHome() {
  * up to three rows, but it still validates the WHOLE document before projecting:
  * a malformed/tampered file is refused as a whole instead of being trusted
  * field-by-field. Rules mirror the producer validator plus two consumer-side
- * hardenings required by the 0.3.0 follow-up:
+ * hardenings required by the 0.3.0 follow-up (re-verified through 0.5.0):
  * - TTL upper bound: expiresAt - generatedAt must be > 0 and <= the contract
  *   5 minutes; generatedAt may not be far in the future (clock-skew guard), so
  *   a hand-edited file cannot buy an arbitrarily long lifetime;

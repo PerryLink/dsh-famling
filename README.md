@@ -24,7 +24,7 @@ dsh plugin --profile web add dsh-famling
 - 设置：低打扰安静时段、减少动态、暂时隐藏、四层缩放、TTS/ASR、数据导出与删除、TTS/ASR 同意。
 - 「一起工作」25/50 分钟专注模式：只暂停自动气泡/自动微动作，不拦显式互动；结束一句本地气泡，无系统通知、无历史、无连续天数。
 
-## 当前实现（0.13.3）
+## 当前实现（0.13.4）
 
 - **DSH 兼容自检**：`npm run verify:dsh` 离线校验清单/patch/客户端产物/兼容矩阵/资源/路径卫生（28 项）；`engines.dsh` 是安装闸门，`dsh.compatibility.dshReleases` 是第三方 Store 展示字段。
 - **分层门禁**：`npm run check:fast`（静态 + 全量单测）与 `npm run check:release`（fast + 动画/打包/清单/发布不变量）；`prepublishOnly` 跑发布不变量。
