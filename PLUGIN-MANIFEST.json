@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-25T00:24:20.647Z",
+  "generatedAt": "2026-11-25T00:46:14.665Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
@@ -11,9 +11,9 @@
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
-    "count": 39,
-    "totalBytes": 1374495,
-    "digest": "a4c061f023902ae378b1827b91e0d65f27a50273e2c8982fa65f2e255c56718b",
+    "count": 40,
+    "totalBytes": 1376768,
+    "digest": "7aa12ccb869cb2cac2bd7e9ba78e7ffcef83ba0d14d4a52c94ba83f665eac39d",
     "files": [
       {
         "path": "LICENSE",
@@ -119,6 +119,11 @@
         "path": "docs/PET-BRIEF-0.5.0-COMPAT-2026-11-24.md",
         "bytes": 5122,
         "sha256": "a81b192360c6e408bb56b88b4e4fcdbc8a798425cb62c2960edeaf409cfc2ab4"
+      },
+      {
+        "path": "docs/PET-BRIEF-0.5.1-COMPAT-2026-11-25.md",
+        "bytes": 2273,
+        "sha256": "8937d0e28b76fc05102ef62daaa2f4073331be373f5b38fe2470d364a33e8a16"
       },
       {
         "path": "docs/PLUGIN-PAGE.md",
