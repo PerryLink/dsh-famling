@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-25T10:41:23.303Z",
+  "generatedAt": "2026-11-25T11:40:49.622Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
     "name": "dsh-famling",
-    "version": "0.14.2",
+    "version": "0.14.3",
     "license": "PolyForm-Noncommercial-1.0.0"
   },
   "packed": {
     "count": 41,
-    "totalBytes": 1399606,
-    "digest": "42414286cff1001abb536d44c5daea0bbce8885036703d61eee16066818d7693",
+    "totalBytes": 1399014,
+    "digest": "d78181294b9b5d6f3d8dcb42000d8e8652f7f12cfabb1e792d19faa434a0392e",
     "files": [
       {
         "path": "LICENSE",
@@ -33,22 +33,22 @@
       {
         "path": "README.md",
         "bytes": 6081,
-        "sha256": "5116f326047121dd9b1c8fd5414a484f04d403787d945ccc41af57318fd8d4e8"
+        "sha256": "4fa3d5b5607d1263f2a620158ca9af1854a4d2f5a84ee4936bafcb7e97f6bb95"
       },
       {
         "path": "client.anims.cat.js",
         "bytes": 125994,
-        "sha256": "a45ec568704a77eb63b1eed821e1551231aa5f79348e744cc87fc32485513a5f"
+        "sha256": "6922a2a9d6a5211670512688c0814e5cf7c83421f91159a585e6e7443cdaaf9a"
       },
       {
         "path": "client.anims.dog.js",
-        "bytes": 134030,
-        "sha256": "ae7077ef733c03313654fb98d65d571188113e542232395c73f8a30be9d10a93"
+        "bytes": 133438,
+        "sha256": "fec3392533b043b2087a8d8ae901346fac387ff979ce4328029f4dc77dfb7d9a"
       },
       {
         "path": "client.anims.human.js",
         "bytes": 115508,
-        "sha256": "b10a8c8f5a139c0522ab1d68ca53679dfe11ec21714b85f4bceb5c9ec98fb008"
+        "sha256": "5c55fffc0ade8ba0283fa0255eaa39385722d287536dd56d1e78bb39344b06ed"
       },
       {
         "path": "client.behavior.js",
@@ -58,12 +58,12 @@
       {
         "path": "client.content.js",
         "bytes": 85750,
-        "sha256": "9b7da2824ec0cc6df702ca264daf0599f90120272e73e939bc0573a1a42dd0c4"
+        "sha256": "1bce3f2e5b6ab856f3d1114a240df44872bb553b35366787776d768c04dabe13"
       },
       {
         "path": "client.js",
         "bytes": 97572,
-        "sha256": "dbfeb5483ea81ac763ef900f1e9293549ed34ce81f3e55e05f6c229556b5d9cd"
+        "sha256": "bab88b2a5540711af59085b17b0c873bb47cd7251466a8797104f8d4eae39a92"
       },
       {
         "path": "client.status.js",
@@ -113,7 +113,7 @@
       {
         "path": "docs/LEGAL-NOTICE-2026-11-18.md",
         "bytes": 28846,
-        "sha256": "122b0aaa62855d83c592a92a29dce10f6a0829d35ee79e69d3779f71b89258b0"
+        "sha256": "1cfe546291688fae781a0caa8a4a24d97161c5e84e93d01bc51737b195cf0fa3"
       },
       {
         "path": "docs/PET-BRIEF-0.3.0-COMPAT-2026-11-20.md",
@@ -208,28 +208,28 @@
       {
         "path": "locale/en.json",
         "bytes": 3439,
-        "sha256": "e998d53e355b6a91060463cfbc47295699657a6ed997ab8bbbf5c4f020feec14"
+        "sha256": "9dfc05eddee23aac40bb280dbb652e094107afcddf478676e59474124d476f23"
       },
       {
         "path": "locale/zh.json",
         "bytes": 3045,
-        "sha256": "3b37e9173c35b0d29fc3e8ff09ebc87ac3e9b1c5c16c64c05c0fefdd941828ab"
+        "sha256": "f5af592314f32e1a0c1d1b5837002ed584586c7b21dc9662ea8438d90d0aa72b"
       },
       {
         "path": "package.json",
         "bytes": 3589,
-        "sha256": "72b0fa4eeae5f5c62ca8a17b0962755173f1250599baa8c544b9e4b842a0f30f"
+        "sha256": "716183f8758d2da49472a3ec4911d83065e07f7bb895d644d26d32c7f3275f95"
       }
     ]
   },
   "animSpec": {
     "path": "scripts/spec/anim-spec.json",
     "bytes": 65141,
-    "sha256": "3997be296049a96dfc939a5ae30223c0a91b5c27fb8cd0948f27d69b8fe70b1b",
+    "sha256": "18a7e4293cbb829294a5f38ae84c22fcae01cd5693d47f96da3a7d8d937877ff",
     "schema": "dsh-famling/anim-spec",
     "version": 1,
-    "selfSha256": "f5402c7d971d2659f08d9acdb154f5e8c2bd6e12a12c429796fa30d000b3ce9a",
-    "sourceSha256": "d0b58826a2b0d94253c4f667a6400d92efed79f36ba85475817319a25ad54b55",
+    "selfSha256": "9f516f98b4cc67fe2023caa5957db82d45ba42f1766e2fd23b7643d92d235127",
+    "sourceSha256": "24130b10c82346fb5efdd88153bd6458567d143cfd3bb51458827cb90da33b71",
     "characters": {
       "cat": 74,
       "dog": 70,
