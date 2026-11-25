@@ -800,7 +800,10 @@ test('quiet hours stop automatic micro actions but explicit taps still answer', 
 
 /* ==================== 0.11.2: coarse host state (client half) ==================== */
 const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve))
-function statusTimers(harness) { return harness.timers.timeouts.filter((timer) => timer.ms === 30000) }
+// 0.14.1 adaptive host-status cadence: mount 1s, working/waiting 3s, fresh
+// success/error 5s, idle 30s. The status tests schedule nothing else in that set.
+const POLL_DELAYS = new Set([1000, 3000, 5000, 30000])
+function statusTimers(harness) { return harness.timers.timeouts.filter((timer) => POLL_DELAYS.has(timer.ms)) }
 /** A valid WP-C `state` reply carrying the optional work-state fields. */
 function stateReply(workState, workSince = null) {
   return {
@@ -810,7 +813,11 @@ function stateReply(workState, workSince = null) {
     updatedAt: 1, lastError: null, transitions: [], workState, workSince,
   }
 }
-/** Fire the latest scheduled 30s poll and let the fetch/parse/settle chain run. */
+/** A valid `state` reply with the 0.14.0 additive approval mirror patched in. */
+function approvalStateReply(pending) {
+  return { ...stateReply('idle'), approvals: { available: true, pending, oldestAt: pending === 0 ? null : 9 } }
+}
+/** Fire the latest scheduled adaptive poll and let the fetch/parse/settle chain run. */
 async function pollState(harness) {
   const timers = statusTimers(harness)
   timers[timers.length - 1].fn()
@@ -818,18 +825,44 @@ async function pollState(harness) {
   harness.ui.render()
 }
 
-test('the lazy host-status chunk loads after mount and pulls once per 30s', async () => {
+test('the lazy host-status chunk loads after mount and schedules the adaptive cadence', async () => {
   const harness = createHarness({ now: localTime(12, 0) })
   assert.ok(harness.asyncCalls.includes('client.status.js'), 'the host-status kit is a package-local lazy chunk')
   assert.equal(harness.businessCalls().length, 0, 'mounting still sends no bridge business call')
   const storageBefore = [...harness.storage.keys()].sort()
-  assert.equal(statusTimers(harness).length, 1, 'the first pull is scheduled 30s after mount')
+  assert.equal(statusTimers(harness).length, 1, 'exactly one pull is scheduled at mount')
+  assert.equal(statusTimers(harness)[0].ms, 1000, 'the first pull is 1s after mount')
   statusTimers(harness)[0].fn()
   await flushMicrotasks()
   assert.equal(harness.stateCalls.length, 1, 'one coarse state pull per tick')
   assert.deepEqual(harness.stateCalls[0], { v: 2, op: 'state' }, 'the poll asks only for the coarse state')
   assert.equal(statusTimers(harness).length, 2, 'the next tick is scheduled')
+  assert.equal(statusTimers(harness)[1].ms, 30000, 'the default idle reply re-arms at 30s')
   assert.deepEqual([...harness.storage.keys()].sort(), storageBefore, 'polling writes nothing to storage')
+})
+
+test('the poll cadence follows the work state and waiting approvals', async () => {
+  let reply = stateReply('idle')
+  const harness = createHarness({ now: localTime(12, 0), hostState: () => reply })
+  const lastDelay = () => statusTimers(harness)[statusTimers(harness).length - 1].ms
+  assert.equal(lastDelay(), 1000, 'mount poll at 1s')
+  await pollState(harness)
+  assert.equal(lastDelay(), 30000, 'plain idle settles to 30s')
+  reply = stateReply('working', 100)
+  await pollState(harness)
+  assert.equal(lastDelay(), 3000, 'a working agent polls at 3s')
+  reply = approvalStateReply(1)
+  await pollState(harness)
+  assert.equal(lastDelay(), 3000, 'a waiting approval keeps the fast cadence')
+  reply = stateReply('success', 200)
+  await pollState(harness)
+  assert.equal(lastDelay(), 5000, 'a fresh success polls at 5s')
+  reply = stateReply('error', 300)
+  await pollState(harness)
+  assert.equal(lastDelay(), 5000, 'a fresh error polls at 5s')
+  reply = stateReply('idle', 400)
+  await pollState(harness)
+  assert.equal(lastDelay(), 30000, 'back to the idle cadence')
 })
 
 test('a missing host-status chunk degrades to the shipped behavior', () => {
@@ -877,7 +910,7 @@ test('visibility changes pause and pull the coarse state exactly once', async ()
   visibility()
   await flushMicrotasks()
   assert.equal(harness.stateCalls.length, 1, 'returning to the tab pulls once')
-  assert.equal(statusTimers(harness).length, 2, 'the 30s cadence resumes')
+  assert.equal(statusTimers(harness).length, 2, 'the idle cadence resumes after the catch-up pull')
 })
 
 test('an unsupported state reply stops polling and never invents a status', async () => {
@@ -900,6 +933,7 @@ test('silent retries are capped when the state route keeps failing', async () =>
   }
   assert.equal(fired, 4, 'initial pull + 3 silent retries')
   assert.equal(statusTimers(harness).length, 4, 'polling stops after the retry cap')
+  assert.deepEqual(statusTimers(harness).slice(1).map((timer) => timer.ms), [30000, 30000, 30000], 'each silent retry waits the idle cadence')
 })
 
 test('a malformed state reply is ignored instead of mapped to quiet', async () => {

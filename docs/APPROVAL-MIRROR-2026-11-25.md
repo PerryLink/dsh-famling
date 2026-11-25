@@ -1,6 +1,6 @@
 # 只读审批等待镜像（P0，2026-11-25）
 
-> 目标版本：dsh-famling 0.14.0 P0-1/2/3 的**只读**子集。本文记录实现边界、验收证据与明确未做项。
+> 目标版本：dsh-famling 0.14.0 P0-1/2/3 的**只读**子集；0.14.1 追加自适应轮询（§5.1 / §10）。本文记录实现边界、验收证据与明确未做项。
 > 状态：代码与单测已落地；**未**在真实 DSH 宿主做冒烟（本工作副本没有可构建的 DSH 运行环境），因此不得据此宣称"已兼容真实审批事件"。
 > 相关规范：`famling-art-rebuild/work/research/02-dsh-integration.md` §2.2 / §4 / §5 P0-1..P0-3。
 
@@ -20,7 +20,7 @@
 
 **永不读取/存储/透出**：`toolName`、`reason`、`displayReason`、`callId`、`agent`、session id、工具参数、文件路径、prompt、审批历史/结果、`req.signal` 内容。观察者函数完全不接触 request 形参（单测用"任何属性访问即抛错"的 Proxy 证明）。`reason` 被视同 prompt 级敏感数据。
 
-新增权限面：0。无新网络目标、无新 `localStorage` 键、无系统通知、无 client inject、无版本/清单改动（本次不升版本、不重生成 PLUGIN-MANIFEST）。
+新增权限面：0。无新网络目标、无新 `localStorage` 键、无系统通知、无 client inject。P0 本身不改版本/清单；0.14.1 发布集成时才升版本并重生成 PLUGIN-MANIFEST（§10）。
 
 ## 3. Host 侧实现（`index.js`）
 
@@ -51,6 +51,24 @@
 | 畸形 approvals | 客户端判整份 reply 非法；Host 端闭式校验回退 unavailable |
 | 页面隐藏/安静时段/关闭气泡 | 不弹提示（沿用低打扰）；计数仍在本机 handle 内 |
 
+### 5.1 自适应轮询（0.14.1）
+
+0.14.0 沿用 30 s 定频；0.14.1 只改客户端 `client.status.js` 的延时决策，wire 仍为 2、`state` reply 字段与 handle 不变、无新网络/存储：
+
+| 上一条 `state` 结果 | 下次拉取 | 理由 |
+|---|---|---|
+| 挂载 / 首个拉取 | **1 s** | 首屏尽快拿到粗状态，不让第一次忙碌判断迟到 |
+| `workState=working` 或 `approvals.pending>0` | **3 s** | 审批等待最敏感；工作态需要较快看到结束 |
+| `workState=success` / `error`（Host 侧 10 s / 60 s TTL 内） | **5 s** | 捕获紧接着的 idle 过渡，又不按工作态常驻高频 |
+| `idle`（含旧 Host 缺字段） | **30 s** | 安全回退，保持 0.14.0 的安静基线 |
+| 拉取失败 / 畸形 reply | **30 s × 最多 3 次**，之后停止 | 完整保留既有"静默重试上限" |
+| `available:false`（不支持） | 停止轮询 | 不猜状态 |
+| 页面隐藏 | 暂停（不排定时器）；恢复可见时立即拉取一次，再按新决策续排 | 复用入口既有单一 `visibilitychange` 监听 |
+
+- 决策是纯函数 `nextPollDelay(report, failures)`（chunk 导出）：`null` = 停止；失败次数由 watcher 维护，成功即清零。
+- handle 字段集与 0.14.0 完全一致（`busy/available/workState/workSince/approval*/refresh/stop`），不暴露轮询状态。
+- 审批出现后的最坏可见延迟从 30 s 降到 3 s；空闲仍为 30 s，单 tab 的请求量级不变（每 30 s 一次同源 bridge 调用）。
+
 ## 6. 明确未做（Not built）
 
 1. **不在宠物上做 Allow/Deny**：DSH 0.2.x 无第三方 answerer 契约；本 P0 零决策权。
@@ -59,23 +77,35 @@
 4. **无审批 TTL/自愈扫描**：依赖 answerer promise 的 settlement（官方 `cancelled` 也会 settle）；若宿主出现"永不 settle"的第三方 answerer，计数会保持——这是当前设计已知风险。
 5. **无 hello/probe capability 行**、无 `test/dsh-host-smoke.mjs` 真机断言（P0-4 未做，需要可运行的 DSH checkout）。
 6. 不读 `approval/asked`/`approval/decided` 审计事件（需要 session id/日志，违背隐私承诺）。
-7. 不升版本、不重生成 PLUGIN-MANIFEST、不动 anim chunks。
+7. P0 本身不升版本、不重生成 PLUGIN-MANIFEST、不动 anim chunks；0.14.1 发布集成步骤另行升版本/重生成清单（§10），anim chunks 仍不动。
 
 ## 7. 验收（本地单测，已运行）
 
+0.14.0 P0 子集（复核仍绿）：
+
 ```bash
 cd repos/dsh-famling
-node --test test/host-bridge.test.js      # 47 pass (9 new approval-mirror tests)
-node --test test/client-status.test.js    # 10 pass (5 new approval/static tests)
-node --test test/client-static.test.js    # 37 pass / 1 pre-existing skip (预算门禁含 status kit <8 KiB)
-node --test test/version-truth.test.js    # 3 pass (版本未变)
+node --test test/host-bridge.test.js      # 47 pass (9 approval-mirror tests)
+node --test test/client-status.test.js    # 13 pass (5 approval/static + 3 adaptive tests)
+node --test test/client-static.test.js    # status kit <8 KiB 预算门禁保持绿
+node --test test/version-truth.test.js    # 3 pass (0.14.1)
 ```
 
-覆盖点：
-- Host：prepend 选项、同步/异步/reject/同步抛错 的 0→1→0 生命周期、并发独立计数、clamp 8、oldestAt 语义、事件 API 缺失与 approval 订阅失败降级、request 字段零读取（Proxy）、state 输出零敏感字段、`hostStateReportValid` 未知/畸形 approvals 全部拒绝。
-- Client：旧 Host 缺省、畸形 approvals fail-closed、handle 计数/时间戳、每一 episode 仅一次提示（zh/en）、失败轮询清零、回调抛错不影响轮询、静态"无 toolName/reason/callId/storage/document/Notification/fetch"。
-- 静态预算：`client.status.js` 8,179 B < 8 KiB；`client.js` 97,572 B（31% 门禁 97,576 B、focus 门禁基线 97,558 + 200 B 内）。
-- 已知未跑：`npm test` 全量会因 PLUGIN-MANIFEST 漂移门禁失败（本任务明确不重生成清单），属发布集成步骤，不是本 P0 缺陷。
+0.14.1 自适应轮询（本次）：
+
+```bash
+node --test test/client-status.test.js test/client-behavior.test.js   # 119 pass / 0 fail
+node scripts/check-jsdoc.mjs                                          # ok
+node scripts/verify-dsh.mjs                                           # ok (28 checks)
+node scripts/plugin-manifest.mjs --check                              # check ok (0.14.1, 41 packed files)
+npm test                                                              # 380 tests / 367 pass / 12 skip / 1 pre-existing fail
+```
+
+- `npm test` 唯一失败来自**任务开始前既存**的未跟踪构建产物 `dsh-famling-0.14.0.tgz`（12:34 生成，非本次改动）：`test/clean-checkout.test.js` 断言复制清单只跳过 `.git/node_modules`，该 `.tgz` 也进入 skipped 列表。把整棵树复制到临时目录并排除它后重跑 `scripts/clean-checkout.mjs --json`：`ok:true`、`files.skipped:[]`、子套件 376 tests / 0 fail / 10 skip、`npm-ci/embed/verify/check/package/jsdoc/typecheck` 全绿——失败与 0.14.1 改动无关，删除该 tgz 即全绿。
+- 覆盖点（Host，0.14.0）：prepend 选项、同步/异步/reject/同步抛错 的 0→1→0 生命周期、并发独立计数、clamp 8、oldestAt 语义、事件 API 缺失与 approval 订阅失败降级、request 字段零读取（Proxy）、state 输出零敏感字段、`hostStateReportValid` 未知/畸形 approvals 全部拒绝。
+- 覆盖点（Client，0.14.0）：旧 Host 缺省、畸形 approvals fail-closed、handle 计数/时间戳、每 episode 仅一次提示（zh/en）、失败轮询清零、回调抛错不影响轮询、静态"无 toolName/reason/callId/storage/document/Notification/fetch"。
+- 覆盖点（0.14.1）：`nextPollDelay` 纯决策（1 s / 3 s / 5 s / 30 s / 失败 30 s×3 后停止）、fake-timer 断言挂载 1 s 与每次 settle 后的延时、hidden 暂停/恢复立即拉取、handle 字段集不变；完整入口集成断言 working→3 s、approval pending→3 s、success/error→5 s、idle→30 s、失败 30 s×3。
+- 静态预算：`client.status.js` 8,059 B < 8 KiB（余 133 B）；`client.js` 97,572 B（31% 门禁 97,576 B、focus 基线 97,558 + 200 B 内；入口仅版本常量变化）。
 
 ## 8. 变更文件
 
@@ -83,14 +113,26 @@ node --test test/version-truth.test.js    # 3 pass (版本未变)
 - `client.status.js`：approvals 解析、handle 字段、episode 一次性提示、语言拷贝。
 - `client.js`：1 行接线（把 `statusRef` 交给 watcher）。
 - `test/host-bridge.test.js`、`test/client-status.test.js`：新增/更新用例。
+- `client.status.js`（0.14.1）：自适应延时纯函数 `nextPollDelay` 与首个 1 s 拉取；解析/handle/提示逻辑不变。
+- `test/client-status.test.js`、`test/client-behavior.test.js`（0.14.1）：新增 working / approval / success / error / idle / 失败重试上限的延时断言。
+- `package.json`、`package-lock.json`、`client.js`、`client.content.js`、`README.md`、`docs/LEGAL-NOTICE-2026-11-18.md`、`locale/*.json`、`PLUGIN-MANIFEST.json`（0.14.1）：版本 0.14.1 真值与清单重生成。
+- `docs/DETAIL.md`、`README.md`（0.14.1）：轮询描述与版本行同步。
 - 本文档。
 
 ## 9. 剩余风险
 
 - **未做真实宿主验证**：`approval/request` 在 0.2.2-rc.5 之外版本的存在性未实测；能力探测只在订阅层，订阅成功≠事件一定会派发（旧宿主可能 available=true 但长期 0，客户端不会误报等待，仅"支持"语义略宽）。
-- **轮询延迟**：沿用既有 30 s 定频轮询，最坏情况下审批出现后 30 s 才被看到；自适应轮询（working 3 s / idle 30 s）属于 P1-1，不在本 P0。低打扰/静默时只有计数没有视觉提示，也是本 P0 "不做常驻徽标"的直接后果。
+- **轮询延迟（0.14.1 已收敛）**：30 s 定频已被自适应轮询替代（§5.1）：审批等待/工作态 3 s、成功/错误 5 s、空闲 30 s。仍存在的窗口是"审批恰好出现在某个 30 s 空闲间隔内"——最坏要等下一次 idle 拉取（≤30 s）才切到 3 s 节奏；本设计不新增实时推送/事件通道。低打扰/静默时只有计数没有视觉提示，也是"不做常驻徽标"的直接后果。
 - **prepend 依赖 cordis listener options**：若某宿主忽略 `ctx.on(name, fn, {prepend:true})` 的第三参，观察者仍不会否决审批，但可能在官方 answerer 认领之后才运行、永远看不到请求（available=true 而 pending 恒 0）；这不是安全缺陷，但会让 HUD 静默失效。
-- 入口字节余量仅 **4 B**（31% 门禁 97,576 B / entry 97,572 B）；任何后续 entry 改动都必须同步重算 31%/200 B/75% 预算门禁，禁止"先超再放宽"。
-- `client.status.js` 余量仅 **13 B**（8,179 / 8,192 B），后续只能"等字节换字节"。
+- 入口字节余量仍为 **4 B**（31% 门禁 97,576 B / entry 97,572 B，0.14.1 只改版本常量）；任何后续 entry 改动都必须同步重算 31%/200 B/75% 预算门禁，禁止"先超再放宽"。
+- `client.status.js` 余量 **133 B**（8,059 / 8,192 B，0.14.1 自适应轮询以压缩注释换字节），后续仍只能"等字节换字节"。
 - clamp=8 与 oldestAt episode 语义在高并发下的展示精度有限（设计取舍）。
 - 无 TTL 自愈：依赖 promise settlement；若上游 answerer 永不 settle，HUD 会保持等待态。
+
+## 10. 0.14.1 自适应轮询发布集成
+
+- 版本：`0.14.1`（`package.json` 单一真值；`node test/version-truth.test.js --write` 同步 client.js / client.content.js / README / LEGAL-NOTICE / locale）。
+- 清单：`node scripts/plugin-manifest.mjs` 已重生成，`package.version` 与 packed 文件 sha256 均为 0.14.1 工作树字节。
+- 契约：bridge wire 仍为 2；`state` reply 与 handle 字段未变；anim chunks 未触碰，`gen-content-constants` 未运行（本次不依赖 sibling famling checkout）。
+- 预算：`client.status.js` 保持 < 8 KiB 门禁；`client.js` 入口仅版本常量变化，96 KiB / 31% / focus 200 B 门禁由 `test/client-static.test.js` 继续守住。
+- 验收：见 §7（`npm test` 全量、`npm run lint`（check-jsdoc）、`npm run verify:dsh`）。

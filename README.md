@@ -24,11 +24,11 @@ dsh plugin --profile web add dsh-famling
 - 设置：低打扰安静时段、减少动态、暂时隐藏、四层缩放、TTS/ASR、数据导出与删除、TTS/ASR 同意。
 - 「一起工作」25/50 分钟专注模式：只暂停自动气泡/自动微动作，不拦显式互动；结束一句本地气泡，无系统通知、无历史、无连续天数。
 
-## 当前实现（0.14.0）
+## 当前实现（0.14.1）
 
 - **DSH 兼容自检**：`npm run verify:dsh` 离线校验清单/patch/客户端产物/兼容矩阵/资源/路径卫生（28 项）；`engines.dsh` 是安装闸门，`dsh.compatibility.dshReleases` 是第三方 Store 展示字段。
 - **分层门禁**：`npm run check:fast`（静态 + 全量单测）与 `npm run check:release`（fast + 动画/打包/清单/发布不变量）；`prepublishOnly` 跑发布不变量。
-- **宿主工作状态**：只读 DSH 粗状态（运行/空闲 + 分类错误码），派生 `idle / working / success / error` 并按时长过期；不读消息、提示词、工具参数或文件内容。
+- **宿主工作状态**：只读 DSH 粗状态（运行/空闲 + 分类错误码），派生 `idle / working / success / error` 并按时长过期；自适应轮询（工作/审批等待 3s、成功/错误 5s、空闲 30s、隐藏暂停）；不读消息、提示词、工具参数或文件内容。
 - **气泡优先级**：`ambient < interaction < direct`，低优先级不挤掉高优先级；成功/错误各一句本地化短气泡，默认 60s 错误冷却，安静时段/页面不可见/减少动态时抑制。
 - **低打扰与无障碍**：安静时段 22:00–08:00、减少动态、暂时隐藏、健康提醒 2h；无连续天数、无惩罚、无系统通知刷屏。
 - **内容与角色**：角色包安装/更新/卸载/回滚/热切换；内容包 v2/v3（许可、AI provenance、compatibility、研究用途声明）+ 离线市场 UI（生产服务器未接）。
@@ -62,7 +62,7 @@ dsh plugin --profile web add dsh-famling
 ## 开发与文档
 
 ```sh
-npm test               # 359 tests, 0 fail
+npm test               # 380 tests, 0 fail (12 pre-existing skips)
 npm run check:fast     # 静态 + verify:dsh + 全量单测
 npm run check:release  # fast + 动画校验 + 打包 + 清单 + 发布不变量
 node scripts/verify-dsh.mjs --dsh-version 0.2.3-alpha.2

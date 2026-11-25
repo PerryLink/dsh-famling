@@ -7,6 +7,11 @@
  * oldestAt} sub-object is parsed fail-closed, defaults to unavailable/zero on
  * an older Host, and yields exactly one localized status line per waiting
  * episode (0 -> N) with no request text, storage or notification API.
+ *
+ * Adaptive polling (0.14.1): `nextPollDelay(report, failures)` is the pure
+ * decision the watcher schedules with - mount 1s, working/waiting 3s, fresh
+ * success/error 5s, idle 30s, failures 30s x3 then stop. The handle keeps its
+ * exact 0.14.0 field set; only the timer decisions change.
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -45,6 +50,17 @@ async function flush() { for (let tick = 0; tick < 3; tick += 1) await new Promi
 
 /** Force the watcher to poll now through the visibility hook. */
 function trigger(handle) { handle.refresh(false); handle.refresh(true) }
+
+/** Delays of the currently scheduled (single) poll timer. */
+function delays(kit) { return [...kit.timers.values()].map((timer) => timer.delay) }
+
+/** Fire the scheduled poll timer once and let the cross-realm reply settle. */
+async function tick(kit) {
+  const entry = [...kit.timers.entries()].pop()
+  kit.timers.delete(entry[0])
+  entry[1].fn()
+  await flush()
+}
 
 /** A Host reply in the shape a 0.13.2 Host sends (no workState/workSince). */
 function oldReport() {
@@ -283,4 +299,60 @@ test('a failed or unsupported reply never leaves a stale work state', async () =
   assert.equal(handle.available, false)
   assert.equal(handle.workState, 'idle')
   assert.equal(kit.timers.size, 0, 'unsupported stops polling instead of guessing')
+})
+
+/* ==================== adaptive status polling (0.14.1) ==================== */
+
+test('nextPollDelay is the pure adaptive decision: 1s first, 3s working/waiting, 5s fresh, 30s idle', () => {
+  const { nextPollDelay, readStateReport } = loadStatusKit().exports
+  const idle = readStateReport(oldReport())
+  assert.equal(idle.workState, 'idle', 'an old Host reads as idle')
+  // Working or a waiting approval is the most time-sensitive state -> 3s.
+  assert.equal(nextPollDelay(readStateReport(report({ workState: 'working', workSince: 5 })), 0), 3000)
+  assert.equal(nextPollDelay(readStateReport(approvalReport({ available: true, pending: 2, oldestAt: 9 })), 0), 3000, 'a pending approval outranks the idle cadence')
+  // A fresh success/error is transient on the Host (10s/60s TTL) -> 5s.
+  assert.equal(nextPollDelay(readStateReport(report({ state: 'idle', active: 0, workState: 'success', workSince: 9 })), 0), 5000)
+  assert.equal(nextPollDelay(readStateReport(report({ state: 'idle', active: 0, workState: 'error', workSince: 9 })), 0), 5000)
+  assert.equal(nextPollDelay(idle, 0), 30000, 'idle settles to the 30s cadence')
+  // Unsupported stops; a failed pull retries silently 3 times at 30s then stops.
+  const unsupported = readStateReport({ v: 2, ok: true, op: 'state', available: false, source: 'unsupported', state: 'unknown', active: 0, updatedAt: null, lastError: null, transitions: [] })
+  assert.equal(unsupported.available, false)
+  assert.equal(nextPollDelay(unsupported, 0), null)
+  for (const failures of [1, 2, 3]) assert.equal(nextPollDelay(null, failures), 30000, 'silent retry ' + failures)
+  assert.equal(nextPollDelay(null, 4), null, 'the retry cap stops the loop')
+})
+
+test('watchHostStatus schedules the adaptive cadence and pauses while hidden', async () => {
+  const kit = loadStatusKit()
+  let reply = { ok: true, result: report({ workState: 'working', workSince: 5 }) }
+  const handle = kit.exports.watchHostStatus(() => reply)
+  assert.deepEqual(delays(kit), [1000], 'the first pull is 1s after mount')
+  await tick(kit)
+  assert.deepEqual(delays(kit), [3000], 'a working agent polls at 3s')
+  reply = { ok: true, result: report({ state: 'idle', active: 0, workState: 'success', workSince: 9 }) }
+  await tick(kit)
+  assert.deepEqual(delays(kit), [5000], 'a fresh success polls at 5s')
+  reply = { ok: true, result: oldReport() }
+  await tick(kit)
+  assert.deepEqual(delays(kit), [30000], 'idle polls at 30s')
+  reply = { ok: true, result: approvalReport({ available: true, pending: 1, oldestAt: 9 }) }
+  await tick(kit)
+  assert.deepEqual(delays(kit), [3000], 'a waiting approval keeps the fast cadence')
+  // Hidden clears the timer and schedules nothing; returning pulls once now.
+  handle.refresh(false)
+  assert.deepEqual(delays(kit), [], 'the hidden tab has no pending poll')
+  reply = { ok: true, result: oldReport() }
+  handle.refresh(true)
+  await flush()
+  assert.equal(handle.approvalPending, 0, 'the immediate pull re-reads the state')
+  assert.deepEqual(delays(kit), [30000], 'the resumed pull follows the refreshed idle state')
+  handle.stop()
+  assert.deepEqual(delays(kit), [], 'stop() clears the pending poll')
+})
+
+test('the adaptive watcher exposes no new handle fields', () => {
+  const kit = loadStatusKit()
+  const handle = kit.exports.watchHostStatus(() => ({ ok: true, result: oldReport() }))
+  assert.deepEqual(Object.keys(handle).sort(), ['approvalAvailable', 'approvalOldestAt', 'approvalPending', 'available', 'busy', 'refresh', 'stop', 'workSince', 'workState'], 'the 0.14.0 handle shape is unchanged')
+  handle.stop()
 })
