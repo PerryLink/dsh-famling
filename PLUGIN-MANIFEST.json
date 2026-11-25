@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "kind": "dsh-famling/plugin-manifest",
   "generatedBy": "scripts/plugin-manifest.mjs",
-  "generatedAt": "2026-11-25T00:18:31.040Z",
+  "generatedAt": "2026-11-25T00:24:20.647Z",
   "reproducible": false,
   "sourceDateEpoch": null,
   "package": {
@@ -12,28 +12,28 @@
   },
   "packed": {
     "count": 39,
-    "totalBytes": 1380562,
-    "digest": "5cba09649cd29f64f54804139d42534693a9e063a1b7c1bd7f8335d5a3c605d0",
+    "totalBytes": 1374495,
+    "digest": "a4c061f023902ae378b1827b91e0d65f27a50273e2c8982fa65f2e255c56718b",
     "files": [
       {
         "path": "LICENSE",
-        "bytes": 4694,
-        "sha256": "75f5f2ae732cdc31adf8ad90a42ed4ed47476b3f27fcdf90de13e79d6788309d"
+        "bytes": 4563,
+        "sha256": "ffcca38841adb694b6f380647e15f17c446a4d1656fed51a1e2041d064c94cc8"
       },
       {
         "path": "LICENSE-ART",
-        "bytes": 26564,
-        "sha256": "76726300572ffc4335c786642845d9ddb6ab6df6a4958b48e592218d64a780cb"
+        "bytes": 26051,
+        "sha256": "a9eb6abdcb382ad1c46eb83ef41d02ba48f97caef94f1bc5da21d9715b462889"
       },
       {
         "path": "NOTICE",
-        "bytes": 673,
-        "sha256": "b9fc8c976c1530c0c5de09fc82c901c9fe9891d590084d518be065d26653c465"
+        "bytes": 663,
+        "sha256": "611267df9947434a3142c76e5616664b4a1625f8dd785a250cd8d32c2f2c9d74"
       },
       {
         "path": "README.md",
-        "bytes": 5919,
-        "sha256": "2313e79c2ec05b1d1a77d94e61d57b48df5451cfa4bbb558ad4ccf5a8a53bf68"
+        "bytes": 5848,
+        "sha256": "a56b873996d398ce4dc25f53615ec806425d761116150a2e9d9dbf88eaf693f3"
       },
       {
         "path": "client.anims.cat.js",
@@ -52,13 +52,13 @@
       },
       {
         "path": "client.behavior.js",
-        "bytes": 5885,
-        "sha256": "60ba59969786ad0b64fa4000e880745128848eeabbf37477d2025e73b55fdde3"
+        "bytes": 5768,
+        "sha256": "fd7388cec156939a33b5d96a108ebb3f82f74e400fd99987a71eb80586605383"
       },
       {
         "path": "client.content.js",
-        "bytes": 86764,
-        "sha256": "2bde55ae14fd271995df4c3bd8e64c2eca814db1afc11cc2e4dff6819e5cbe98"
+        "bytes": 85750,
+        "sha256": "b3a1611e626b9a3aeed5b5be5af2fa83130d3863bdec997775f42a7b98c65465"
       },
       {
         "path": "client.js",
@@ -67,73 +67,73 @@
       },
       {
         "path": "client.status.js",
-        "bytes": 5286,
-        "sha256": "eb3284a5fa7b605c018c853593c6aec38ddec1f3ab191aa250f7cf5d886fa2fe"
+        "bytes": 5179,
+        "sha256": "0a83492104c3bbff18eed7faa71ad4a71662091024b4e72b5d421494a7e4e536"
       },
       {
         "path": "content-extension.mjs",
-        "bytes": 58226,
-        "sha256": "5b739a8116a72dd2c4e4458a2cfcbacae37d4c1435d1bc0cf767938efcda8c71"
+        "bytes": 57150,
+        "sha256": "f5eea63bf17cec1fe6d008ebad2b1df795c2c99eb7b308172ee5ccae1c2f2770"
       },
       {
         "path": "cordis.patch.yml",
-        "bytes": 59,
-        "sha256": "250d5a5e76a93f619f0dfecd6a80a296a639dda95c6b9a2d6a95e923b9603f1a"
+        "bytes": 56,
+        "sha256": "102218633a8cdba80fc9559b02700b1f715fb94b81fb2b43d2ce14ea1d2c7693"
       },
       {
         "path": "docs/CONTENT-CONSTANTS-2026-11-20.md",
-        "bytes": 14402,
-        "sha256": "90ebbb81e1129e3d8521799e2d787f6026ce1f257887403d1ddcb0a557a390f0"
+        "bytes": 14252,
+        "sha256": "f8427c0fedf2ad7e88570eb98f8dfc84c99891440c425ac47db1e0eaefc3b206"
       },
       {
         "path": "docs/DETAIL.md",
-        "bytes": 52134,
-        "sha256": "0c9f68b080421257304ba05ed557265228b88d67622c8f1b89d89c17bf5e8eaf"
+        "bytes": 51835,
+        "sha256": "5f2c5242f94bf5fc6545a27370612d66f01ce797ba48492699d200f75f85d021"
       },
       {
         "path": "docs/DSH-COMPATIBILITY.md",
-        "bytes": 7527,
-        "sha256": "ea074520829cd2ae8b52f8d93a078d7105f358d2e49c6ea807b1ed338890ea5b"
+        "bytes": 7454,
+        "sha256": "7e10433f5210b531dd72cd901fd9d35435726dcc8a35e57db084aee5ef14f9ac"
       },
       {
         "path": "docs/DSH-HOST-SMOKE-2026-11-21.md",
-        "bytes": 15747,
-        "sha256": "1f6725c0c1acdc009bbfb593d911997b2d5e0cf66bef73a731faea343a55edf8"
+        "bytes": 15592,
+        "sha256": "df677a2c9a5c9bfda832849b901ad4a14b34365572ee07b13d3ac8b4de74cf0c"
       },
       {
         "path": "docs/INDEPENDENT-REBUILD-2026-11-20.md",
-        "bytes": 11293,
-        "sha256": "a23177f25265d8ffe06ff89f508ee25b18235ebd3db5f4149afe778da5ab1533"
+        "bytes": 11090,
+        "sha256": "5826e0767b1aeaba43e1953cb738115b56327e23743a7f63657687fb0e1aa8b9"
       },
       {
         "path": "docs/LEGAL-NOTICE-2026-11-18.md",
-        "bytes": 29053,
-        "sha256": "0ad3c01fe1cd5ee843e9b5c753a585a95d1f43e138ea623dcf556beb5133fcf6"
+        "bytes": 28846,
+        "sha256": "d6d40d2a0631221488436e32e480930fef64c8e50ef88a48ee4d7a88fdbd84ec"
       },
       {
         "path": "docs/PET-BRIEF-0.3.0-COMPAT-2026-11-20.md",
-        "bytes": 15396,
-        "sha256": "1de69a3229c501d5e4f32eefe8a7ba47e4f1774894269b4ab6848bb26c77d3b0"
+        "bytes": 15251,
+        "sha256": "2f6df8aa0a6777237e0b208880fbfbff9986008a1bdf3b892d5302b8d1f9ff3c"
       },
       {
         "path": "docs/PET-BRIEF-0.5.0-COMPAT-2026-11-24.md",
-        "bytes": 5186,
-        "sha256": "4dd576cf01e5096b2f942b9d0fd9017bc7834060caaef69d19e6723a053d9dfd"
+        "bytes": 5122,
+        "sha256": "a81b192360c6e408bb56b88b4e4fcdbc8a798425cb62c2960edeaf409cfc2ab4"
       },
       {
         "path": "docs/PLUGIN-PAGE.md",
-        "bytes": 2117,
-        "sha256": "3b60b9fdd10f801d715742ea136b2ff184abff9bc4dd50594388c453d9640d73"
+        "bytes": 2106,
+        "sha256": "76717b40288396e8d930988aea8207da265153517305ecb6c874304609b46fb4"
       },
       {
         "path": "docs/PUBLIC-REPO-SYNC-2026-11-20.md",
-        "bytes": 7073,
-        "sha256": "215ba37b8481a73943e0cbe6d71ae76f3765df74cc0bd14b06ac5704e748de88"
+        "bytes": 6914,
+        "sha256": "5e66826fa4010c09c97a97bbd80c80fcbb1c9597833d4e0b6f0dbc337734f119"
       },
       {
         "path": "docs/RELEASE-HYGIENE.md",
-        "bytes": 25800,
-        "sha256": "255ffc20ab5736af4362d4426698e2896698f053bc9889e2340529ab447f1e30"
+        "bytes": 25519,
+        "sha256": "aee14426ee69b7a89a416efbdb96fdeeafd2a96676a056e52c32ce3b4dc1db1c"
       },
       {
         "path": "docs/assets/dsh-famling-demo.gif",
@@ -142,13 +142,13 @@
       },
       {
         "path": "docs/assets/dsh-famling-flow-v5-dark.svg",
-        "bytes": 10105,
-        "sha256": "d5c8b85403afaf0f6db6dec5145ae39e5f4c0df2ae2d10519e214da839bb4e13"
+        "bytes": 10031,
+        "sha256": "6a28320332796311a27ded21ed42629f93122905b076ec62b3bff9acdc1a13d9"
       },
       {
         "path": "docs/assets/dsh-famling-flow-v5-light.svg",
-        "bytes": 10105,
-        "sha256": "fabe6b42fad14c51efce5934886d3ff39aa2455341482318d8d78b4b2a62beb5"
+        "bytes": 10031,
+        "sha256": "570e6b89925e761beea2de8c37cf8c71fa6c552884d821c7b54442eca66a3920"
       },
       {
         "path": "docs/assets/dsh-famling-hero-en-dark.webp",
@@ -172,18 +172,18 @@
       },
       {
         "path": "docs/market/README.md",
-        "bytes": 608,
-        "sha256": "08e0bec911432cb2b7b03050181eef5d70b5d0d9ad754609615902cd6604a5bf"
+        "bytes": 595,
+        "sha256": "d8a1e919496af710347653607ca35c39b289fe24c6e3313c1a4e212440ce0090"
       },
       {
         "path": "docs/market/index.json",
-        "bytes": 11587,
-        "sha256": "7192bc2db7889979a076bd12904d162a56c6c2b02d5223a0b6832c326917617d"
+        "bytes": 11469,
+        "sha256": "397339f2e20658192b83357d0e1fdc5fe15b127f16c5e60412fd0fa52451671a"
       },
       {
         "path": "docs/market/plugins.txt",
-        "bytes": 13,
-        "sha256": "20867dd58418383ac5c17faf7ddd623dd641212103c28f5a6574c8de35e18bc9"
+        "bytes": 12,
+        "sha256": "447ff528226c5e65102817acea995b4b09e337af8cde9ee256510cd1bc732b45"
       },
       {
         "path": "icon.png",
@@ -192,8 +192,8 @@
       },
       {
         "path": "index.js",
-        "bytes": 49415,
-        "sha256": "0fbb75566209e541afd69be475b7b640f3bed56b2477c637987439ae0ba2802a"
+        "bytes": 48417,
+        "sha256": "20a1b997f7626e9426e2f31eb152b03c999619d467748d1206b80777d32a886c"
       },
       {
         "path": "locale/en.json",
@@ -230,7 +230,7 @@
     "module": "content-extension.mjs",
     "version": 3,
     "packSchemaVersion": 3,
-    "sha256": "5b739a8116a72dd2c4e4458a2cfcbacae37d4c1435d1bc0cf767938efcda8c71"
+    "sha256": "f5eea63bf17cec1fe6d008ebad2b1df795c2c99eb7b308172ee5ccae1c2f2770"
   },
   "notes": [
     "Unsigned evidence artifact: this manifest proves file identity only, never publisher authenticity.",
