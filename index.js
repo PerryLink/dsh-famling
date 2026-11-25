@@ -265,6 +265,14 @@ function handleProbe(ctx) {
  * events only: a working streak, the last clean stop and the last classified
  * error. It still never reads an agent/session id, message, prompt, tool
  * argument or file path; the extra fields are an enum plus one timestamp.
+ *
+ * P0 read-only approval mirror (0.14.0): the tracker also observes the DSH
+ * `approval/request` waterfall from the outermost position and keeps only
+ * `{available, pending, oldestAt}`. The request object is never read (no tool
+ * name, reason, call id, agent/session, args or path), nothing is persisted or
+ * forwarded, and the observer always calls `next()` and returns its result so
+ * it can never veto, replace or delay a decision. `pending` is clamped to the
+ * 0..HOST_APPROVAL_MAX window and `oldestAt` is null whenever nothing waits.
  */
 const HOST_STATE_RING_MAX = 16
 const HOST_STATE_MAX_ACTIVE = 64
@@ -275,7 +283,12 @@ const HOST_STATE_ERROR_KINDS = ['aborted', 'auth', 'network', 'rate-limit', 'ser
 export const HOST_WORK_STATES = Object.freeze(['idle', 'working', 'success', 'error'])
 /** Freshness windows (ms) for the derived `error` / `success` work states. */
 export const HOST_WORK_STATE_TTL_MS = Object.freeze({ error: 60_000, success: 10_000 })
-const HOST_STATE_FIELDS = ['available', 'source', 'state', 'active', 'updatedAt', 'lastError', 'transitions', 'workState', 'workSince']
+/** Upper bound of the read-only approval mirror count (in-memory, never persisted). */
+export const HOST_APPROVAL_MAX = 8
+/** Closed field set of the `approvals` state sub-object (three scalars, no text). */
+const HOST_APPROVAL_FIELDS = ['available', 'pending', 'oldestAt']
+const HOST_APPROVALS_UNAVAILABLE = Object.freeze({ available: false, pending: 0, oldestAt: null })
+const HOST_STATE_FIELDS = ['available', 'source', 'state', 'active', 'updatedAt', 'lastError', 'transitions', 'workState', 'workSince', 'approvals']
 /** Bounded trackers by Host context; a WeakMap never keeps a disposed context alive. */
 const HOST_STATE_TRACKERS = new WeakMap()
 const HOST_STATE_UNAVAILABLE = Object.freeze({
@@ -288,6 +301,7 @@ const HOST_STATE_UNAVAILABLE = Object.freeze({
   transitions: Object.freeze([]),
   workState: 'idle',
   workSince: null,
+  approvals: HOST_APPROVALS_UNAVAILABLE,
 })
 
 /**
@@ -327,6 +341,9 @@ function createHostStateTracker(now) {
     lastStopAt: null,
     workStartedAt: null,
     transitions: [],
+    approvalAvailable: false,
+    approvalPending: 0,
+    approvalOldestAt: null,
   }
   tracker.record = (state) => {
     tracker.state = state
@@ -335,6 +352,47 @@ function createHostStateTracker(now) {
     if (tracker.transitions.length > HOST_STATE_RING_MAX) tracker.transitions.shift()
   }
   return tracker
+}
+
+/**
+ * Count one in-flight `approval/request` and start the waiting episode stamp.
+ * Bounded in memory: an extra concurrent request only saturates the clamp; it
+ * is never attributed, listed or persisted.
+ * @param {object} tracker Coarse state tracker that owns the approval mirror.
+ * @param {number} now Injected current epoch ms.
+ */
+function hostApprovalBegin(tracker, now) {
+  tracker.approvalPending = Math.min(tracker.approvalPending + 1, HOST_APPROVAL_MAX)
+  if (tracker.approvalOldestAt === null) {
+    tracker.approvalOldestAt = Number.isInteger(now) && now >= 0 ? now : Date.now()
+  }
+}
+
+/**
+ * Settle one in-flight `approval/request`; the count never goes negative and
+ * the waiting episode ends (oldestAt null) exactly when nothing waits.
+ * @param {object} tracker Coarse state tracker that owns the approval mirror.
+ */
+function hostApprovalEnd(tracker) {
+  tracker.approvalPending = Math.max(0, tracker.approvalPending - 1)
+  if (tracker.approvalPending === 0) tracker.approvalOldestAt = null
+}
+
+/**
+ * Project the approval mirror for the `state` op: only three scalars, the count
+ * clamped to 0..HOST_APPROVAL_MAX and `oldestAt` null when nothing waits.
+ * @param {object} tracker Coarse state tracker that owns the approval mirror.
+ * @returns {{available: boolean, pending: number, oldestAt: number|null}}
+ */
+function hostApprovalSnapshot(tracker) {
+  const pending = Number.isInteger(tracker.approvalPending)
+    ? Math.min(Math.max(tracker.approvalPending, 0), HOST_APPROVAL_MAX)
+    : 0
+  return {
+    available: true,
+    pending,
+    oldestAt: pending > 0 && Number.isInteger(tracker.approvalOldestAt) && tracker.approvalOldestAt >= 0 ? tracker.approvalOldestAt : null,
+  }
 }
 
 /**
@@ -424,6 +482,44 @@ function trackHostState(ctx) {
     tracker.available = false
     return tracker
   }
+  // Approval/request waterfall observer (0.14.0 P0 read-only mirror). It is
+  // prepended so it sees every request before the official answerers claim it,
+  // but it never inspects the request payload and never becomes a decision
+  // face: it always calls next() and hands the chain's exact result back, so
+  // the only thing it can add is a bounded counter. A synchronous throw or a
+  // rejected promise from the rest of the chain always reaches the original
+  // caller unchanged and still settles the counter.
+  try {
+    const onApproval = (request, next) => {
+      try { hostApprovalBegin(tracker, Date.now()) } catch {}
+      let result
+      try {
+        result = next()
+      } catch (error) {
+        try { hostApprovalEnd(tracker) } catch {}
+        throw error
+      }
+      try {
+        if (result && typeof result.then === 'function') {
+          // Observe settlement without replacing the waterfall result: the exact
+          // promise returned by next() is what the decision chain receives.
+          result.then(
+            () => { try { hostApprovalEnd(tracker) } catch {} },
+            () => { try { hostApprovalEnd(tracker) } catch {} },
+          )
+          return result
+        }
+      } catch {
+        try { hostApprovalEnd(tracker) } catch {}
+        return result
+      }
+      try { hostApprovalEnd(tracker) } catch {}
+      return result
+    }
+    const offApproval = ctx.on('approval/request', onApproval, { prepend: true })
+    if (typeof offApproval === 'function') disposers.push(offApproval)
+    tracker.approvalAvailable = true
+  } catch { tracker.approvalAvailable = false }
   try {
     if (typeof ctx.effect === 'function') {
       ctx.effect(() => () => {
@@ -437,8 +533,12 @@ function trackHostState(ctx) {
 /**
  * Closed-schema validation of one coarse state report (fail-closed: any unknown
  * key, enum, type or bound rejects the whole report instead of projecting it).
+ * The `approvals` sub-object is additive wire-2 data; it must carry exactly the
+ * three declared scalars and keep the count/timestamp invariants.
+ * @param {unknown} report Candidate state report.
+ * @returns {boolean} True only for a fully valid event-backed report.
  */
-function hostStateReportValid(report) {
+export function hostStateReportValid(report) {
   if (!report || typeof report !== 'object' || Array.isArray(report)) return false
   for (const key of Object.keys(report)) if (!HOST_STATE_FIELDS.includes(key)) return false
   if (report.available !== true || report.source !== 'events') return false
@@ -458,6 +558,15 @@ function hostStateReportValid(report) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).length !== 2) return false
     if (!HOST_STATE_TRANSITIONS.includes(entry.state) || !Number.isInteger(entry.at) || entry.at < 0) return false
   }
+  const approvals = report.approvals
+  if (!approvals || typeof approvals !== 'object' || Array.isArray(approvals)) return false
+  if (Object.keys(approvals).length !== HOST_APPROVAL_FIELDS.length) return false
+  for (const key of Object.keys(approvals)) if (!HOST_APPROVAL_FIELDS.includes(key)) return false
+  if (typeof approvals.available !== 'boolean') return false
+  if (!Number.isInteger(approvals.pending) || approvals.pending < 0 || approvals.pending > HOST_APPROVAL_MAX) return false
+  if (approvals.oldestAt !== null && (!Number.isInteger(approvals.oldestAt) || approvals.oldestAt < 0)) return false
+  if (approvals.pending === 0 && approvals.oldestAt !== null) return false
+  if (!approvals.available && approvals.pending !== 0) return false
   return true
 }
 
@@ -482,6 +591,7 @@ function hostStateSnapshot(ctx) {
     transitions: tracker.transitions.slice(-HOST_STATE_RING_MAX),
     workState: work.workState,
     workSince: work.workSince,
+    approvals: tracker.approvalAvailable === true ? hostApprovalSnapshot(tracker) : HOST_APPROVALS_UNAVAILABLE,
   }
   return hostStateReportValid(report) ? report : HOST_STATE_UNAVAILABLE
 }

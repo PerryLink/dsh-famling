@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
     const CHARACTER_POLICY = {"human":{"canTts":true,"bubble":"speech"},"cat":{"canTts":false,"bubble":"thought"},"dog":{"canTts":false,"bubble":"thought"}}
     const CHARACTER_CHUNKS = {"human":"./client.anims.human.js","cat":"./client.anims.cat.js","dog":"./client.anims.dog.js"}
     // <dsh-famling:anims:end>
-    const PLUGIN_VERSION = '0.13.5'
+    const PLUGIN_VERSION = '0.14.0'
     const BRIDGE_WIRE_VERSION = 2
     const SIZE = 72
     const CHARACTER_KEY = 'dsh-famling/character'
@@ -848,7 +848,7 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         let alive = true
         requestBehaviorChunk((module) => { if (alive) setBehavior(module) })
-        requestStatusChunk((chunk) => { if (alive && chunk) hostStatus.current = chunk.watchHostStatus(callBridge) })
+        requestStatusChunk((chunk) => { if (alive && chunk) hostStatus.current = chunk.watchHostStatus(callBridge, statusRef) })
         return () => { alive = false; hostStatus.current?.stop?.(); hostStatus.current = null }
       }, [])
       // Declared after the playback effects: the first pass has no sprites; the

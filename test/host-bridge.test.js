@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { CRISIS_KEYWORDS, HOST_WORK_STATES, HOST_WORK_STATE_TTL_MS, apply, crisisKeyword, deriveHostWorkState, inject } from '../index.js'
+import { CRISIS_KEYWORDS, HOST_APPROVAL_MAX, HOST_WORK_STATES, HOST_WORK_STATE_TTL_MS, apply, crisisKeyword, deriveHostWorkState, hostStateReportValid, inject } from '../index.js'
 import { CONTENT_EXTENSION_POINTS, CONTENT_EXTENSION_VERSION, CONTENT_PACK_SCHEMA_VERSION } from '../content-extension.mjs'
 
 const PLUGIN_VERSION = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version
@@ -57,16 +57,30 @@ function makeContext({ selection = { provider: 'profile-provider', model: 'profi
 function makeEventContext(options = {}) {
   const env = makeContext()
   const handlers = new Map()
-  env.ctx.on = (event, handler) => {
+  const listenerOptions = new Map()
+  env.ctx.on = (event, handler, option) => {
     if (options.onThrows) throw new Error('the Host has no event API')
     if (options.subscribeThrows && event === 'agent/status') throw options.subscribeThrows
+    if (options.approvalThrows && event === 'approval/request') throw options.approvalThrows
     const list = handlers.get(event) || []
     list.push(handler)
     handlers.set(event, list)
+    const optionList = listenerOptions.get(event) || []
+    optionList.push(option)
+    listenerOptions.set(event, optionList)
     return () => { handlers.set(event, (handlers.get(event) || []).filter((fn) => fn !== handler)) }
   }
   env.emit = (event, payload) => { for (const handler of (handlers.get(event) || [])) handler(payload) }
   env.handlers = handlers
+  env.listenerOptions = listenerOptions
+  // Cordis waterfall simulation: the prepended observer runs outermost with
+  // (req, next); next() reaches the next listener or the final answerer.
+  env.emitApproval = (request, answer) => {
+    const chain = (handlers.get('approval/request') || []).slice()
+    const terminal = answer || (() => Promise.resolve('unavailable'))
+    const dispatch = (index) => (index >= chain.length ? terminal() : chain[index](request, () => dispatch(index + 1)))
+    return dispatch(0)
+  }
   return env
 }
 async function post(route, payload, init = {}) {
@@ -526,6 +540,7 @@ test('a Host without the event API activates and reports state unsupported, not 
   assert.equal(body.updatedAt, null)
   assert.equal(body.workState, 'idle', 'no event API: the derived work state fails closed to idle')
   assert.equal(body.workSince, null)
+  assert.deepEqual(body.approvals, { available: false, pending: 0, oldestAt: null }, 'no event API: the approval mirror is unavailable, never a fake zero-wait support claim')
 })
 
 test('agent/status transitions are tracked as bounded coarse state', async () => {
@@ -678,7 +693,9 @@ test('state answers with a closed schema: no ids, no messages, only the declared
   env.emit('agent/status', { agent: { id: 'agent-xyz' }, status: 'running', message: { text: 'SECRET-PROMPT-TEXT' } })
   env.emit('agent/error', { agent: { id: 'agent-xyz' }, error: { message: 'SECRET-PROMPT-TEXT' } })
   const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
-  assert.deepEqual(Object.keys(body).sort(), ['active', 'available', 'lastError', 'ok', 'op', 'source', 'state', 'transitions', 'updatedAt', 'v', 'workSince', 'workState'])
+  assert.deepEqual(Object.keys(body).sort(), ['active', 'approvals', 'available', 'lastError', 'ok', 'op', 'source', 'state', 'transitions', 'updatedAt', 'v', 'workSince', 'workState'])
+  assert.deepEqual(Object.keys(body.approvals).sort(), ['available', 'oldestAt', 'pending'], 'the approval mirror adds exactly three scalars')
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null }, 'an idle approval mirror is available and empty')
   assert.equal(body.workState, 'working', 'the busy agent still outranks the error for the derived view')
   assert.ok(Number.isInteger(body.workSince) && body.workSince > 0, 'workSince is a coarse timestamp, never an id')
   assert.equal(JSON.stringify(body).includes('agent-xyz'), false, 'no agent id is stored or projected')
@@ -693,6 +710,7 @@ test('a throwing event API degrades to available:false and never blocks the brid
   const body = await (await post(throwing.route(), { v: 2, op: 'state' })).json()
   assert.equal(body.available, false)
   assert.equal(body.source, 'unsupported')
+  assert.deepEqual(body.approvals, { available: false, pending: 0, oldestAt: null })
   const echo = await post(throwing.route(), { v: 1, op: 'echo', text: 'ping' })
   assert.equal(echo.status, 200, 'other bridge operations keep working')
   const partial = makeEventContext({ subscribeThrows: new Error('agent/status subscription rejected') })
@@ -722,6 +740,169 @@ test('state requires bridge wire 2 like hello/probe', async () => {
   const res = await post(env.route(), { v: 1, op: 'state' })
   assert.equal(res.status, 426)
   assert.equal((await res.json()).code, 'E_WIRE')
+})
+
+/* ==================== P0: read-only approval waiting mirror (0.14.0) ==================== */
+
+/** Let cross-realm promise callbacks (the observer's settlement hook) run. */
+async function settleTasks() { for (let tick = 0; tick < 3; tick += 1) await new Promise((resolve) => setImmediate(resolve)) }
+
+/** One manually settled promise, standing in for the official answerer chain. */
+function deferred() {
+  let resolve, reject
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+  return { promise, resolve, reject }
+}
+
+test('approval/request is observed read-only, prepended, and the chain result is returned untouched', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  assert.deepEqual(env.listenerOptions.get('approval/request'), [{ prepend: true }], 'the observer sits outermost (prepend) so the official answerers still run')
+  // A proxy that throws on ANY property access proves the request is never read.
+  const forbidden = new Proxy({}, { get() { throw new Error('approval fields must never be read') }, has() { throw new Error('approval fields must never be inspected') } })
+  assert.equal(await env.emitApproval(forbidden, () => 'allowed-once'), 'allowed-once', 'the sync answerer value is returned unchanged')
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null }, 'a sync answer settles the count immediately')
+})
+
+test('an in-flight approval is counted until its promise settles, then oldestAt clears', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const gate = deferred()
+  const outcome = env.emitApproval({}, () => gate.promise)
+  let body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.approvals.available, true)
+  assert.equal(body.approvals.pending, 1, '0 -> 1 while the answerer is deciding')
+  assert.ok(Number.isInteger(body.approvals.oldestAt) && body.approvals.oldestAt > 0, 'oldestAt is one epoch-ms stamp, never an id')
+  gate.resolve('allowed-once')
+  assert.equal(await outcome, 'allowed-once', 'the observer returns the chain promise result')
+  body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null }, '1 -> 0 and oldestAt is null again')
+})
+
+test('a rejected approval decrements the count and propagates the same rejection', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const gate = deferred()
+  const error = new Error('transport died')
+  const outcome = env.emitApproval({}, () => gate.promise)
+  assert.equal((await (await post(env.route(), { v: 2, op: 'state' })).json()).approvals.pending, 1)
+  gate.reject(error)
+  await assert.rejects(outcome, (thrown) => thrown === error, 'the exact rejection is handed back')
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null }, 'reject also settles the count')
+})
+
+test('a synchronous throw from the rest of the chain still decrements and propagates', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  assert.throws(() => env.emitApproval({}, () => { throw new Error('sync bug') }), /sync bug/)
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null }, 'a sync throw cannot leave a stuck pending count')
+})
+
+test('the observer hands the exact next() promise back and survives a hostile thenable', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const answer = Promise.resolve('allowed-once')
+  assert.equal(env.emitApproval({}, () => answer), answer, 'the original decision promise is returned by identity')
+  await answer
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.approvals.pending, 0)
+  // A thenable whose "then" getter throws must not escape the observer or latch
+  // the count; the waterfall still receives the same malformed value back.
+  const hostile = { get then() { throw new Error('hostile thenable') } }
+  let returned
+  assert.doesNotThrow(() => { returned = env.emitApproval({}, () => hostile) })
+  assert.equal(returned, hostile)
+  const after = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(after.approvals, { available: true, pending: 0, oldestAt: null }, 'a hostile thenable cannot leave a stuck count')
+})
+
+test('two concurrent approvals stay counted and settle independently', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const first = deferred()
+  const second = deferred()
+  const firstOutcome = env.emitApproval({}, () => first.promise)
+  const secondOutcome = env.emitApproval({}, () => second.promise)
+  let body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.approvals.pending, 2)
+  const oldest = body.approvals.oldestAt
+  first.resolve('allowed-once')
+  await firstOutcome
+  body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.approvals.pending, 1, 'the other request still waits')
+  assert.equal(body.approvals.oldestAt, oldest, 'oldestAt never moves backwards while an episode is open')
+  second.resolve('rejected')
+  await secondOutcome
+  body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null })
+})
+
+test('the pending count is clamped to HOST_APPROVAL_MAX and never goes negative', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  const gates = Array.from({ length: HOST_APPROVAL_MAX + 4 }, () => deferred())
+  const outcomes = gates.map((gate) => env.emitApproval({}, () => gate.promise))
+  let body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(HOST_APPROVAL_MAX, 8, 'the documented clamp window is 0..8')
+  assert.equal(body.approvals.pending, HOST_APPROVAL_MAX, 'clamped up to the maximum, not an unbounded count')
+  for (const gate of gates) gate.resolve('cancelled')
+  await Promise.all(outcomes)
+  body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.deepEqual(body.approvals, { available: true, pending: 0, oldestAt: null }, 'clamped ends still settle to exactly zero')
+})
+
+test('approval names, reasons, ids, agents and args are never read, stored or projected', async () => {
+  const env = makeEventContext()
+  apply(env.ctx)
+  await env.emitApproval({
+    agent: { id: 'agent-xyz' }, toolName: 'bash', callId: 'call-secret-1',
+    reason: 'SECRET-PATH C:\\secret\\file.txt', displayReason: { en: 'SECRET-DISPLAY' },
+    args: { prompt: 'SECRET-ARGS' }, sessionId: 'session-secret',
+  }, () => Promise.resolve('rejected'))
+  await settleTasks()
+  const serialized = JSON.stringify(await (await post(env.route(), { v: 2, op: 'state' })).json())
+  for (const secret of ['agent-xyz', 'bash', 'call-secret-1', 'SECRET-PATH', 'SECRET-DISPLAY', 'SECRET-ARGS', 'session-secret', 'toolName', 'callId', 'displayReason']) {
+    assert.equal(serialized.includes(secret), false, 'approval payload is never projected: ' + secret)
+  }
+})
+
+test('a Host with the event API but no approval/request subscription reports approvals unavailable, not a fake zero', async () => {
+  const env = makeEventContext({ approvalThrows: new Error('approval/request is not dispatched by this Host') })
+  apply(env.ctx)
+  assert.equal((await (await post(env.route(), { v: 2, op: 'state' })).json()).available, true, 'agent lifecycle state still works')
+  env.emit('agent/status', { status: 'running' })
+  const body = await (await post(env.route(), { v: 2, op: 'state' })).json()
+  assert.equal(body.state, 'running')
+  assert.deepEqual(body.approvals, { available: false, pending: 0, oldestAt: null }, 'a refused approval subscription is reported honestly')
+})
+
+test('hostStateReportValid rejects unknown or malformed approval data fail-closed', () => {
+  const valid = () => ({
+    available: true, source: 'events', state: 'idle', active: 0, updatedAt: 5, lastError: null,
+    transitions: [], workState: 'idle', workSince: null,
+    approvals: { available: true, pending: 0, oldestAt: null },
+  })
+  assert.equal(hostStateReportValid(valid()), true, 'the additive wire-2 report is valid')
+  assert.equal(hostStateReportValid({ ...valid(), approvals: { available: true, pending: 1, oldestAt: 5 } }), true, 'a waiting approval is valid')
+  const invalid = [
+    ['unknown top-level field', { ...valid(), reason: 'SECRET' }],
+    ['missing approvals', (() => { const report = valid(); delete report.approvals; return report })()],
+    ['approvals not an object', { ...valid(), approvals: 'waiting' }],
+    ['unknown approval field', { ...valid(), approvals: { available: true, pending: 0, oldestAt: null, toolName: 'bash' } }],
+    ['missing approval field', { ...valid(), approvals: { available: true, pending: 0 } }],
+    ['non-boolean available', { ...valid(), approvals: { available: 'yes', pending: 0, oldestAt: null } }],
+    ['negative pending', { ...valid(), approvals: { available: true, pending: -1, oldestAt: 5 } }],
+    ['over-max pending', { ...valid(), approvals: { available: true, pending: HOST_APPROVAL_MAX + 1, oldestAt: 5 } }],
+    ['fractional pending', { ...valid(), approvals: { available: true, pending: 1.5, oldestAt: 5 } }],
+    ['string pending', { ...valid(), approvals: { available: true, pending: '1', oldestAt: 5 } }],
+    ['negative oldestAt', { ...valid(), approvals: { available: true, pending: 1, oldestAt: -5 } }],
+    ['oldestAt while idle', { ...valid(), approvals: { available: true, pending: 0, oldestAt: 5 } }],
+    ['unavailable with pending', { ...valid(), approvals: { available: false, pending: 1, oldestAt: 5 } }],
+  ]
+  for (const [name, report] of invalid) assert.equal(hostStateReportValid(report), false, 'fail-closed: ' + name)
 })
 
 test('crisisKeyword matches specific phrases and documents its public list', () => {
